@@ -39,8 +39,14 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
             Matrix4::from_translation(vec3(1.5, 0.0, 0.0)) *
             Matrix4::from_scale(0.6);
         let r = Rule::Recurse(test_rule);
-        RuleStep { geom: mesh.clone(), rule: Box::new(r), xform: m }
+        let mut m2 = mesh.clone();
+        m2.apply_transformation(m);
+        RuleStep { geom: m2, rule: Box::new(r), xform: m }
     };
+    // TODO: Why is 'mesh' present in each RuleStep?  This is just
+    // duplicate geometry! Either 'm' applies to 'mesh' (and the
+    // definition of RuleStep changes) - or 'mesh' needs to already be
+    // transformed.
 
     turns.iter().map(gen_rulestep).collect()
 }
@@ -75,6 +81,8 @@ fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
                 submesh.apply_transformation(xform);
 
                 mesh.append(&submesh);
+                // TODO: I think above is a problem; it accumulates
+                // submeshes multiple times.
             }
             mesh
         }
