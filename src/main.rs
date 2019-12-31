@@ -24,14 +24,14 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
     let mesh = MeshBuilder::new().cube().build().unwrap();
 
     // Quarter-turn in radians:
-    let qtr = Rad::turn_div_4();
+    //let qtr = Rad::turn_div_4();
     
     // Each element of this turns to a branch for the recursion:
     let turns: Vec<Mat4> = vec![
         Matrix4::identity(),
-        Matrix4::from_angle_y(qtr),
+        /*Matrix4::from_angle_y(qtr),
         Matrix4::from_angle_y(qtr * 2.0),
-        Matrix4::from_angle_y(qtr * 3.0),
+        Matrix4::from_angle_y(qtr * 3.0),*/
     ];
 
     let gen_rulestep = |rot: &Mat4| -> RuleStep {
@@ -40,7 +40,7 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
             Matrix4::from_scale(0.6);
         let r = Rule::Recurse(test_rule);
         let mut m2 = mesh.clone();
-        m2.apply_transformation(m);
+        //m2.apply_transformation(m);
         RuleStep { geom: m2, rule: Box::new(r), xform: m }
     };
     // TODO: Why is 'mesh' present in each RuleStep?  This is just
@@ -55,10 +55,9 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // could end up having a lot of identical geometry that need not be
 // duplicated until it is transformed into the global space
 
-// Bigger TODO: either rule_to_mesh or test_rule is doing something
-// totally wrong here (look at the generated mesh).  I suspect it is
-// appending geometry multiple times because my semantics are vague.
+// Bigger TODO: my vague semantics are producing duplicated geometry
 
+use std::convert::TryInto; // DEBUG
 fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
 
     let max_iters: u32 = 4;
@@ -67,7 +66,13 @@ fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
     if iter_num >= max_iters {
         return mesh;
     }
+
+    // DEBUG
+    let s = "  ".repeat(iter_num.try_into().unwrap());
     
+    println!("{}rule_to_mesh(iter_num={}), xform: ", s, iter_num);
+    print_matrix(&xform);
+
     match rule {
         Rule::Recurse(func) => {
             for step in func(vec![]) {
@@ -75,14 +80,28 @@ fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
                 let subxform: Mat4 = step.xform;
                 let geom: Mesh = step.geom;
 
+                println!("{}geom has {} faces, {} verts",
+                         s, geom.no_faces(), geom.no_vertices());
+
                 mesh.append(&geom);
+                println!("{}post-append(1): mesh has {} faces, {} verts",
+                         s, mesh.no_faces(), mesh.no_vertices());
+                
+                println!("{}recursing, subxform: ", s);
+                print_matrix(&subxform);
                 
                 let mut submesh: Mesh = rule_to_mesh(&subrule, subxform, iter_num + 1);
                 submesh.apply_transformation(xform);
 
+                println!("{}returning, applying xform: ", s);
+                print_matrix(&xform);
+                
+                println!("{}submesh has {} faces, {} verts",
+                         s, submesh.no_faces(), submesh.no_vertices());
+                
                 mesh.append(&submesh);
-                // TODO: I think above is a problem; it accumulates
-                // submeshes multiple times.
+                println!("{}post-append(2): mesh has {} faces, {} verts",
+                         s, mesh.no_faces(), mesh.no_vertices());
             }
             mesh
         }
@@ -172,15 +191,9 @@ fn main() {
 
     let r = Rule::Recurse(test_rule);
 
-    match r {
-        Rule::Recurse(f) => {
-            let _v = f(vec![]);
-        }
-        Rule::EmptyRule => {
-            println!("Empty");
-        }
-    }
-
+    // TODO: The 'identity()' here is causing the duplicated geometry
+    // - but I should not have to copy the transform from the rule
+    // here.  Clean this up.
     let cubemesh: Mesh = rule_to_mesh(&r, Matrix4::identity(), 0);
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
 }
