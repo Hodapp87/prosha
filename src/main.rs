@@ -24,23 +24,25 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
     let mesh = MeshBuilder::new().cube().build().unwrap();
 
     // Quarter-turn in radians:
-    //let qtr = Rad::turn_div_4();
+    let qtr = Rad::turn_div_4();
     
     // Each element of this turns to a branch for the recursion:
     let turns: Vec<Mat4> = vec![
         Matrix4::identity(),
-        /*Matrix4::from_angle_y(qtr),
+        Matrix4::from_angle_y(qtr),
         Matrix4::from_angle_y(qtr * 2.0),
-        Matrix4::from_angle_y(qtr * 3.0),*/
+        Matrix4::from_angle_y(qtr * 3.0),
+        Matrix4::from_angle_z(qtr),
+        Matrix4::from_angle_z(-qtr),
     ];
 
     let gen_rulestep = |rot: &Mat4| -> RuleStep {
         let m: Mat4 = rot *
-            Matrix4::from_translation(vec3(2.0, 0.0, 0.0)) *
-            Matrix4::from_scale(0.6);
+            Matrix4::from_scale(0.5) *
+            Matrix4::from_translation(vec3(6.0, 0.0, 0.0));
         let r = Rule::Recurse(test_rule);
         let mut m2 = mesh.clone();
-        //m2.apply_transformation(m);
+        m2.apply_transformation(m);
         RuleStep { geom: m2, rule: Box::new(r), xform: m }
     };
     // TODO: Why is 'mesh' present in each RuleStep?  This is just
@@ -55,12 +57,14 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // could end up having a lot of identical geometry that need not be
 // duplicated until it is transformed into the global space
 
-fn rule_to_mesh(rule: &Rule, iters_left: u32) -> Mesh {
+fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (Mesh, u32) {
 
     let mut mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
 
+    let mut nodes: u32 = 1;
+    
     if iters_left <= 0 {
-        return mesh;
+        return (mesh, nodes);
     }
 
     match rule {
@@ -72,8 +76,9 @@ fn rule_to_mesh(rule: &Rule, iters_left: u32) -> Mesh {
 
                 mesh.append(&geom);
                 
-                let mut submesh: Mesh = rule_to_mesh(&subrule, iters_left - 1);
+                let (mut submesh, subnodes) = rule_to_mesh(&subrule, iters_left - 1);
                 submesh.apply_transformation(subxform);
+                nodes += subnodes;
 
                 mesh.append(&submesh);
             }
@@ -82,7 +87,7 @@ fn rule_to_mesh(rule: &Rule, iters_left: u32) -> Mesh {
             // do nothing
         }
     }
-    mesh
+    (mesh, nodes)
 }
 
 // This isn't kosher:
@@ -165,7 +170,11 @@ fn main() {
 
     let r = Rule::Recurse(test_rule);
 
-    let max_iters = 5;
-    let cubemesh: Mesh = rule_to_mesh(&r, max_iters);
+    let max_iters = 4;
+    println!("Running rules...");
+    let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
+    println!("Collected {} nodes, produced {} faces, {} vertices",
+             nodes, cubemesh.no_faces(), cubemesh.no_vertices());
+    println!("Writing OBJ...");
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
 }
