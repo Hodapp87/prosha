@@ -55,24 +55,13 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // could end up having a lot of identical geometry that need not be
 // duplicated until it is transformed into the global space
 
-// Bigger TODO: my vague semantics are producing duplicated geometry
-// What is the meaning of an initial 'xform' here?
+fn rule_to_mesh(rule: &Rule, iters_left: u32) -> Mesh {
 
-use std::convert::TryInto; // DEBUG
-fn rule_to_mesh_rec(rule: &Rule, iter_num: u32) -> Mesh {
-
-    let max_iters: u32 = 4;
     let mut mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
 
-    if iter_num >= max_iters {
+    if iters_left <= 0 {
         return mesh;
     }
-
-    // DEBUG
-    let s = "  ".repeat(iter_num.try_into().unwrap());
-    
-    println!("{}rule_to_mesh(iter_num={})", s, iter_num);
-    //print_matrix(&xform);
 
     match rule {
         Rule::Recurse(func) => {
@@ -81,41 +70,19 @@ fn rule_to_mesh_rec(rule: &Rule, iter_num: u32) -> Mesh {
                 let subxform: Mat4 = step.xform;
                 let geom: Mesh = step.geom;
 
-                println!("{}geom has {} faces, {} verts",
-                         s, geom.no_faces(), geom.no_vertices());
-
                 mesh.append(&geom);
-                println!("{}post-append(1): mesh has {} faces, {} verts",
-                         s, mesh.no_faces(), mesh.no_vertices());
                 
-                println!("{}recursing, subxform: ", s);
-                print_matrix(&subxform);
-                
-                let mut submesh: Mesh = rule_to_mesh_rec(&subrule, iter_num + 1);
+                let mut submesh: Mesh = rule_to_mesh(&subrule, iters_left - 1);
                 submesh.apply_transformation(subxform);
 
-                println!("{}returning", s);
-                
-                println!("{}submesh has {} faces, {} verts",
-                         s, submesh.no_faces(), submesh.no_vertices());
-                
                 mesh.append(&submesh);
-                println!("{}post-append(2): mesh has {} faces, {} verts",
-                         s, mesh.no_faces(), mesh.no_vertices());
             }
-            mesh
         }
         Rule::EmptyRule => {
-            mesh
+            // do nothing
         }
     }
-}
-
-fn rule_to_mesh(rule: &Rule) -> Mesh {
-    // TODO: The 'identity()' here is causing the duplicated geometry
-    // - but I should not have to copy the transform from the rule
-    // here.  Clean this up.
-    rule_to_mesh_rec(rule, 0)
+    mesh
 }
 
 // This isn't kosher:
@@ -198,6 +165,7 @@ fn main() {
 
     let r = Rule::Recurse(test_rule);
 
-    let cubemesh: Mesh = rule_to_mesh(&r);
+    let max_iters = 5;
+    let cubemesh: Mesh = rule_to_mesh(&r, max_iters);
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
 }
