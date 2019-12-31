@@ -36,7 +36,7 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 
     let gen_rulestep = |rot: &Mat4| -> RuleStep {
         let m: Mat4 = rot *
-            Matrix4::from_translation(vec3(1.5, 0.0, 0.0)) *
+            Matrix4::from_translation(vec3(2.0, 0.0, 0.0)) *
             Matrix4::from_scale(0.6);
         let r = Rule::Recurse(test_rule);
         let mut m2 = mesh.clone();
@@ -58,7 +58,7 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // Bigger TODO: my vague semantics are producing duplicated geometry
 
 use std::convert::TryInto; // DEBUG
-fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
+fn rule_to_mesh_rec(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
 
     let max_iters: u32 = 4;
     let mut mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
@@ -90,7 +90,7 @@ fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
                 println!("{}recursing, subxform: ", s);
                 print_matrix(&subxform);
                 
-                let mut submesh: Mesh = rule_to_mesh(&subrule, subxform, iter_num + 1);
+                let mut submesh: Mesh = rule_to_mesh_rec(&subrule, subxform, iter_num + 1);
                 submesh.apply_transformation(xform);
 
                 println!("{}returning, applying xform: ", s);
@@ -109,6 +109,13 @@ fn rule_to_mesh(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
             mesh
         }
     }
+}
+
+fn rule_to_mesh(rule: &Rule) -> Mesh {
+    // TODO: The 'identity()' here is causing the duplicated geometry
+    // - but I should not have to copy the transform from the rule
+    // here.  Clean this up.
+    rule_to_mesh_rec(rule, Matrix4::identity(), 0)
 }
 
 // This isn't kosher:
@@ -191,9 +198,6 @@ fn main() {
 
     let r = Rule::Recurse(test_rule);
 
-    // TODO: The 'identity()' here is causing the duplicated geometry
-    // - but I should not have to copy the transform from the rule
-    // here.  Clean this up.
-    let cubemesh: Mesh = rule_to_mesh(&r, Matrix4::identity(), 0);
+    let cubemesh: Mesh = rule_to_mesh(&r);
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
 }
