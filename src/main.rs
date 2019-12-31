@@ -56,9 +56,10 @@ fn test_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // duplicated until it is transformed into the global space
 
 // Bigger TODO: my vague semantics are producing duplicated geometry
+// What is the meaning of an initial 'xform' here?
 
 use std::convert::TryInto; // DEBUG
-fn rule_to_mesh_rec(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
+fn rule_to_mesh_rec(rule: &Rule, iter_num: u32) -> Mesh {
 
     let max_iters: u32 = 4;
     let mut mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
@@ -70,8 +71,8 @@ fn rule_to_mesh_rec(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
     // DEBUG
     let s = "  ".repeat(iter_num.try_into().unwrap());
     
-    println!("{}rule_to_mesh(iter_num={}), xform: ", s, iter_num);
-    print_matrix(&xform);
+    println!("{}rule_to_mesh(iter_num={})", s, iter_num);
+    //print_matrix(&xform);
 
     match rule {
         Rule::Recurse(func) => {
@@ -90,11 +91,10 @@ fn rule_to_mesh_rec(rule: &Rule, xform: Mat4, iter_num: u32) -> Mesh {
                 println!("{}recursing, subxform: ", s);
                 print_matrix(&subxform);
                 
-                let mut submesh: Mesh = rule_to_mesh_rec(&subrule, subxform, iter_num + 1);
-                submesh.apply_transformation(xform);
+                let mut submesh: Mesh = rule_to_mesh_rec(&subrule, iter_num + 1);
+                submesh.apply_transformation(subxform);
 
-                println!("{}returning, applying xform: ", s);
-                print_matrix(&xform);
+                println!("{}returning", s);
                 
                 println!("{}submesh has {} faces, {} verts",
                          s, submesh.no_faces(), submesh.no_vertices());
@@ -115,7 +115,7 @@ fn rule_to_mesh(rule: &Rule) -> Mesh {
     // TODO: The 'identity()' here is causing the duplicated geometry
     // - but I should not have to copy the transform from the rule
     // here.  Clean this up.
-    rule_to_mesh_rec(rule, Matrix4::identity(), 0)
+    rule_to_mesh_rec(rule, 0)
 }
 
 // This isn't kosher:
