@@ -2,7 +2,10 @@
 use tri_mesh::prelude::*;
 
 enum Rule {
-    // Recurse further:
+    // Recurse further.  Input is "seeds" that further geometry should
+    // *replace*.  Generated geometry must have the same outer
+    // boundary as the seeds, and be in the same coordinate space as
+    // the input.
     Recurse(fn (Vec<Mesh>) -> Vec<RuleStep>),
     // Stop recursing here:
     EmptyRule,
@@ -10,14 +13,42 @@ enum Rule {
 // TODO: Rename rules?
 
 struct RuleStep {
-    // The geometry generated at this step
+    // The 'final' geometry generated at this step.
     geom: Mesh,
-    // The next rule to run on this geometry.  If EmptyRule, then stop
-    // here (and 'xform' is irrelevant).
+    // The 'seed' geometry from this step.  If recursion stops
+    // (whether because rule is EmptyRule or because recursion depth
+    // has been hit), this will be transformed with 'xform' and
+    // appended with 'geom'. If recursion continues, this geometry is
+    // passed as the input to the next rule.  (TODO: rule_to_mesh
+    // needs to do the 'recursion stops' part.)
+    //
+    // This is in the coordinate space that 'rule' should run in -
+    // thus, if it is transformed with 'xform', it will be in the same
+    // coordinate space as 'geom'.
+    seeds: Vec<Mesh>,
+    // The next rule to run.  If EmptyRule, then stop here (and
+    // 'xform' is irrelevant).
     rule: Box<Rule>,
-    // The transformation to apply to any results of 'rule' (if
-    // applicable)
+    // The transformation which puts any geometry from 'rule' (if
+    // applicable) into the same coordinate space as 'geom'.
     xform: Mat4,
+}
+
+fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
+
+    // TODO:
+    // So...
+    // Accept 'input' seeds in v.
+    // Draw everything relative to v.
+    
+    // Of what is drawn here, for any seed that is passed to a future
+    // rule, compute an xform which moves that seed to a sane
+    // coordinate system.  Pass the transformed seed and xform
+    // forward.  (How do I get a seed to the rule? Still need code for
+    // this.)
+    panic!("Not implemented");
+    return vec![];
+    // Pesky TODO: How do I figure out that right transform?
 }
 
 fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
@@ -44,7 +75,7 @@ fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
         let r = Rule::Recurse(cube_thing_rule);
         let mut m2 = mesh.clone();
         m2.apply_transformation(m);
-        RuleStep { geom: m2, rule: Box::new(r), xform: m }
+        RuleStep { geom: m2, rule: Box::new(r), xform: m, seeds: vec![] }
     };
     // TODO: Why is 'mesh' present in each RuleStep?  This is just
     // duplicate geometry! Either 'm' applies to 'mesh' (and the
@@ -62,7 +93,7 @@ fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
 // rather than repeatedly transforming meshes, it stacks
 // transformations and then applies them all at once.
 
-fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (Mesh, u32) {
+fn rule_to_mesh(rule: &Rule, seed: Vec<Mesh>, iters_left: u32) -> (Mesh, u32) {
 
     let mut mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
 
@@ -74,14 +105,15 @@ fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (Mesh, u32) {
 
     match rule {
         Rule::Recurse(func) => {
-            for step in func(vec![]) {
+            for step in func(seed) {
                 let subrule: Rule = *step.rule;
                 let subxform: Mat4 = step.xform;
                 let geom: Mesh = step.geom;
 
                 mesh.append(&geom);
                 
-                let (mut submesh, subnodes) = rule_to_mesh(&subrule, iters_left - 1);
+                let (mut submesh, subnodes) = rule_to_mesh(
+                    &subrule, step.seeds, iters_left - 1);
                 submesh.apply_transformation(subxform);
                 nodes += subnodes;
 
@@ -126,7 +158,7 @@ fn main() {
 
     let max_iters = 2;
     println!("Running rules...");
-    let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
+    let (cubemesh, nodes) = rule_to_mesh(&r, vec![], max_iters);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, cubemesh.no_faces(), cubemesh.no_vertices());
     println!("Writing OBJ...");
