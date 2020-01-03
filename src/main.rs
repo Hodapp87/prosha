@@ -29,26 +29,45 @@ struct RuleStep {
     // The next rule to run.  If EmptyRule, then stop here (and
     // 'xform' is irrelevant).
     rule: Box<Rule>,
-    // The transformation which puts any geometry from 'rule' (if
-    // applicable) into the same coordinate space as 'geom'.
+    // The transformation which puts 'seeds' and any geometry from
+    // 'rule' (if applicable) into the same coordinate space as
+    // 'geom'.
     xform: Mat4,
 }
 
 fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
-
+ 
     // TODO:
-    // So...
     // Accept 'input' seeds in v.
     // Draw everything relative to v.
-    
+    /*
+    let gen_geom = |seed: &Mesh| -> RuleStep {
+    }*/
+
+    // TODO:
     // Of what is drawn here, for any seed that is passed to a future
     // rule, compute an xform which moves that seed to a sane
     // coordinate system.  Pass the transformed seed and xform
-    // forward.  (How do I get a seed to the rule? Still need code for
-    // this.)
+    // forward.
+    
+    // Pesky TODO: How do I figure out that right transform?
+    // I think that I can just use something like...
+    let _m: Mat4 = Matrix4::from_cols(
+        Vector4::new(1.0, 0.0, 0.0, 0.0), // new X
+        Vector4::new(0.0, 1.0, 0.0, 0.0), // new Y
+        Vector4::new(0.0, 0.0, 1.0, 0.0), // new Z
+        Vector4::new(0.0, 0.0, 0.0, 1.0), // translation?
+    );
+    // where the new X, Y, and Z are whatever I choose - e.g. (v1-v0),
+    // (v2-v0), and (v1-v0) x (v2-v0) for seed vertices v0,v1,v2,
+    // assuming v2 is perpendicular to v1. Then translation is v0?
+    //
+    // The above won't work in general, but is an example of how a
+    // seed that obeys certain assumptions could produce this
+    // transform.
+
     panic!("Not implemented");
     return vec![];
-    // Pesky TODO: How do I figure out that right transform?
 }
 
 fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
