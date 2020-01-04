@@ -65,9 +65,31 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     // The above won't work in general, but is an example of how a
     // seed that obeys certain assumptions could produce this
     // transform.
+    //
+    // For vertices v0,v1,v2 that not collinear, I think I can do...
+    // X  = normalize(v1-v0)
+    // Y' = (v2-v0)
+    // Z  = normalize(X x Y')
+    // Y  = Z x X
+    //
+    // (tried to do this as points_to_xform below)
 
     panic!("Not implemented");
     return vec![];
+}
+
+fn points_to_xform(v0: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> Mat4 {
+    let x:  Vec3 = (v1 - v0).normalize();
+    let z:  Vec3 = x.cross(v2 - v0).normalize();
+    let y:  Vec3 = z.cross(x);
+
+    let _m: Mat4 = Matrix4::from_cols(
+        x.extend(0.0),       // new X
+        y.extend(0.0),       // new Y
+        z.extend(0.0),       // new Z
+        v0.to_homogeneous(), // translation
+    );
+    return _m;
 }
 
 fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
@@ -169,6 +191,14 @@ fn main() {
     
     // .. or construct an actual mesh representing the axis aligned bounding box
     let _aabb = mesh.axis_aligned_bounding_box();
+
+    let xform = points_to_xform(
+        Point3::new(1.0, 1.0, 0.0),
+        Point3::new(4.0, 1.0, 0.0),
+        Point3::new(2.0, 4.0, 0.0),
+    );
+    println!("points_to_xform:");
+    print_matrix(&xform);
     
     // Export the bounding box to an obj file
     std::fs::write("foo.obj", mesh.parse_as_obj()).unwrap();
