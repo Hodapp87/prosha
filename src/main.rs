@@ -49,30 +49,21 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     // rule, compute an xform which moves that seed to a sane
     // coordinate system.  Pass the transformed seed and xform
     // forward.
-    
-    // Pesky TODO: How do I figure out that right transform?
-    // I think that I can just use something like...
-    let _m: Mat4 = Matrix4::from_cols(
-        Vector4::new(1.0, 0.0, 0.0, 0.0), // new X
-        Vector4::new(0.0, 1.0, 0.0, 0.0), // new Y
-        Vector4::new(0.0, 0.0, 1.0, 0.0), // new Z
-        Vector4::new(0.0, 0.0, 0.0, 1.0), // translation?
-    );
-    // where the new X, Y, and Z are whatever I choose - e.g. (v1-v0),
-    // (v2-v0), and (v1-v0) x (v2-v0) for seed vertices v0,v1,v2,
-    // assuming v2 is perpendicular to v1. Then translation is v0?
-    //
-    // The above won't work in general, but is an example of how a
-    // seed that obeys certain assumptions could produce this
-    // transform.
-    //
-    // For vertices v0,v1,v2 that not collinear, I think I can do...
-    // X  = normalize(v1-v0)
-    // Y' = (v2-v0)
-    // Z  = normalize(X x Y')
-    // Y  = Z x X
-    //
-    // (tried to do this as points_to_xform below)
+
+    for seed in v {
+        for halfedge_id in seed.edge_iter() {
+            let (v1, v2) = seed.edge_vertices(halfedge_id);
+            println!("Half-edge {}, verts {} & {}: {}",
+                     halfedge_id,
+                     v1, v2,
+                     if seed.is_edge_on_boundary(halfedge_id) {
+                         "boundary"
+                     } else {
+                         "non-boundary"
+                     }
+                     );
+        }
+    }
 
     panic!("Not implemented");
     return vec![];
@@ -212,4 +203,17 @@ fn main() {
              nodes, cubemesh.no_faces(), cubemesh.no_vertices());
     println!("Writing OBJ...");
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
+
+    let r2 = Rule::Recurse(curve_horn_thing_rule);
+    println!("Running rules...");
+    // Seed:
+    let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
+    let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
+    let seed = MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
+    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], max_iters);
+    println!("Collected {} nodes, produced {} faces, {} vertices",
+             nodes, mesh.no_faces(), mesh.no_vertices());
+    println!("Writing OBJ...");
+    std::fs::write("curve_horn_thing.obj", mesh.parse_as_obj()).unwrap();
+    // TODO: Can I make the seed geometry part of the rule itself?
 }
