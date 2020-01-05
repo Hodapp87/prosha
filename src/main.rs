@@ -51,18 +51,23 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     // forward.
 
     for seed in v {
-        for halfedge_id in seed.edge_iter() {
+
+        let boundary = seed.edge_iter().filter(|e| seed.is_edge_on_boundary(*e));
+
+        // DEBUG
+        for halfedge_id in boundary {
             let (v1, v2) = seed.edge_vertices(halfedge_id);
-            println!("Half-edge {}, verts {} & {}: {}",
-                     halfedge_id,
-                     v1, v2,
-                     if seed.is_edge_on_boundary(halfedge_id) {
-                         "boundary"
-                     } else {
-                         "non-boundary"
-                     }
-                     );
+            println!("Boundary half-edge {}, verts {} & {}",
+                     halfedge_id, v1, v2);
         }
+
+        // So, I have my boundary edges in no particular order.
+        // I suppose I could use a Walker to give some order.
+        //
+        // But: how do I then connect these vertices up?  I can easily
+        // get boundary vertices and make something based on those but
+        // that then limits me to the 'cage' thing I was stuck with
+        // prior.
     }
 
     panic!("Not implemented");
