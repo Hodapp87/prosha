@@ -37,24 +37,31 @@ struct RuleStep {
 
 fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
  
-    // TODO:
-    // Accept 'input' seeds in v.
-    // Draw everything relative to v.
-    /*
     let gen_geom = |seed: &Mesh| -> RuleStep {
-    }*/
+        let mut mesh = seed.clone();
 
-    // TODO:
-    // Of what is drawn here, for any seed that is passed to a future
-    // rule, compute an xform which moves that seed to a sane
-    // coordinate system.  Pass the transformed seed and xform
-    // forward.
+        let m: Mat4 = Matrix4::from_angle_y(Rad(0.1)) *
+            Matrix4::from_scale(0.95) *
+            Matrix4::from_translation(vec3(0.0, 0.0, 0.2));
+        
+        let r = Rule::Recurse(curve_horn_thing_rule);
+        mesh.apply_transformation(m);
+        //let seed2 = mesh.clone();
+        RuleStep { geom: mesh, rule: Box::new(r), xform: m, seeds: vec![seed.clone()] }
+        // TODO: 'mesh' shouldn't be the actual 'geom' here; once I
+        // actually connect things up it will differ from 'seeds'.
+    };
+    // Since 'mesh' is computed directly by applying 'm' to 'seed',
+    // trivially, we follow the requirement in a RuleStep that
+    // applying 'xform' to 'seeds' puts it into the same space as
+    // 'geom'.
 
-    for seed in v {
+    // DEBUG
+    /*
+    for seed in &v {
 
         let boundary = seed.edge_iter().filter(|e| seed.is_edge_on_boundary(*e));
 
-        // DEBUG
         for halfedge_id in boundary {
             let (v1, v2) = seed.edge_vertices(halfedge_id);
             println!("Boundary half-edge {}, verts {} & {}",
@@ -69,20 +76,30 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
         // that then limits me to the 'cage' thing I was stuck with
         // prior.
     }
+    */
 
-    panic!("Not implemented");
-    return vec![];
+    v.iter().map(gen_geom).collect()
 }
 
+// Assume v0, v1, and v2 are non-collinear points.  This tries to
+// produce a transform which treats v0 as the origin of a new
+// coordinate system, the line from v0 to v1 as the new X axis, the Y
+// axis perpendicular to this along the plane that (v0,v1,v2) forms,
+// and the Z axis the normal of this same plane.
+//
+// Scale is taken into account (to the extent that the length of
+// (v1-v0) is taken as distance 1 in the new coordinate system).
 fn points_to_xform(v0: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> Mat4 {
-    let x:  Vec3 = (v1 - v0).normalize();
+    let x:  Vec3 = v1 - v0;
+    let xn: Vec3 = x.normalize();
     let z:  Vec3 = x.cross(v2 - v0).normalize();
     let y:  Vec3 = z.cross(x);
+    let s = x.magnitude();
 
     let _m: Mat4 = Matrix4::from_cols(
-        x.extend(0.0),       // new X
-        y.extend(0.0),       // new Y
-        z.extend(0.0),       // new Z
+        (x*s).extend(0.0),   // new X
+        (y*s).extend(0.0),   // new Y
+        (z*s).extend(0.0),   // new Z
         v0.to_homogeneous(), // translation
     );
     return _m;
@@ -189,9 +206,9 @@ fn main() {
     let _aabb = mesh.axis_aligned_bounding_box();
 
     let xform = points_to_xform(
-        Point3::new(1.0, 1.0, 0.0),
-        Point3::new(4.0, 1.0, 0.0),
-        Point3::new(2.0, 4.0, 0.0),
+        Point3::new(0.5, 0.5, 0.0),
+        Point3::new(-0.5, 0.5, 0.0),
+        Point3::new(2.0, -4.0, 0.0),
     );
     println!("points_to_xform:");
     print_matrix(&xform);
@@ -212,10 +229,14 @@ fn main() {
     let r2 = Rule::Recurse(curve_horn_thing_rule);
     println!("Running rules...");
     // Seed:
-    let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
-    let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
-    let seed = MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
-    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], max_iters);
+    let seed = {
+        let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
+        let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
+        let mut s = MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
+        s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
+        s
+    };
+    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 20);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
     println!("Writing OBJ...");
