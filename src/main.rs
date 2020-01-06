@@ -35,8 +35,43 @@ struct RuleStep {
     xform: Mat4,
 }
 
+// is there a better way to do this?
+fn empty_mesh() -> Mesh {
+    MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap()
+}
+
+fn curve_horn_start(_v: Vec<Mesh>) -> Vec<RuleStep> {
+    // Seed is a square in XY, sidelength 1, centered at (0,0,0):
+    let seed = {
+        let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
+        let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
+        let mut s = MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
+        s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
+        s
+    };
+    vec![
+        // Since neither of the other two rules *start* with geometry:
+        RuleStep { geom: seed.clone(),
+                   rule: Box::new(Rule::EmptyRule),
+                   xform: Matrix4::identity(),
+                   seeds: vec![]
+        },
+        // Recurse in both directions:
+        RuleStep { geom: empty_mesh(),
+                   rule: Box::new(Rule::Recurse(curve_horn_thing_rule)),
+                   xform: Matrix4::identity(),
+                   seeds: vec![seed.clone()],
+        },
+        RuleStep { geom: empty_mesh(),
+                   rule: Box::new(Rule::Recurse(curve_horn_thing_rule)),
+                   xform: Matrix4::from_angle_y(Rad::turn_div_2()),
+                   seeds: vec![seed.clone()],
+        },
+    ]
+}
+
 fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
- 
+    
     let gen_geom = |seed: &Mesh| -> RuleStep {
         let mut mesh = seed.clone();
 
@@ -92,14 +127,14 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
 fn points_to_xform(v0: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> Mat4 {
     let x:  Vec3 = v1 - v0;
     let xn: Vec3 = x.normalize();
-    let z:  Vec3 = x.cross(v2 - v0).normalize();
-    let y:  Vec3 = z.cross(x);
+    let zn:  Vec3 = x.cross(v2 - v0).normalize();
+    let yn:  Vec3 = zn.cross(xn);
     let s = x.magnitude();
 
     let _m: Mat4 = Matrix4::from_cols(
-        (x*s).extend(0.0),   // new X
-        (y*s).extend(0.0),   // new Y
-        (z*s).extend(0.0),   // new Z
+        (xn*s).extend(0.0),   // new X
+        (yn*s).extend(0.0),   // new Y
+        (zn*s).extend(0.0),   // new Z
         v0.to_homogeneous(), // translation
     );
     return _m;
@@ -196,9 +231,6 @@ fn main() {
     // Construct any mesh, this time, we will construct a simple icosahedron
     let mesh = MeshBuilder::new().icosahedron().build().unwrap();
 
-    // Is there a better way to do this?
-    let _empty_mesh = MeshBuilder::new().with_indices(vec![]).with_positions(vec![]).build().unwrap();
-    
     // Compute the extreme coordinates which defines the axis aligned bounding box..
     let (_min_coordinates, _max_coordinates) = mesh.extreme_coordinates();
     
@@ -226,7 +258,7 @@ fn main() {
     println!("Writing OBJ...");
     std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
 
-    let r2 = Rule::Recurse(curve_horn_thing_rule);
+    let r2 = Rule::Recurse(curve_horn_start);
     println!("Running rules...");
     // Seed:
     let seed = {
@@ -236,7 +268,7 @@ fn main() {
         s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
         s
     };
-    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 20);
+    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
     println!("Writing OBJ...");
