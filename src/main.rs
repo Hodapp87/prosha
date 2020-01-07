@@ -70,6 +70,8 @@ fn curve_horn_start(_v: Vec<Mesh>) -> Vec<RuleStep> {
     ]
 }
 
+use std::convert::TryFrom;
+
 fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     
     let gen_geom = |seed: &Mesh| -> RuleStep {
@@ -78,18 +80,57 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
         let m: Mat4 = Matrix4::from_angle_y(Rad(0.1)) *
             Matrix4::from_scale(0.95) *
             Matrix4::from_translation(vec3(0.0, 0.0, 0.2));
-        
+
         let r = Rule::Recurse(curve_horn_thing_rule);
         mesh.apply_transformation(m);
         //let seed2 = mesh.clone();
-        RuleStep { geom: mesh, rule: Box::new(r), xform: m, seeds: vec![seed.clone()] }
-        // TODO: 'mesh' shouldn't be the actual 'geom' here; once I
-        // actually connect things up it will differ from 'seeds'.
+
+        // Put all vertices together:
+        let mut pos = seed.positions_buffer();
+        let offset = pos.len();
+        pos.append(&mut mesh.positions_buffer());
+        let mut indices: Vec<u32> = vec![0; 2 * offset * 3];
+        println!("Have {} vertices", pos.len());
+        println!("Allocate {} indices", 2 * offset * 3);
+        let off2 = u32::try_from(offset).unwrap();
+        for i in 0..offset {
+            let j = u32::try_from(i).unwrap();
+            let k = u32::try_from(offset + i).unwrap();
+            indices[6*i + 0] = j;
+            println!("indices[{}] = {}", 6*i + 0, indices[6*i + 0]);
+            indices[6*i + 1] = j + 1;
+            println!("indices[{}] = {}", 6*i + 1, indices[6*i + 1]);
+            indices[6*i + 2] = (k + 1);
+            println!("indices[{}] = {}", 6*i + 2, indices[6*i + 2]);
+            indices[6*i + 3] = j + 1;
+            println!("indices[{}] = {}", 6*i + 3, indices[6*i + 3]);
+            indices[6*i + 4] = (k + 1);
+            println!("indices[{}] = {}", 6*i + 4, indices[6*i + 4]);
+            indices[6*i + 5] = k;
+            println!("indices[{}] = {}", 6*i + 5, indices[6*i + 5]);
+        }
+        // TODO: Above needs some clarity
+
+        let joined = match MeshBuilder::new().with_indices(indices).with_positions(pos).build() {
+            Ok(m) => m,
+            Err(error) => {
+                panic!("Error building mesh: {:?}", error)
+            },
+        };
+        
+        RuleStep { geom: joined, rule: Box::new(r), xform: m, seeds: vec![seed.clone()] }
     };
     // Since 'mesh' is computed directly by applying 'm' to 'seed',
     // trivially, we follow the requirement in a RuleStep that
     // applying 'xform' to 'seeds' puts it into the same space as
     // 'geom'.
+
+    // TODO: If I transform a clone of the seed then this will leave
+    // the vertices in the same order and preserve things like
+    // boundaries.  I would then need to copy positions_buffer for
+    // both the seed and the transformed seed (to give the vertices),
+    // and use this in conjuction with my own indices in order to do
+    // the zig-zag connection
 
     // DEBUG
     /*
