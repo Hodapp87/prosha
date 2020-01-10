@@ -97,21 +97,22 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             let j = u32::try_from(i).unwrap();
             let k = u32::try_from(offset + i).unwrap();
             indices[6*i + 0] = j;
-            println!("indices[{}] = {}", 6*i + 0, indices[6*i + 0]);
+            println!("*indices[{}] = {}", 6*i + 0, indices[6*i + 0]);
             indices[6*i + 1] = j + 1;
             println!("indices[{}] = {}", 6*i + 1, indices[6*i + 1]);
-            indices[6*i + 2] = (k + 1);
+            indices[6*i + 2] = (k + 1) % (2 * off2);
             println!("indices[{}] = {}", 6*i + 2, indices[6*i + 2]);
-            indices[6*i + 3] = j + 1;
+            indices[6*i + 3] = (k + 1) % (2 * off2);
             println!("indices[{}] = {}", 6*i + 3, indices[6*i + 3]);
-            indices[6*i + 4] = (k + 1);
+            indices[6*i + 4] = j + 1;
             println!("indices[{}] = {}", 6*i + 4, indices[6*i + 4]);
             indices[6*i + 5] = k;
             println!("indices[{}] = {}", 6*i + 5, indices[6*i + 5]);
         }
         // TODO: Above needs some clarity
+        // (also, to be fixed)
 
-        let joined = match MeshBuilder::new().with_indices(indices).with_positions(pos).build() {
+        let joined = match MeshBuilder::new().with_positions(pos).with_indices(indices).build() {
             Ok(m) => m,
             Err(error) => {
                 panic!("Error building mesh: {:?}", error)
