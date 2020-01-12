@@ -43,8 +43,8 @@ fn empty_mesh() -> Mesh {
 fn curve_horn_start(_v: Vec<Mesh>) -> Vec<RuleStep> {
     // Seed is a square in XY, sidelength 1, centered at (0,0,0):
     let seed = {
-        let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
-        let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
+        let indices: Vec<u32> = vec![0, 1, 2,  0, 2, 3];
+        let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  1.0, 1.0, 0.0,  0.0, 1.0, 0.0];
         let mut s = MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
         s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
         s
@@ -87,27 +87,26 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
 
         // Put all vertices together:
         let mut pos = seed.positions_buffer();
-        let offset = pos.len();
         pos.append(&mut mesh.positions_buffer());
-        let mut indices: Vec<u32> = vec![0; 2 * offset * 3];
-        println!("Have {} vertices", pos.len());
-        println!("Allocate {} indices", 2 * offset * 3);
-        let off2 = u32::try_from(offset).unwrap();
-        for i in 0..offset {
+        let num_verts = seed.no_vertices();
+        let mut indices: Vec<u32> = vec![0; 2 * num_verts * 3];
+        let nv2 = u32::try_from(num_verts).unwrap();
+
+        // TODO: don't I need to check if these are boundary edges or
+        // something?  I have to be traversing in some kind of sane
+        // order!
+
+        for i in 0..num_verts {
             let j = u32::try_from(i).unwrap();
-            let k = u32::try_from(offset + i).unwrap();
+            let k = u32::try_from(num_verts + i).unwrap();
+            // First triangle:
             indices[6*i + 0] = j;
-            println!("*indices[{}] = {}", 6*i + 0, indices[6*i + 0]);
-            indices[6*i + 1] = j + 1;
-            println!("indices[{}] = {}", 6*i + 1, indices[6*i + 1]);
-            indices[6*i + 2] = (k + 1) % (2 * off2);
-            println!("indices[{}] = {}", 6*i + 2, indices[6*i + 2]);
-            indices[6*i + 3] = (k + 1) % (2 * off2);
-            println!("indices[{}] = {}", 6*i + 3, indices[6*i + 3]);
-            indices[6*i + 4] = j + 1;
-            println!("indices[{}] = {}", 6*i + 4, indices[6*i + 4]);
-            indices[6*i + 5] = k;
-            println!("indices[{}] = {}", 6*i + 5, indices[6*i + 5]);
+            indices[6*i + 1] = (j + 1) % nv2;
+            indices[6*i + 2] = k;
+            // Second triangle:
+            indices[6*i + 3] = j; // k;
+            indices[6*i + 4] = (j + 1) % nv2; // j + 1;
+            indices[6*i + 5] = k; // (k + 1) % (2 * nv2);
         }
         // TODO: Above needs some clarity
         // (also, to be fixed)
