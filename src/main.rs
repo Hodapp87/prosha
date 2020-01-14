@@ -215,6 +215,61 @@ fn cube_thing_rule(_v: Vec<Mesh>) -> Vec<RuleStep> {
     turns.iter().map(gen_rulestep).collect()
 }
 
+struct MeshBound<'a> {
+    m: &'a Mesh,
+    start: HalfEdgeID,
+    cur: HalfEdgeID,
+}
+
+impl<'a> MeshBound<'a> {
+    fn new(m: &'a Mesh) -> Option<MeshBound> {
+        for halfedge_id in m.edge_iter() {
+            if m.is_edge_on_boundary(halfedge_id) {
+                return Some(MeshBound {
+                    m: m,
+                    start: halfedge_id,
+                    cur: halfedge_id,
+                });
+            }
+        }
+        return None;
+    }
+}
+
+impl<'a> Iterator for MeshBound<'a> {
+    type Item = HalfEdgeID;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        // Start from self.cur.
+        // Pick a vertex. (Doesn't matter which, as long as consistent.)
+        // Step to all *other* half-edges.
+        // Find the one that is a boundary.
+        //
+        // Update 'cur' to this half-edge.
+
+        let (v1, v2) = self.m.edge_vertices(self.cur);
+        // TODO: v1 or v2?
+        for halfedge_id in self.m.vertex_halfedge_iter(v1) {
+            if self.m.is_edge_on_boundary(halfedge_id) {
+                if self.start == halfedge_id {
+                    // If we are walking the boundary and reach the
+                    // starting edge again, we're done:
+                    break;
+                }
+                // Otherwise, yield the next edge:
+                self.cur = halfedge_id;
+                return Some(halfedge_id);
+            }
+        }
+        return None;
+    }
+    
+}
+
+//fn mesh_boundary(m: &Mesh) -> Vec<tri_mesh::HalfEdgeID> {
+//}
+
 // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
 // could end up having a lot of identical geometry that need not be
 // duplicated until it is transformed into the global space.
@@ -309,6 +364,11 @@ fn main() {
         s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
         s
     };
+    // TODO: Something is wrong here
+    let mb = MeshBound::new(&seed);
+    for bound_edge in mb {
+        println!("Boundary edge: {}", bound_edge);
+    }
     let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
