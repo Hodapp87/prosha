@@ -94,8 +94,9 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
 
         // TODO: don't I need to check if these are boundary edges or
         // something?  I have to be traversing in some kind of sane
-        // order!
-
+        // order!  That is, this loop needs to be traversing the outer
+        // boundary one vertex at a time.
+        
         for i in 0..num_verts {
             let j = u32::try_from(i).unwrap();
             let k = u32::try_from(num_verts + i).unwrap();
@@ -247,12 +248,17 @@ impl<'a> Iterator for MeshBound<'a> {
         // Find the one that is a boundary.
         //
         // Update 'cur' to this half-edge.
+        println!("DEBUG: start={} cur={}", self.start, self.cur);
 
         let (v1, v2) = self.m.edge_vertices(self.cur);
+        println!("DEBUG: v1={} v2={}", v1, v2);
         // TODO: v1 or v2?
         for halfedge_id in self.m.vertex_halfedge_iter(v1) {
+            println!("DEBUG:   try halfedge {}", halfedge_id);
             if self.m.is_edge_on_boundary(halfedge_id) {
+            println!("DEBUG:   is boundary");
                 if self.start == halfedge_id {
+                    println!("DEBUG:   back to start");
                     // If we are walking the boundary and reach the
                     // starting edge again, we're done:
                     break;
@@ -365,10 +371,11 @@ fn main() {
         s
     };
     // TODO: Something is wrong here
-    let mb = MeshBound::new(&seed);
+    let mb = MeshBound::new(&seed).unwrap();
     for bound_edge in mb {
         println!("Boundary edge: {}", bound_edge);
     }
+
     let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
