@@ -244,30 +244,30 @@ impl<'a> Iterator for MeshBound<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
 
-        // Start from self.cur.
-        // Pick a vertex. (Doesn't matter which, as long as consistent.)
-        // Step to all *other* half-edges.
-        // Find the one that is a boundary.
-        //
-        // Update 'cur' to this half-edge.
-
         if self.done {
             return None;
         }
-        
+
+        // Start from our current half-edge:
         let (v1, v2) = self.m.edge_vertices(self.cur);
+        // Pick a vertex and walk around incident half-edges:
         for halfedge_id in self.m.vertex_halfedge_iter(v1) {
-            let (v3, v4) = self.m.edge_vertices(halfedge_id);
-            if v3 == v2 || v4 == v2 {
-                continue
+
+            // Avoid twin half-edge, which returns where we started:
+            let w = self.m.walker_from_halfedge(halfedge_id);
+            if w.twin_id().map_or(false, |twin| twin == self.cur) {
+                continue;
             }
+            // TODO: is there a quicker way to get the twin?
+
+            // If this incident half-edge is a boundary, follow it:
             if self.m.is_edge_on_boundary(halfedge_id) {
-                if self.start == halfedge_id {
-                    // If we are walking the boundary and reach the
-                    // start edge again, this is the last iteration:
+                
+                self.cur = halfedge_id;
+                if self.start == self.cur {
+                    // We have returned back to start:
                     self.done = true;
                 }
-                self.cur = halfedge_id;
                 return Some(halfedge_id);
             }
         }
