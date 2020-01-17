@@ -220,6 +220,7 @@ struct MeshBound<'a> {
     m: &'a Mesh,
     start: HalfEdgeID,
     cur: HalfEdgeID,
+    done: bool,
 }
 
 impl<'a> MeshBound<'a> {
@@ -230,6 +231,7 @@ impl<'a> MeshBound<'a> {
                     m: m,
                     start: halfedge_id,
                     cur: halfedge_id,
+                    done: false,
                 });
             }
         }
@@ -248,22 +250,23 @@ impl<'a> Iterator for MeshBound<'a> {
         // Find the one that is a boundary.
         //
         // Update 'cur' to this half-edge.
-        println!("DEBUG: start={} cur={}", self.start, self.cur);
 
+        if self.done {
+            return None;
+        }
+        
         let (v1, v2) = self.m.edge_vertices(self.cur);
-        println!("DEBUG: v1={} v2={}", v1, v2);
-        // TODO: v1 or v2?
         for halfedge_id in self.m.vertex_halfedge_iter(v1) {
-            println!("DEBUG:   try halfedge {}", halfedge_id);
+            let (v3, v4) = self.m.edge_vertices(halfedge_id);
+            if v3 == v2 || v4 == v2 {
+                continue
+            }
             if self.m.is_edge_on_boundary(halfedge_id) {
-            println!("DEBUG:   is boundary");
                 if self.start == halfedge_id {
-                    println!("DEBUG:   back to start");
                     // If we are walking the boundary and reach the
-                    // starting edge again, we're done:
-                    break;
+                    // start edge again, this is the last iteration:
+                    self.done = true;
                 }
-                // Otherwise, yield the next edge:
                 self.cur = halfedge_id;
                 return Some(halfedge_id);
             }
