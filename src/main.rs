@@ -107,6 +107,10 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
         // MeshBuilder requires u32 indices.  My vertices are
         // VertexID, which is just usize under the hood.  I am open to
         // other suggestions.
+        fn vertex_id_to_usize(v: VertexID) -> usize {
+            let v: VID = unsafe { std::mem::transmute(v) };
+            v.val
+        }
 
         let offset = u32::try_from(seed.no_vertices()).unwrap();
         
@@ -117,6 +121,24 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             let v1b = vertex_id_to_u32(v1b_);
             let v2a = vertex_id_to_u32(v2a_);
             let v2b = vertex_id_to_u32(v2b_);
+            
+            let v1a_d = vertex_id_to_usize(v1a_);
+            let v1b_d = vertex_id_to_usize(v1b_);
+            let v2a_d = vertex_id_to_usize(v2a_);
+            let v2b_d = vertex_id_to_usize(v2b_);
+
+            println!("DEBUG: i={} e1={} ({}-{}) e2={} ({}-{})", i, e1, v1a, v1b, e2, v2a, v2b);
+            // TODO: Figure out why I am seeing two different things
+            // for e1 here with pos vs. seed.edge_positions:
+            println!("DEBUG: i={} e1: ({},{},{}) to ({},{},{})",
+                     i, pos[3*v1a_d], pos[3*v1a_d+1], pos[3*v1a_d+2],
+                     pos[3*v1b_d], pos[3*v1b_d+1], pos[3*v1b_d+2]);
+            println!("DEBUG: e1, {:?}", seed.edge_positions(*e1));
+            // and for e2 here:
+            println!("DEBUG: i={} e2: ({},{},{}) to ({},{},{})",
+                     i, pos[3*v2a_d+3], pos[3*v2a_d+4], pos[3*v2a_d+5],
+                     pos[3*v2b_d+3], pos[3*v2b_d+4], pos[3*v2b_d+5]);
+            println!("DEBUG: e2, {:?}", mesh.edge_positions(*e2));
             // First triangle:
             indices[6*i + 0] = v1a;
             indices[6*i + 1] = v1b;
@@ -125,6 +147,7 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             indices[6*i + 3] = offset + v2a;
             indices[6*i + 4] = v1b;
             indices[6*i + 5] = offset + v2b;
+            println!("DEBUG: i={} ({}, {}, {}) and ({}, {}, {})", i, v1a, v1b, offset + v2a, offset + v2a, v1b, offset + v2b);
         }
         // TODO: This is *still* connecting wrong somehow
         
@@ -257,6 +280,7 @@ impl<'a> Iterator for MeshBound<'a> {
                     // We have returned back to start:
                     self.done = true;
                 }
+                println!("DEBUG:   MeshBound: edge {} is {:?}", halfedge_id, self.m.edge_positions(halfedge_id));
                 return Some(halfedge_id);
             }
         }
@@ -362,13 +386,14 @@ fn main() {
         s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
         s
     };
-    // TODO: Something is wrong here
+    /*
     let mb = MeshBound::new(&seed).unwrap();
     for bound_edge in mb {
         println!("Boundary edge: {}", bound_edge);
     }
+    */
 
-    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
+    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 5);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
     println!("Writing OBJ...");
