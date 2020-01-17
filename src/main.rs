@@ -83,35 +83,51 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
 
         let r = Rule::Recurse(curve_horn_thing_rule);
         mesh.apply_transformation(m);
-        //let seed2 = mesh.clone();
 
-        // Put all vertices together:
+        // TODO: Fix this horrible code below that is seemingly
+        // correct, but should not be run on every single iteration.
+        let bounds: Vec<(HalfEdgeID, HalfEdgeID)> = MeshBound::new(&seed).unwrap().zip(MeshBound::new(&mesh).unwrap()).collect();
+
+        // 'bounds' now has pairs of half-edges which walk the outside
+        // boundaries of each mesh, and should be connected together.
+        // They come from different meshes, so handle accordingly.
+        
+        // Put all vertices together (though we may not need them all,
+        // only the ones 'bounds' touches - TODO):
         let mut pos = seed.positions_buffer();
         pos.append(&mut mesh.positions_buffer());
-        let num_verts = seed.no_vertices();
-        let mut indices: Vec<u32> = vec![0; 2 * num_verts * 3];
-        let nv2 = u32::try_from(num_verts).unwrap();
+        // 2 faces per 'bounds' element, 3 vertices per face:
+        let mut indices: Vec<u32> = vec![0; 2 * bounds.len() * 3];
 
-        // TODO: don't I need to check if these are boundary edges or
-        // something?  I have to be traversing in some kind of sane
-        // order!  That is, this loop needs to be traversing the outer
-        // boundary one vertex at a time.
-        
-        for i in 0..num_verts {
-            let j = u32::try_from(i).unwrap();
-            let k = u32::try_from(num_verts + i).unwrap();
-            // First triangle:
-            indices[6*i + 0] = j;
-            indices[6*i + 1] = (j + 1) % nv2;
-            indices[6*i + 2] = k;
-            // Second triangle:
-            indices[6*i + 3] = j; // k;
-            indices[6*i + 4] = (j + 1) % nv2; // j + 1;
-            indices[6*i + 5] = k; // (k + 1) % (2 * nv2);
+        struct VID { val: usize }
+        fn vertex_id_to_u32(v: VertexID) -> u32 {
+            let v: VID = unsafe { std::mem::transmute(v) };
+            u32::try_from(v.val).unwrap()
         }
-        // TODO: Above needs some clarity
-        // (also, to be fixed)
+        // MeshBuilder requires u32 indices.  My vertices are
+        // VertexID, which is just usize under the hood.  I am open to
+        // other suggestions.
 
+        let offset = u32::try_from(seed.no_vertices()).unwrap();
+        
+        for (i,(e1,e2)) in bounds.iter().enumerate() {
+            let (v1a_, v1b_) = seed.edge_vertices(*e1);
+            let (v2a_, v2b_) = mesh.edge_vertices(*e2);
+            let v1a = vertex_id_to_u32(v1a_);
+            let v1b = vertex_id_to_u32(v1b_);
+            let v2a = vertex_id_to_u32(v2a_);
+            let v2b = vertex_id_to_u32(v2b_);
+            // First triangle:
+            indices[6*i + 0] = v1a;
+            indices[6*i + 1] = v1b;
+            indices[6*i + 2] = offset + v2a;
+            // Second triangle:
+            indices[6*i + 3] = offset + v2a;
+            indices[6*i + 4] = v1b;
+            indices[6*i + 5] = offset + v2b;
+        }
+        // TODO: This is *still* connecting wrong somehow
+        
         let joined = match MeshBuilder::new().with_positions(pos).with_indices(indices).build() {
             Ok(m) => m,
             Err(error) => {
@@ -125,35 +141,6 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     // trivially, we follow the requirement in a RuleStep that
     // applying 'xform' to 'seeds' puts it into the same space as
     // 'geom'.
-
-    // TODO: If I transform a clone of the seed then this will leave
-    // the vertices in the same order and preserve things like
-    // boundaries.  I would then need to copy positions_buffer for
-    // both the seed and the transformed seed (to give the vertices),
-    // and use this in conjuction with my own indices in order to do
-    // the zig-zag connection
-
-    // DEBUG
-    /*
-    for seed in &v {
-
-        let boundary = seed.edge_iter().filter(|e| seed.is_edge_on_boundary(*e));
-
-        for halfedge_id in boundary {
-            let (v1, v2) = seed.edge_vertices(halfedge_id);
-            println!("Boundary half-edge {}, verts {} & {}",
-                     halfedge_id, v1, v2);
-        }
-
-        // So, I have my boundary edges in no particular order.
-        // I suppose I could use a Walker to give some order.
-        //
-        // But: how do I then connect these vertices up?  I can easily
-        // get boundary vertices and make something based on those but
-        // that then limits me to the 'cage' thing I was stuck with
-        // prior.
-    }
-    */
 
     v.iter().map(gen_geom).collect()
 }
@@ -235,6 +222,8 @@ impl<'a> MeshBound<'a> {
                 });
             }
         }
+        // TODO: Maybe just return an iterator that returns None
+        // immediately if this mesh has no boundary?
         return None;
     }
 }
