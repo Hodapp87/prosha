@@ -124,8 +124,8 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             
             let v1a_d = vertex_id_to_usize(v1a_);
             let v1b_d = vertex_id_to_usize(v1b_);
-            let v2a_d = vertex_id_to_usize(v2a_);
-            let v2b_d = vertex_id_to_usize(v2b_);
+            let v2a_d = vertex_id_to_usize(v2a_) + seed.no_vertices();
+            let v2b_d = vertex_id_to_usize(v2b_) + seed.no_vertices();
 
             println!("DEBUG: i={} e1={} ({}-{}) e2={} ({}-{})", i, e1, v1a, v1b, e2, v2a, v2b);
             // TODO: Figure out why I am seeing two different things
@@ -136,8 +136,8 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             println!("DEBUG: e1, {:?}", seed.edge_positions(*e1));
             // and for e2 here:
             println!("DEBUG: i={} e2: ({},{},{}) to ({},{},{})",
-                     i, pos[3*v2a_d+3], pos[3*v2a_d+4], pos[3*v2a_d+5],
-                     pos[3*v2b_d+3], pos[3*v2b_d+4], pos[3*v2b_d+5]);
+                     i, pos[3*v2a_d], pos[3*v2a_d+1], pos[3*v2a_d+2],
+                     pos[3*v2b_d], pos[3*v2b_d+1], pos[3*v2b_d+2]);
             println!("DEBUG: e2, {:?}", mesh.edge_positions(*e2));
             // First triangle:
             indices[6*i + 0] = v1a;
@@ -149,7 +149,19 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             indices[6*i + 5] = offset + v2b;
             println!("DEBUG: i={} ({}, {}, {}) and ({}, {}, {})", i, v1a, v1b, offset + v2a, offset + v2a, v1b, offset + v2b);
         }
-        // TODO: This is *still* connecting wrong somehow
+        // TODO: This is *still* connecting wrong somehow.
+        
+        // positions_buffer just calls vertex_iter() and
+        // vertex_position anyway, so why not just access directly?
+        // The only thing that matters with my own indices is that
+        // they be u32 and they point to the right vertex (and I can
+        // choose the vertices).
+
+        // So maybe...
+        // - Assemble vertices just from 'bounds'.
+        // - Disregard positions_buffer completely. I don't need it.
+        // - Set 'indices' based on what I know about how 'bounds' was
+        // constructed.
         
         let joined = match MeshBuilder::new().with_positions(pos).with_indices(indices).build() {
             Ok(m) => m,
@@ -386,12 +398,27 @@ fn main() {
         s.apply_transformation(Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
         s
     };
-    /*
-    let mb = MeshBound::new(&seed).unwrap();
-    for bound_edge in mb {
-        println!("Boundary edge: {}", bound_edge);
+    // TEMP (while I figure shit out)
+    struct VID { val: usize }
+    fn vertex_id_to_usize(v: VertexID) -> usize {
+        let v: VID = unsafe { std::mem::transmute(v) };
+        v.val
     }
-    */
+    println!("DEBUG-------------------------------");
+    let mb = MeshBound::new(&seed).unwrap();
+    let mut pos = seed.positions_buffer();
+    for bound_edge in mb {
+        let (v1, v2) = seed.edge_vertices(bound_edge);
+        let v1idx = vertex_id_to_usize(v1);
+        let v2idx = vertex_id_to_usize(v2);
+        
+        println!("Boundary edge {}, vertices = {},{}, {:?}",
+                 bound_edge, v1, v2, seed.edge_positions(bound_edge));
+        println!("v1idx={} pos[...]=[{},{},{}], v2idx={}, pos[...]=[{},{},{}]",
+                 v1idx, pos[3*v1idx], pos[3*v1idx+1], pos[3*v1idx+2],
+                 v2idx, pos[3*v2idx], pos[3*v2idx+1], pos[3*v2idx+2]);
+    }
+    println!("DEBUG-------------------------------");
 
     let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 5);
     println!("Collected {} nodes, produced {} faces, {} vertices",
