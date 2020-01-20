@@ -90,14 +90,23 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
         // Collect together all the vertices from the boundaries of
         // 'seed' and 'mesh':
         let edge2vert = |m: &Mesh, e: HalfEdgeID| {
-            let v = m.edge_positions(e).0;
+            let v = m.vertex_position(m.edge_vertices(e).0);
             vec![v.x, v.y, v.z]
         };
         let i1 = MeshBound::new(&seed).unwrap().flat_map(|id| edge2vert(&seed, id));
         let i2 = MeshBound::new(&mesh).unwrap().flat_map(|id| edge2vert(&mesh, id));
         let verts: Vec<f64> = i1.chain(i2).collect();
-        println!("verts = {:?}", verts);
-
+        
+        /*
+        let vert2str = |idx: u32| {
+            let i2: usize = idx as _;
+            format!("({:.4},{:.4},{:.4})", verts[3*i2], verts[3*i2+1], verts[3*i2+2])
+        };
+        for i in 0..(seed.no_vertices() + mesh.no_vertices()) {
+            println!("vert {}: {}", i, vert2str(i as _))
+        }
+        */
+        
         // We need 3 indices per face, 2 faces per (boundary) vertex:
         let num_verts = seed.no_vertices();
         let mut idxs: Vec<u32> = vec![0; 2 * num_verts * 3];
@@ -108,17 +117,20 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             let b2: u32 = (((i + 1) % num_verts) + num_verts) as _;
             // Connect vertices into faces with a zig-zag pattern
             // (mind the winding order).  First face:
+            
             idxs[6*i + 0] = a1;
             idxs[6*i + 1] = a2;
             idxs[6*i + 2] = b1;
-            println!("vert {}, face 1: ({}, {}, {})", i, a1, a2, b1);
+            //println!("connect vert {}, face 1: ({}, {}, {}) = {}, {}, {}", i, a1, a2, b1, vert2str(a1), vert2str(a2), vert2str(b1));
             // Second face:
             idxs[6*i + 3] = b1;
             idxs[6*i + 4] = a2;
             idxs[6*i + 5] = b2;
-            println!("vert {}, face 2: ({}, {}, {})", i, b1, a2, b2);
+            //println!("connect vert {}, face 2: ({}, {}, {}) = {}, {}, {}", i, b1, a2, b2, vert2str(b1), vert2str(a2), vert2str(b2));
         }
-        // TODO: Something is still not quite right there.
+        // TODO: Something is *still* not quite right there.  I think
+        // that I cannot use MeshBuilder this was and then append
+        // meshes - it just leads to disconnected geometry
         
         let joined = match MeshBuilder::new().
             with_positions(verts).
@@ -367,7 +379,7 @@ fn main() {
     }
     println!("DEBUG-------------------------------");
     let mb = MeshBound::new(&seed).unwrap();
-    let mut pos = seed.positions_buffer();
+    let pos = seed.positions_buffer();
     for bound_edge in mb {
         let (v1, v2) = seed.edge_vertices(bound_edge);
         let v1idx = vertex_id_to_usize(v1);
