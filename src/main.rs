@@ -1,5 +1,83 @@
 //use std::io;
 use tri_mesh::prelude::*;
+use nalgebra::base::dimension::{U1, U4};
+//use nalgebra::Matrix4;
+
+/// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
+pub type Vertex = nalgebra::Matrix<f32, U4, U1, nalgebra::ArrayStorage<f32, U4, U1>>;
+// TODO: Why am I not just using nalgebra's RowVector type here?
+
+/// Initializes a vertex for a custom mesh.
+pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
+    Vertex::new(x, y, z, 1.0)
+}
+
+struct OpenMesh {
+    // Vertices (in homogeneous coordinates).  These must be in a
+    // specific order: 'Entrance' loops, then 'body' vertices, then
+    // 'exit' loops.
+    verts: Vec<Vertex>,
+    // Triangles, taken as every 3 values, treated each as indices
+    // into 'verts':
+    faces: Vec<usize>,
+    // A list of indices into verts, telling the index at which each
+    // 'entrance' vertex loop begins.  The loop implicitly ends where the
+    // next one begins, or if it is the last one, at idxs_body._1.
+    // Thus, this has one element per vertex loop, and must go in
+    // ascending order.
+    idxs_entrance: Vec<usize>,
+    // The same as idxs_entrance, but for 'exit' vertex loops.  The final
+    // loop is taken as ending at the end of the list.
+    idxs_exit:  Vec<usize>,
+    // The start and end (non-inclusive) of the 'body' vertices -
+    // those that are neither an entrance nor an exit loop.
+    idxs_body: (usize, usize),
+}
+// TODO: What is proper for an index, u32 or usize?
+
+impl OpenMesh {
+    
+    fn transform(&self, xfm: nalgebra::Matrix4<f32>) -> OpenMesh {
+        OpenMesh {
+            verts: self.verts.iter().map(|v| xfm * v).collect(),
+            faces: self.faces.clone(), // TODO: Use Rc?
+            idxs_entrance: self.idxs_entrance.clone(), // TODO: Use Rc?
+            idxs_exit: self.idxs_exit.clone(), // TODO: Use Rc?
+            idxs_body: self.idxs_body.clone(), // TODO: Use Rc?
+        }
+    }
+
+    fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
+
+        let mut v = self.verts.clone();
+        let mut f = self.faces.clone();
+
+        for other in others {
+            // We are offsetting all vertices in 'other' by everything
+            // else in 'v', so we need to account for this when we
+            // copy 'faces' (which has vector indices):
+            let offset = v.len();
+            v.extend(other.verts.iter());
+            f.extend(other.faces.iter().map(|f| *f + offset));
+        }
+        
+        // - Append entrance loop & body vertices of all.
+        // - Append all faces - but add offset to those from 'other'.
+        // - Connect up so that each of self's exit loops is an
+        // entrance loop from one of 'other'
+
+        return OpenMesh {
+            verts: v,
+            faces: f,
+            idxs_entrance: self.idxs_entrance.clone(), // TODO
+            idxs_exit: self.idxs_exit.clone(), // TODO
+            idxs_body: self.idxs_body.clone(), // TODO
+        };
+    }
+}
+
+// TODO: Does OpenMesh subsume both 'geom' and 'seeds' in RuleStep?
+// TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
 
 enum Rule {
     // Recurse further.  Input is "seeds" that further geometry should
@@ -129,7 +207,7 @@ fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
             //println!("connect vert {}, face 2: ({}, {}, {}) = {}, {}, {}", i, b1, a2, b2, vert2str(b1), vert2str(a2), vert2str(b2));
         }
         // TODO: Something is *still* not quite right there.  I think
-        // that I cannot use MeshBuilder this was and then append
+        // that I cannot use MeshBuilder this way and then append
         // meshes - it just leads to disconnected geometry
         
         let joined = match MeshBuilder::new().
@@ -393,9 +471,20 @@ fn main() {
     }
     println!("DEBUG-------------------------------");
 
-    let (mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
+    let (mut mesh, nodes) = rule_to_mesh(&r2, vec![seed], 75);
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, mesh.no_faces(), mesh.no_vertices());
+    println!("Trying to merge...");
+    match mesh.merge_overlapping_primitives() {
+        Err(e) => {
+            println!("Couldn't merge overlapping primitives!");
+            println!("Error: {:?}", e);
+        }
+        Ok(v) => {
+            println!("Merged to {} faces, {} vertices",
+                     mesh.no_faces(), mesh.no_vertices());
+        }
+    }
     println!("Writing OBJ...");
     std::fs::write("curve_horn_thing.obj", mesh.parse_as_obj()).unwrap();
     // TODO: Can I make the seed geometry part of the rule itself?
