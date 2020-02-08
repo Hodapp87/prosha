@@ -66,10 +66,23 @@ impl OpenMesh {
         // loop vertices of self.others[0] right over top of them).
         // 
         // exit loop 1 requires an offset of the number of entrace &
-        // body vertices of self.others[0].
+        // body vertices of self.others[0] (because we have appended
+        // this all)... with some additional adjustment maybe?  not
+        // sure.
         //
         // exit loop 2 requires an offset of the same for
         // self.others[0] and self.others[1].
+
+        // one thing I'm missing: the above assumes one entrance loop
+        // for each element of 'others' but this might not be right.
+        // how do I know *which* entrance loop in 'others' goes with
+        // which exit loop of 'self'?
+
+        // if I enforce that each in 'others' can have only one
+        // entrance loop, and these match up 1:1 with exit loops, then
+        // this is much simpler but less flexible; it forbids multiple
+        // loops moving in tandem, and more complex things like
+        // joining forks.
 
         for other in others {
             // We are offsetting all vertices in 'other' by everything
