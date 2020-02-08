@@ -49,20 +49,37 @@ impl OpenMesh {
 
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        let mut v = self.verts.clone();
+        // Start out by cloning just entrance & body vertices:
+        let mut v = self.verts[0..self.idxs_body.1].clone();
         let mut f = self.faces.clone();
+        // TODO: Don't I need to patch up 'f'?  self.faces refers to
+        // exit vertices which - if others.len() > 1 - need to be
+        // manually patched up.  This patching up should consist
+        // solely of an offset to all indices in a certain range.
+        //
+        // e.g. let idxs_exit be [e0, e1, e2, ... e_(n-1)]
+        // indices in range [e0, e1-1] are for exit loop 0.
+        // indices in range [e1, e2-1] are for exit loop 1.
+        // indices in range [e2, e3-1] are for exit loop 2, etc.
+        //
+        // exit loop 0 requires no offset (we'll be putting entrance
+        // loop vertices of self.others[0] right over top of them).
+        // 
+        // exit loop 1 requires an offset of the number of entrace &
+        // body vertices of self.others[0].
+        //
+        // exit loop 2 requires an offset of the same for
+        // self.others[0] and self.others[1].
 
         for other in others {
             // We are offsetting all vertices in 'other' by everything
             // else in 'v', so we need to account for this when we
             // copy 'faces' (which has vector indices):
             let offset = v.len();
-            v.extend(other.verts.iter());
+            v.extend(other.verts[0..other.idxs_body.1].iter());
             f.extend(other.faces.iter().map(|f| *f + offset));
         }
         
-        // - Append entrance loop & body vertices of all.
-        // - Append all faces - but add offset to those from 'other'.
         // - Connect up so that each of self's exit loops is an
         // entrance loop from one of 'other'
 
