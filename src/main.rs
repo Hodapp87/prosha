@@ -47,7 +47,7 @@ impl OpenMesh {
     }
 
     fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
-        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
+        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.idxs_body.1];
         // Start out by cloning just entrance & body vertices:
         v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
         let mut f = self.faces.clone();
@@ -485,12 +485,13 @@ fn main() {
             vertex(1.0, 1.0, 1.0),
         ],
         faces: vec![
-            0, 3, 1,
-            0, 2, 3,
+            // End caps disabled for now to test connect_single
+            // 0, 3, 1,
+            // 0, 2, 3,
             1, 7, 5,
             1, 3, 7,
-            5, 6, 4,
-            5, 7, 6,
+            // 5, 6, 4,
+            // 5, 7, 6,
             4, 2, 0,
             4, 6, 2,
             2, 7, 3,
@@ -498,14 +499,16 @@ fn main() {
             0, 1, 5,
             0, 5, 4,
         ],
-        idxs_entrance: vec![],
-        idxs_exit: vec![],
-        idxs_body: (0, 0),
+        idxs_entrance: vec![0, 1, 2, 3],
+        idxs_exit: vec![4, 5, 6, 7],
+        idxs_body: (4, 4),
     };
 
-    let xform = nalgebra::geometry::Translation3::new(2.0, 0.0, 0.0).to_homogeneous();
+    let xform = nalgebra::geometry::Translation3::new(0.0, 0.0, 1.0).to_homogeneous();
     let m2 = m.transform(xform);
 
+    let m3 = m.connect_single(&m2);
+    
     let try_save = |m: OpenMesh, fname: &str| {
         let m_trimesh = m.to_trimesh().unwrap();
         std::fs::write(fname, m_trimesh.parse_as_obj()).unwrap();
@@ -513,6 +516,7 @@ fn main() {
 
     try_save(m, "openmesh_cube.obj");
     try_save(m2, "openmesh_cube2.obj");
+    try_save(m3, "openmesh_cube3.obj");
     
     // Construct any mesh, this time, we will construct a simple icosahedron
     let mesh = MeshBuilder::new().icosahedron().build().unwrap();
