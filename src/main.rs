@@ -21,16 +21,16 @@ struct OpenMesh {
     // into 'verts':
     faces: Vec<usize>,
     // A list of indices into verts, telling the index at which each
-    // 'entrance' vertex loop begins.  The loop implicitly ends where the
-    // next one begins, or if it is the last one, at idxs_body._1.
-    // Thus, this has one element per vertex loop, and must go in
-    // ascending order.
+    // 'entrance' vertex group begins.  The group implicitly ends
+    // where the next one begins, or if it is the last group, at
+    // idxs_body._1.  Thus, this has one element per vertex group, and
+    // must go in ascending order.
     idxs_entrance: Vec<usize>,
-    // The same as idxs_entrance, but for 'exit' vertex loops.  The final
-    // loop is taken as ending at the end of the list.
+    // The same as idxs_entrance, but for 'exit' vertex groups.  The
+    // final loop is taken as ending at the end of the list.
     idxs_exit:  Vec<usize>,
     // The start and end (non-inclusive) of the 'body' vertices -
-    // those that are neither an entrance nor an exit loop.
+    // those that are neither an entrance nor an exit group.
     idxs_body: (usize, usize),
 }
 // TODO: What is proper for an index, u32 or usize?
@@ -47,10 +47,54 @@ impl OpenMesh {
         }
     }
 
+    fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
+        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
+        // Start out by cloning just entrance & body vertices:
+        v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
+        let mut f = self.faces.clone();
+
+        // I already know what size v will be so I can pre-allocate
+        // and then just clone_from_slice to the proper locations
+
+        // We are offsetting all vertices in 'other' by everything
+        // else in 'v', so we need to account for this when we copy
+        // 'faces' (which has vector indices):
+        let offset = self.idxs_body.1;
+        f.extend(other.faces.iter().map(|f| *f + offset));
+        v.extend(other.verts.iter());
+        // The new exit groups are those in 'other', but likewise we
+        // need to shift these indices:
+        let idxs_exit = self.idxs_exit.iter().map(|f| *f + offset).collect();
+        // Body vertices start in the same place, but end where the
+        // body vertices in 'other' end (thus needing offset):
+        let idxs_body = (self.idxs_body.0, other.idxs_body.1 + offset);
+
+        OpenMesh {
+            verts: v,
+            faces: f,
+            idxs_entrance: self.idxs_entrance.clone(),
+            idxs_exit: idxs_exit,
+            idxs_body: idxs_body,
+        }
+    }
+
+    fn to_trimesh(&self) -> Result<Mesh, tri_mesh::mesh_builder::Error> {
+        let mut v: Vec<f64> = vec![0.0; self.verts.len() * 3];
+        for (i, vert) in self.verts.iter().enumerate() {
+            v[3*i] = vert[0].into();
+            v[3*i+1] = vert[1].into();
+            v[3*i+2] = vert[2].into();
+        }
+        let faces: Vec<u32> = self.faces.iter().map(|f| *f as _).collect();
+        MeshBuilder::new().with_indices(faces).with_positions(v).build()
+    }
+
+    // Just assume this is broken
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
+        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
         // Start out by cloning just entrance & body vertices:
-        let mut v = self.verts[0..self.idxs_body.1].clone();
+        v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
         let mut f = self.faces.clone();
         // TODO: Don't I need to patch up 'f'?  self.faces refers to
         // exit vertices which - if others.len() > 1 - need to be
@@ -58,31 +102,20 @@ impl OpenMesh {
         // solely of an offset to all indices in a certain range.
         //
         // e.g. let idxs_exit be [e0, e1, e2, ... e_(n-1)]
-        // indices in range [e0, e1-1] are for exit loop 0.
-        // indices in range [e1, e2-1] are for exit loop 1.
-        // indices in range [e2, e3-1] are for exit loop 2, etc.
+        // indices in range [e0, e1-1] are for exit group 0.
+        // indices in range [e1, e2-1] are for exit group 1.
+        // indices in range [e2, e3-1] are for exit group 2, etc.
         //
-        // exit loop 0 requires no offset (we'll be putting entrance
-        // loop vertices of self.others[0] right over top of them).
+        // exit group 0 requires no offset (we'll be putting entrance
+        // group vertices of self.others[0] right over top of them).
         // 
-        // exit loop 1 requires an offset of the number of entrace &
+        // exit group 1 requires an offset of the number of entrace &
         // body vertices of self.others[0] (because we have appended
         // this all)... with some additional adjustment maybe?  not
         // sure.
         //
-        // exit loop 2 requires an offset of the same for
+        // exit group 2 requires an offset of the same for
         // self.others[0] and self.others[1].
-
-        // one thing I'm missing: the above assumes one entrance loop
-        // for each element of 'others' but this might not be right.
-        // how do I know *which* entrance loop in 'others' goes with
-        // which exit loop of 'self'?
-
-        // if I enforce that each in 'others' can have only one
-        // entrance loop, and these match up 1:1 with exit loops, then
-        // this is much simpler but less flexible; it forbids multiple
-        // loops moving in tandem, and more complex things like
-        // joining forks.
 
         for other in others {
             // We are offsetting all vertices in 'other' by everything
@@ -93,13 +126,13 @@ impl OpenMesh {
             f.extend(other.faces.iter().map(|f| *f + offset));
         }
         
-        // - Connect up so that each of self's exit loops is an
-        // entrance loop from one of 'other'
+        // - Connect up so that each of self's exit groups is an
+        // entrance group from one of 'other'
 
         return OpenMesh {
             verts: v,
             faces: f,
-            idxs_entrance: self.idxs_entrance.clone(), // TODO
+            idxs_entrance: self.idxs_entrance.clone(),
             idxs_exit: self.idxs_exit.clone(), // TODO
             idxs_body: self.idxs_body.clone(), // TODO
         };
@@ -439,6 +472,40 @@ fn print_matrix(m: &Mat4) {
 }
 
 fn main() {
+
+    println!("DEBUG-------------------------------");
+    let m = OpenMesh {
+        verts: vec![
+            vertex(0.0, 0.0, 0.0),
+            vertex(1.0, 0.0, 0.0),
+            vertex(0.0, 1.0, 0.0),
+            vertex(1.0, 1.0, 0.0),
+            vertex(0.0, 0.0, 1.0),
+            vertex(1.0, 0.0, 1.0),
+            vertex(0.0, 1.0, 1.0),
+            vertex(1.0, 1.0, 1.0),
+        ],
+        faces: vec![
+            0, 3, 1,
+            0, 2, 3,
+            1, 7, 5,
+            1, 3, 7,
+            5, 6, 4,
+            5, 7, 6,
+            4, 2, 0,
+            4, 6, 2,
+            2, 7, 3,
+            2, 6, 7,
+            0, 1, 5,
+            0, 5, 4,
+        ],
+        idxs_entrance: vec![],
+        idxs_exit: vec![],
+        idxs_body: (0, 0),
+    };
+    let m_trimesh = m.to_trimesh().unwrap();
+    std::fs::write("openmesh_cube.obj", m_trimesh.parse_as_obj()).unwrap();
+    
     // Construct any mesh, this time, we will construct a simple icosahedron
     let mesh = MeshBuilder::new().icosahedron().build().unwrap();
 
