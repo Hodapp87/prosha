@@ -1,6 +1,6 @@
 //use std::io;
 use tri_mesh::prelude::*;
-use nalgebra::base::dimension::{U1, U4};
+//use nalgebra::base::dimension::{U1, U4};
 //use nalgebra::Matrix4;
 
 /// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
@@ -11,6 +11,7 @@ pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
     Vertex::new(x, y, z, 1.0)
 }
 
+#[derive(Clone, Debug)]
 struct OpenMesh {
     // Vertices (in homogeneous coordinates).  These must be in a
     // specific order: 'Entrance' loops, then 'body' vertices, then
@@ -63,7 +64,7 @@ impl OpenMesh {
         v.extend(other.verts.iter());
         // The new exit groups are those in 'other', but likewise we
         // need to shift these indices:
-        let idxs_exit = self.idxs_exit.iter().map(|f| *f + offset).collect();
+        let idxs_exit = other.idxs_exit.iter().map(|f| *f + offset).collect();
         // Body vertices start in the same place, but end where the
         // body vertices in 'other' end (thus needing offset):
         let idxs_body = (self.idxs_body.0, other.idxs_body.1 + offset);
@@ -210,7 +211,7 @@ fn curve_horn_start(_v: Vec<Mesh>) -> Vec<RuleStep> {
     ]
 }
 
-use std::convert::TryFrom;
+//use std::convert::TryFrom;
 
 fn curve_horn_thing_rule(v: Vec<Mesh>) -> Vec<RuleStep> {
     
@@ -499,24 +500,37 @@ fn main() {
             0, 1, 5,
             0, 5, 4,
         ],
-        idxs_entrance: vec![0, 1, 2, 3],
-        idxs_exit: vec![4, 5, 6, 7],
+        idxs_entrance: vec![0],
+        idxs_exit: vec![4],
         idxs_body: (4, 4),
     };
 
     let xform = nalgebra::geometry::Translation3::new(0.0, 0.0, 1.0).to_homogeneous();
     let m2 = m.transform(xform);
-
     let m3 = m.connect_single(&m2);
+    let m4 = m3.connect_single(&m2.transform(xform));
+    println!("m4 = {:?}", m4);
     
-    let try_save = |m: OpenMesh, fname: &str| {
+    let try_save = |m: &OpenMesh, fname: &str| {
         let m_trimesh = m.to_trimesh().unwrap();
-        std::fs::write(fname, m_trimesh.parse_as_obj()).unwrap();
+        std::fs::write(fname, m_trimesh.parse_as_obj()).unwrap();                                    
     };
 
-    try_save(m, "openmesh_cube.obj");
-    try_save(m2, "openmesh_cube2.obj");
-    try_save(m3, "openmesh_cube3.obj");
+    try_save(&m, "openmesh_cube.obj");
+    try_save(&m2, "openmesh_cube2.obj");
+    try_save(&m3, "openmesh_cube3.obj");
+
+    {
+        let count = 10;
+        let mut mesh = m.clone();
+        let mut inc = m.clone();
+        for i in 0..count {
+            inc = inc.transform(xform);
+            mesh = mesh.connect_single(&inc);
+        }
+        println!("mesh = {:?}", mesh);
+        try_save(&mesh, "openmesh_cube_several.obj");
+    }
     
     // Construct any mesh, this time, we will construct a simple icosahedron
     let mesh = MeshBuilder::new().icosahedron().build().unwrap();
