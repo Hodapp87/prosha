@@ -4,8 +4,7 @@ use nalgebra::base::dimension::{U1, U4};
 //use nalgebra::Matrix4;
 
 /// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
-pub type Vertex = nalgebra::Matrix<f32, U4, U1, nalgebra::ArrayStorage<f32, U4, U1>>;
-// TODO: Why am I not just using nalgebra's RowVector type here?
+pub type Vertex = nalgebra::Vector4<f32>;
 
 /// Initializes a vertex for a custom mesh.
 pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
@@ -503,8 +502,17 @@ fn main() {
         idxs_exit: vec![],
         idxs_body: (0, 0),
     };
-    let m_trimesh = m.to_trimesh().unwrap();
-    std::fs::write("openmesh_cube.obj", m_trimesh.parse_as_obj()).unwrap();
+
+    let xform = nalgebra::geometry::Translation3::new(2.0, 0.0, 0.0).to_homogeneous();
+    let m2 = m.transform(xform);
+
+    let try_save = |m: OpenMesh, fname: &str| {
+        let m_trimesh = m.to_trimesh().unwrap();
+        std::fs::write(fname, m_trimesh.parse_as_obj()).unwrap();
+    };
+
+    try_save(m, "openmesh_cube.obj");
+    try_save(m2, "openmesh_cube2.obj");
     
     // Construct any mesh, this time, we will construct a simple icosahedron
     let mesh = MeshBuilder::new().icosahedron().build().unwrap();
