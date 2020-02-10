@@ -48,6 +48,12 @@ impl OpenMesh {
     }
 
     fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
+
+        // Imagine connecting two pieces of pipe together.  We are
+        // fitting the exit of 'self' to the entrance of 'other' - and
+        // producing a new piece of pipe which has the entrance of
+        // 'self', but the exit of 'other'.
+        
         let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.idxs_body.1];
         // Start out by cloning just entrance & body vertices:
         v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
@@ -387,7 +393,7 @@ impl<'a> Iterator for MeshBound<'a> {
         }
 
         // Start from our current half-edge:
-        let (v1, v2) = self.m.edge_vertices(self.cur);
+        let (v1, _) = self.m.edge_vertices(self.cur);
         // Pick a vertex and walk around incident half-edges:
         for halfedge_id in self.m.vertex_halfedge_iter(v1) {
 
@@ -524,7 +530,7 @@ fn main() {
         let count = 10;
         let mut mesh = m.clone();
         let mut inc = m.clone();
-        for i in 0..count {
+        for _ in 0..count {
             inc = inc.transform(xform);
             mesh = mesh.connect_single(&inc);
         }
@@ -603,7 +609,7 @@ fn main() {
             println!("Couldn't merge overlapping primitives!");
             println!("Error: {:?}", e);
         }
-        Ok(v) => {
+        Ok(_) => {
             println!("Merged to {} faces, {} vertices",
                      mesh.no_faces(), mesh.no_vertices());
         }
