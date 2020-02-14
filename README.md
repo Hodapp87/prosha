@@ -1,13 +1,21 @@
-- `curve_horn_*`: actually *combine* geometry properly.
+# This needs a title
 
-- Why is MeshBuilder so slow?  Am I certain I'm not giving it a lot of
-  redundant geometry?
+## Highest priority:
 
+- Fix `OpenMesh.connect()`.
+- Continue converting `curve_horn_*`.
+- Migrate away from `tri_mesh` because its MeshBuilder is so slow.
+  Perhaps use [stl_io](https://docs.rs/stl_io/0.4.2/stl_io/) instead.
+
+## Important:
+
+- Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
 - Implement some of the tougher examples from the above too, e.g. the
   triple nested spiral
 - Lots of Rust-kosher refactoring (once I understand Rust better)
-- Grep for all TODOs in code, really
 - Actual Rust-style docs!
+
+## If I'm bored:
 
 - Fix links in tri_mesh docs that use relative paths & do a PR?
