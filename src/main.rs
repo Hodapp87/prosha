@@ -46,6 +46,20 @@ impl OpenMesh {
         }
     }
 
+    fn to_trimesh(&self) -> Result<tm::Mesh, tri_mesh::mesh_builder::Error> {
+        let mut v: Vec<f64> = vec![0.0; self.verts.len() * 3];
+        println!("DEBUG: to_trimesh() iterating...");
+        for (i, vert) in self.verts.iter().enumerate() {
+            v[3*i] = vert[0].into();
+            v[3*i+1] = vert[1].into();
+            v[3*i+2] = vert[2].into();
+        }
+        let faces: Vec<u32> = self.faces.iter().map(|f| *f as _).collect();
+        println!("DEBUG: to_trimesh() calling MeshBuilder. faces.len()={}, v.len()={}...", faces.len(), v.len());
+        tm::MeshBuilder::new().with_indices(faces).with_positions(v).build()
+    }
+    // TODO: Why is this the slow part?
+
     fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
 
         // Imagine connecting two pieces of pipe together.  We are
@@ -83,89 +97,89 @@ impl OpenMesh {
         }
     }
 
-    fn to_trimesh(&self) -> Result<tm::Mesh, tri_mesh::mesh_builder::Error> {
-        let mut v: Vec<f64> = vec![0.0; self.verts.len() * 3];
-        for (i, vert) in self.verts.iter().enumerate() {
-            v[3*i] = vert[0].into();
-            v[3*i+1] = vert[1].into();
-            v[3*i+2] = vert[2].into();
-        }
-        let faces: Vec<u32> = self.faces.iter().map(|f| *f as _).collect();
-        tm::MeshBuilder::new().with_indices(faces).with_positions(v).build()
-    }
-
     // Just assume this is broken
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
-        // Start out by cloning just entrance & body vertices:
-        v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
-        let mut f = self.faces.clone();
-        // TODO: Don't I need to patch up 'f'?  self.faces refers to
-        // exit vertices which - if others.len() > 1 - need to be
-        // manually patched up.  This patching up should consist
-        // solely of an offset to all indices in a certain range.
-        //
-        // e.g. let idxs_exit be [e0, e1, e2, ... e_(n-1)]
-        // indices in range [e0, e1-1] are for exit group 0.
-        // indices in range [e1, e2-1] are for exit group 1.
-        // indices in range [e2, e3-1] are for exit group 2, etc.
-        //
-        // exit group 0 requires no offset (we'll be putting entrance
-        // group vertices of self.others[0] right over top of them).
-        // 
-        // exit group 1 requires an offset of the number of entrace &
-        // body vertices of self.others[0] (because we have appended
-        // this all)... with some additional adjustment maybe?  not
-        // sure.
-        //
-        // exit group 2 requires an offset of the same for
-        // self.others[0] and self.others[1].
-
-        for other in others {
-            // We are offsetting all vertices in 'other' by everything
-            // else in 'v', so we need to account for this when we
-            // copy 'faces' (which has vector indices):
-            let offset = v.len();
-            v.extend(other.verts[0..other.idxs_body.1].iter());
-            f.extend(other.faces.iter().map(|f| *f + offset));
+        if others.len() > 1 && self.idxs_exit.len() > 0 {
+            panic!("connect() is implemented for only one mesh if exit groups are present")
         }
-        
-        // - Connect up so that each of self's exit groups is an
-        // entrance group from one of 'other'
 
-        return OpenMesh {
-            verts: v,
-            faces: f,
-            idxs_entrance: self.idxs_entrance.clone(),
-            idxs_exit: self.idxs_exit.clone(), // TODO
-            idxs_body: self.idxs_body.clone(), // TODO
-        };
+        if false {
+            let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
+            // Start out by cloning just entrance & body vertices:
+            v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
+            let mut f = self.faces.clone();
+            // TODO: Don't I need to patch up 'f'?  self.faces refers to
+            // exit vertices which - if others.len() > 1 - need to be
+            // manually patched up.  This patching up should consist
+            // solely of an offset to all indices in a certain range.
+            //
+            // e.g. let idxs_exit be [e0, e1, e2, ... e_(n-1)]
+            // indices in range [e0, e1-1] are for exit group 0.
+            // indices in range [e1, e2-1] are for exit group 1.
+            // indices in range [e2, e3-1] are for exit group 2, etc.
+            //
+            // exit group 0 requires no offset (we'll be putting entrance
+            // group vertices of self.others[0] right over top of them).
+            // 
+            // exit group 1 requires an offset of the number of entrace &
+            // body vertices of self.others[0] (because we have appended
+            // this all)... with some additional adjustment maybe?  not
+            // sure.
+            //
+            // exit group 2 requires an offset of the same for
+            // self.others[0] and self.others[1].
+
+            for other in others {
+                // We are offsetting all vertices in 'other' by everything
+                // else in 'v', so we need to account for this when we
+                // copy 'faces' (which has vector indices):
+                let offset = v.len();
+                v.extend(other.verts[0..other.idxs_body.1].iter());
+                f.extend(other.faces.iter().map(|f| *f + offset));
+            }
+            
+            // - Connect up so that each of self's exit groups is an
+            // entrance group from one of 'other'
+
+            return OpenMesh {
+                verts: v,
+                faces: f,
+                idxs_entrance: self.idxs_entrance.clone(),
+                idxs_exit: self.idxs_exit.clone(), // TODO
+                idxs_body: self.idxs_body.clone(), // TODO
+            };
+        }
+
+        // This is wrong, but close enough for now;
+        let mut mesh = self.clone();
+        for other in others {
+            mesh = mesh.connect_single(&other);
+        }
+        return mesh;
     }
 }
 
-// TODO: Does OpenMesh subsume both 'geom' and 'seeds' in RuleStep?
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
 
 enum Rule {
     // Produce geometry, and possibly recurse further:
-    Recurse(fn () -> Vec<RuleStep>),
+    Recurse(fn () -> RuleStep),
     // Stop recursing here:
     EmptyRule,
 }
 // TODO: Rename rules?
+// TODO: It may be possible to have just a 'static' rule that requires
+// no function call.
 
 struct RuleStep {
-    // The geometry generated by this rule on its own - and none of
-    // the child rules.
+    // The geometry generated by this rule on its own (not by any of
+    // the child rules).
     geom: OpenMesh,
-    
-    // The next rule to run.  If EmptyRule, then stop here (and
-    // 'xform' is irrelevant).
-    rule: Box<Rule>,
-    // The transformation to apply to geometry generated by 'rule' and
-    // any child rules.
-    xform: Matrix4<f32>,
+
+    // Child rules, paired with the transform that will be applied to
+    // all of their geometry
+    children: Vec<(Rule, Matrix4<f32>)>,
 }
 
 // is there a better way to do this?
@@ -361,7 +375,7 @@ fn cube() -> OpenMesh {
     }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }
 
-fn cube_thing_rule() -> Vec<RuleStep> {
+fn cube_thing_rule() -> RuleStep {
 
     let mesh = cube();
 
@@ -381,18 +395,20 @@ fn cube_thing_rule() -> Vec<RuleStep> {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
-    let gen_rulestep = |rot: &Matrix4<f32>| -> RuleStep {
+    let gen_rulestep = |rot: &Matrix4<f32>| -> (Rule, Matrix4<f32>) {
         let m: Matrix4<f32> = rot *
             Matrix4::new_scaling(0.5) *
             geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
-        let r = Rule::Recurse(cube_thing_rule);
-
-        let m2 = mesh.transform(m);
-        RuleStep { geom: m2, rule: Box::new(r), xform: m }
+        (Rule::Recurse(cube_thing_rule), m)
     };
 
-    turns.iter().map(gen_rulestep).collect()
+    RuleStep {
+        geom: mesh,
+        children: turns.iter().map(gen_rulestep).collect(),
+    }
 }
+// TODO: This doesn't produce a central cube; it's like it's half an
+// iteration off.
 
 // Have I any need of this after making OpenMesh?
 /*
@@ -473,38 +489,34 @@ impl<'a> Iterator for MeshBound<'a> {
 
 fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (OpenMesh, u32) {
 
-    let mut mesh = empty_mesh();
-
     let mut nodes: u32 = 1;
     
     if iters_left <= 0 {
-        return (mesh, nodes);
+        return (empty_mesh(), nodes);
     }
 
     match rule {
-        Rule::Recurse(func) => {
-            for step in func() {
-                let subrule: Rule = *step.rule;
-                let subxform: Matrix4<f32> = step.xform;
-                let geom: OpenMesh = step.geom;
+        Rule::Recurse(f) => {
+            let rs: RuleStep = f();
 
-                mesh = mesh.connect_single(&geom);
-                
-                let (mut submesh, subnodes) = rule_to_mesh(
-                    &subrule, iters_left - 1);
+            // Get sub-geometry (from child rules) and transform it:
+            let subgeom: Vec<(OpenMesh, Matrix4<f32>, u32)> = rs.children.iter().map(|(subrule, subxform)| {
+                let (m,n) = rule_to_mesh(subrule, iters_left - 1);
+                (m, *subxform, n)
+            }).collect();
 
-                submesh = submesh.transform(subxform);
+            // Tally up node count:
+            subgeom.iter().for_each(|(_,_,n)| nodes += n);
 
-                nodes += subnodes;
+            let g: Vec<OpenMesh> = subgeom.iter().map(|(m,x,_)| m.transform(*x)).collect();
 
-                mesh = mesh.connect_single(&submesh);
-            }
+            // Connect geometry from this rule (not child rules):
+            return (rs.geom.connect(&g), nodes);
         }
         Rule::EmptyRule => {
-            // do nothing
+            return (empty_mesh(), nodes);
         }
     }
-    (mesh, nodes)
 }
 
 fn main() {
@@ -570,9 +582,10 @@ fn main() {
 
     let r = Rule::Recurse(cube_thing_rule);
 
-    let max_iters = 2;
+    let max_iters = 4;
     println!("Running rules...");
     let (cubemesh_, nodes) = rule_to_mesh(&r, max_iters);
+    println!("Converting mesh...");
     let cubemesh = cubemesh_.to_trimesh().unwrap();
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, cubemesh.no_faces(), cubemesh.no_vertices());
@@ -591,7 +604,4 @@ fn main() {
         s
     };
     */
-    // TEMP (while I figure shit out)
-    println!("DEBUG-------------------------------");
-
 }
