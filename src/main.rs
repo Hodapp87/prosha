@@ -1,7 +1,7 @@
 //use std::io;
-use tri_mesh::prelude as tm;
 use nalgebra::*;
 use std::fs::OpenOptions;
+use std::io;
 
 /// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
 pub type Vertex = Vector4<f32>;
@@ -49,30 +49,16 @@ impl OpenMesh {
         }
     }
 
-    fn to_trimesh(&self) -> Result<tm::Mesh, tri_mesh::mesh_builder::Error> {
-        let mut v: Vec<f64> = vec![0.0; self.verts.len() * 3];
-        println!("DEBUG: to_trimesh() iterating...");
-        for (i, vert) in self.verts.iter().enumerate() {
-            v[3*i] = vert[0].into();
-            v[3*i+1] = vert[1].into();
-            v[3*i+2] = vert[2].into();
-        }
-        let faces: Vec<u32> = self.faces.iter().map(|f| *f as _).collect();
-        println!("DEBUG: to_trimesh() calling MeshBuilder. faces.len()={}, v.len()={}...", faces.len(), v.len());
-        // TODO: Why is this the slow part?
-        tm::MeshBuilder::new().with_indices(faces).with_positions(v).build()
-    }
-
-    fn write_stl_file(&self, fname: &str) -> Result<(), std::io::Error> {
+    fn write_stl_file(&self, fname: &str) -> io::Result<()> {
         let mut file = OpenOptions::new().write(true).create(true).open(fname)?;
         self.write_stl(&mut file)
     }
     
-    fn write_stl<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+    fn write_stl<W: std::io::Write>(&self, writer: &mut W) -> io::Result<()> {
 
-        // TODO: Fix indexing bug here
-        
-        let num_faces = self.faces.len();
+        // Every group of 3 indices in self.faces is one triangle, so
+        // pre-allocate in the format stl_io wants:
+        let num_faces = self.faces.len() / 3;
         let mut triangles = vec![stl_io::Triangle {
             normal: [0.0; 3],
             vertices: [[0.0; 3]; 3],
@@ -88,11 +74,12 @@ impl OpenMesh {
             triangles[i].vertices[0].copy_from_slice(&v0[0..3]);
             triangles[i].vertices[1].copy_from_slice(&v1[0..3]);
             triangles[i].vertices[2].copy_from_slice(&v2[0..3]);
+            // TODO: Is there a cleaner way to do the above?
         }
 
         // I could also solve this with something like
         // https://doc.rust-lang.org/std/primitive.slice.html#method.chunks_exact
-        // however I don't know what performance difference may be
+        // however I don't know what performance difference may be.
 
         stl_io::write_stl(writer, triangles.iter())
     }
@@ -595,15 +582,10 @@ fn main() {
     let m3 = m.connect_single(&m2);
     let m4 = m3.connect_single(&m2.transform(xform));
     println!("m4 = {:?}", m4);
-    
-    let try_save = |m: &OpenMesh, fname: &str| {
-        let m_trimesh = m.to_trimesh().unwrap();
-        std::fs::write(fname, m_trimesh.parse_as_obj()).unwrap();                                    
-    };
 
-    try_save(&m, "openmesh_cube.obj");
-    try_save(&m2, "openmesh_cube2.obj");
-    try_save(&m3, "openmesh_cube3.obj");
+    m.write_stl_file("openmesh_cube.obj").unwrap();
+    m2.write_stl_file("openmesh_cube2.obj").unwrap();
+    m3.write_stl_file("openmesh_cube3.obj").unwrap();
 
     {
         let count = 10;
@@ -614,22 +596,16 @@ fn main() {
             mesh = mesh.connect_single(&inc);
         }
         println!("mesh = {:?}", mesh);
-        try_save(&mesh, "openmesh_cube_several.obj");
+        //try_save(&mesh, "openmesh_cube_several.obj");
     }
 
     let r = Rule::Recurse(cube_thing_rule);
 
     let max_iters = 4;
     println!("Running rules...");
-    let (cubemesh_, nodes) = rule_to_mesh(&r, max_iters);
+    let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
     println!("Writing STL...");
-    cubemesh_.write_stl_file("cubemesh.stl").unwrap();
-    println!("Converting mesh to tri_mesh...");
-    let cubemesh = cubemesh_.to_trimesh().unwrap();
-    println!("Collected {} nodes, produced {} faces, {} vertices",
-             nodes, cubemesh.no_faces(), cubemesh.no_vertices());
-    println!("Writing OBJ...");
-    std::fs::write("cubemesh.obj", cubemesh.parse_as_obj()).unwrap();
+    cubemesh.write_stl_file("cubemesh.stl").unwrap();
 
     /*
     let r2 = Rule::Recurse(curve_horn_start);

@@ -4,8 +4,6 @@
 
 - Fix `OpenMesh.connect()`.
 - Continue converting `curve_horn_*`.
-- Migrate away from `tri_mesh` because its MeshBuilder is so slow.
-  Perhaps use [stl_io](https://docs.rs/stl_io/0.4.2/stl_io/) instead.
 
 ## Important:
 
