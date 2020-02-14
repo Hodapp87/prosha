@@ -1,11 +1,13 @@
 //use std::io;
 use tri_mesh::prelude as tm;
 use nalgebra::*;
+use std::fs::OpenOptions;
 
 /// A type for custom mesh vertices. Initialize with [vertex][self::vertex].
 pub type Vertex = Vector4<f32>;
+pub type Mat4 = Matrix4<f32>;
 
-/// Initializes a vertex for a custom mesh.
+/// Initializes a vertex:
 pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
     Vertex::new(x, y, z, 1.0)
 }
@@ -32,11 +34,12 @@ struct OpenMesh {
     // those that are neither an entrance nor an exit group.
     idxs_body: (usize, usize),
 }
-// TODO: What is proper for an index, u32 or usize?
+// TODO: Do I even use idxs_entrance?  Is it still valuable as a
+// cross-check?
 
 impl OpenMesh {
     
-    fn transform(&self, xfm: Matrix4<f32>) -> OpenMesh {
+    fn transform(&self, xfm: Mat4) -> OpenMesh {
         OpenMesh {
             verts: self.verts.iter().map(|v| xfm * v).collect(),
             faces: self.faces.clone(), // TODO: Use Rc?
@@ -56,9 +59,43 @@ impl OpenMesh {
         }
         let faces: Vec<u32> = self.faces.iter().map(|f| *f as _).collect();
         println!("DEBUG: to_trimesh() calling MeshBuilder. faces.len()={}, v.len()={}...", faces.len(), v.len());
+        // TODO: Why is this the slow part?
         tm::MeshBuilder::new().with_indices(faces).with_positions(v).build()
     }
-    // TODO: Why is this the slow part?
+
+    fn write_stl_file(&self, fname: &str) -> Result<(), std::io::Error> {
+        let mut file = OpenOptions::new().write(true).create(true).open(fname)?;
+        self.write_stl(&mut file)
+    }
+    
+    fn write_stl<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+
+        // TODO: Fix indexing bug here
+        
+        let num_faces = self.faces.len();
+        let mut triangles = vec![stl_io::Triangle {
+            normal: [0.0; 3],
+            vertices: [[0.0; 3]; 3],
+        }; num_faces];
+        
+        // Turn every face into an stl_io::Triangle:
+        for i in 0..num_faces {
+            let v0 = self.verts[self.faces[3*i + 0]].as_slice();
+            let v1 = self.verts[self.faces[3*i + 1]].as_slice();
+            let v2 = self.verts[self.faces[3*i + 2]].as_slice();
+
+            // TODO: Normals
+            triangles[i].vertices[0].copy_from_slice(&v0[0..3]);
+            triangles[i].vertices[1].copy_from_slice(&v1[0..3]);
+            triangles[i].vertices[2].copy_from_slice(&v2[0..3]);
+        }
+
+        // I could also solve this with something like
+        // https://doc.rust-lang.org/std/primitive.slice.html#method.chunks_exact
+        // however I don't know what performance difference may be
+
+        stl_io::write_stl(writer, triangles.iter())
+    }
 
     fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
 
@@ -179,7 +216,7 @@ struct RuleStep {
 
     // Child rules, paired with the transform that will be applied to
     // all of their geometry
-    children: Vec<(Rule, Matrix4<f32>)>,
+    children: Vec<(Rule, Mat4)>,
 }
 
 // is there a better way to do this?
@@ -386,7 +423,7 @@ fn cube_thing_rule() -> RuleStep {
     let z = &Vector3::z_axis();
     
     // Each element of this turns to a branch for the recursion:
-    let turns: Vec<Matrix4<f32>> = vec![
+    let turns: Vec<Mat4> = vec![
         geometry::Transform3::identity().to_homogeneous(),
         geometry::Rotation3::from_axis_angle(y, qtr).to_homogeneous(),
         geometry::Rotation3::from_axis_angle(y, qtr * 2.0).to_homogeneous(),
@@ -395,8 +432,8 @@ fn cube_thing_rule() -> RuleStep {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
-    let gen_rulestep = |rot: &Matrix4<f32>| -> (Rule, Matrix4<f32>) {
-        let m: Matrix4<f32> = rot *
+    let gen_rulestep = |rot: &Mat4| -> (Rule, Mat4) {
+        let m: Mat4 = rot *
             Matrix4::new_scaling(0.5) *
             geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
         (Rule::Recurse(cube_thing_rule), m)
@@ -500,7 +537,7 @@ fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (OpenMesh, u32) {
             let rs: RuleStep = f();
 
             // Get sub-geometry (from child rules) and transform it:
-            let subgeom: Vec<(OpenMesh, Matrix4<f32>, u32)> = rs.children.iter().map(|(subrule, subxform)| {
+            let subgeom: Vec<(OpenMesh, Mat4, u32)> = rs.children.iter().map(|(subrule, subxform)| {
                 let (m,n) = rule_to_mesh(subrule, iters_left - 1);
                 (m, *subxform, n)
             }).collect();
@@ -585,7 +622,9 @@ fn main() {
     let max_iters = 4;
     println!("Running rules...");
     let (cubemesh_, nodes) = rule_to_mesh(&r, max_iters);
-    println!("Converting mesh...");
+    println!("Writing STL...");
+    cubemesh_.write_stl_file("cubemesh.stl").unwrap();
+    println!("Converting mesh to tri_mesh...");
     let cubemesh = cubemesh_.to_trimesh().unwrap();
     println!("Collected {} nodes, produced {} faces, {} vertices",
              nodes, cubemesh.no_faces(), cubemesh.no_vertices());
