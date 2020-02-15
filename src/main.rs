@@ -41,6 +41,8 @@ impl OpenMesh {
     fn transform(&self, xfm: Mat4) -> OpenMesh {
         OpenMesh {
             verts: self.verts.iter().map(|v| xfm * v).collect(),
+            // TODO: Is the above faster if I pack vectors into a
+            // bigger matrix?
             faces: self.faces.clone(), // TODO: Use Rc?
             idxs_entrance: self.idxs_entrance.clone(), // TODO: Use Rc?
             idxs_exit: self.idxs_exit.clone(), // TODO: Use Rc?
@@ -62,13 +64,13 @@ impl OpenMesh {
             normal: [0.0; 3],
             vertices: [[0.0; 3]; 3],
         }; num_faces];
-        
+
         // Turn every face into an stl_io::Triangle:
         for i in 0..num_faces {
             let v0 = self.verts[self.faces[3*i + 0]].xyz();
             let v1 = self.verts[self.faces[3*i + 1]].xyz();
             let v2 = self.verts[self.faces[3*i + 2]].xyz();
-
+            
             let normal = (v1-v0).cross(&(v2-v0));
 
             triangles[i].normal.copy_from_slice(&normal.as_slice());
@@ -201,6 +203,12 @@ struct RuleStep {
     // the child rules).
     geom: OpenMesh,
 
+    // The "final" geometry, used only if recursion must be stopped.
+    // This should be in the same coordinate space as 'geom', and
+    // properly close any exit groups that it may have (and have no
+    // exit groups of its own).
+    final_geom: OpenMesh,
+
     // Child rules, paired with the transform that will be applied to
     // all of their geometry
     children: Vec<(Rule, Mat4)>,
@@ -221,7 +229,15 @@ impl Rule {
         let mut nodes: u32 = 1;
 
         if iters_left <= 0 {
-            return (empty_mesh(), nodes);
+            match self {
+                Rule::Recurse(f) => {
+                    let rs: RuleStep = f();
+                    return (rs.final_geom, 1);
+                }
+                Rule::EmptyRule => {
+                    return (empty_mesh(), nodes);
+                }
+            }
         }
 
         match self {
@@ -293,7 +309,7 @@ fn cube() -> OpenMesh {
 }
 
 /*
-fn curve_horn_start() -> Vec<RuleStep> {
+fn curve_horn_start() -> RuleStep {
     // Seed is a square in XY, sidelength 1, centered at (0,0,0):
     let seed = {
         let m = OpenMesh {
@@ -335,42 +351,65 @@ fn curve_horn_start() -> Vec<RuleStep> {
 }
 
 //use std::convert::TryFrom;
+*/
 
-fn curve_horn_thing_rule() -> Vec<RuleStep> {
+fn curve_horn_thing_rule() -> RuleStep {
+
+    let y = &Vector3::y_axis();
     
-    let gen_geom = |seed: &Mesh| -> RuleStep {
-        let mut mesh = seed.clone();
+    let m: Mat4 = geometry::Rotation3::from_axis_angle(y, 0.1).to_homogeneous() *
+        Matrix4::new_scaling(0.95) *
+        geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous();
 
-        let m: Mat4 = tm::Matrix4::from_angle_y(Rad(0.1)) *
-            tm::Matrix4::from_scale(0.95) *
-            tm::Matrix4::from_translation(vec3(0.0, 0.0, 0.2));
+    let mut verts = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(0.5, -0.5, 0.0),
+        vertex(-0.5, 0.5, 0.0),
+        vertex(0.5, 0.5, 0.0),
+    ];
+    let mut v2: Vec<Vertex> = verts.iter().map(|v| m * v).collect();
+    let final_verts: Vec<Vertex> = v2.clone();
+    verts.append(&mut v2);
+    
+    let geom = OpenMesh {
+        verts: verts,
+        faces: vec![
+            // Endcaps purposely left off for now.
+            // TODO: I should really generate these, not hard-code them.
+            1, 7, 5,
+            1, 3, 7,
+            4, 2, 0,
+            4, 6, 2,
+            2, 7, 3,
+            2, 6, 7,
+            0, 1, 5,
+            0, 5, 4,
+        ],
+        idxs_entrance: vec![0],
+        idxs_exit: vec![4],
+        idxs_body: (4, 4),
+    };
 
-        let r = Rule::Recurse(curve_horn_thing_rule);
-        mesh.apply_transformation(m);
+    let final_geom = OpenMesh {
+        verts: final_verts,
+        faces: vec![
+            0, 3, 1,
+            0, 2, 3,
+        ],
+        idxs_entrance: vec![0],
+        idxs_exit: vec![],
+        idxs_body: (4, 4),
+    };
+    
+    RuleStep{
+        geom: geom,
+        final_geom: final_geom,
+        children: vec![
+            (Rule::Recurse(curve_horn_thing_rule), m),
+        ],
+    }
 
-        // TODO: Fix this horrible code below that is seemingly
-        // correct, but shouldn't be run on every rule iteration!
-
-        // Collect together all the vertices from the boundaries of
-        // 'seed' and 'mesh':
-        let edge2vert = |m: &Mesh, e: HalfEdgeID| {
-            let v = m.vertex_position(m.edge_vertices(e).0);
-            vec![v.x, v.y, v.z]
-        };
-        let i1 = MeshBound::new(&seed).unwrap().flat_map(|id| edge2vert(&seed, id));
-        let i2 = MeshBound::new(&mesh).unwrap().flat_map(|id| edge2vert(&mesh, id));
-        let verts: Vec<f64> = i1.chain(i2).collect();
-        
-        /*
-        let vert2str = |idx: u32| {
-            let i2: usize = idx as _;
-            format!("({:.4},{:.4},{:.4})", verts[3*i2], verts[3*i2+1], verts[3*i2+2])
-        };
-        for i in 0..(seed.no_vertices() + mesh.no_vertices()) {
-            println!("vert {}: {}", i, vert2str(i as _))
-        }
-        */
-        
+    /*
         // We need 3 indices per face, 2 faces per (boundary) vertex:
         let num_verts = seed.no_vertices();
         let mut idxs: Vec<u32> = vec![0; 2 * num_verts * 3];
@@ -392,55 +431,8 @@ fn curve_horn_thing_rule() -> Vec<RuleStep> {
             idxs[6*i + 5] = b2;
             //println!("connect vert {}, face 2: ({}, {}, {}) = {}, {}, {}", i, b1, a2, b2, vert2str(b1), vert2str(a2), vert2str(b2));
         }
-        // TODO: Something is *still* not quite right there.  I think
-        // that I cannot use MeshBuilder this way and then append
-        // meshes - it just leads to disconnected geometry
-        
-        let joined = match tm::MeshBuilder::new().
-            with_positions(verts).
-            with_indices(idxs).
-            build()
-        {
-            Ok(m) => m,
-            Err(error) => {
-                panic!("Error building mesh: {:?}", error)
-            },
-        };
-        
-        RuleStep { geom: joined, rule: Box::new(r), xform: m, seeds: vec![seed.clone()] }
-    };
-    // Since 'mesh' is computed directly by applying 'm' to 'seed',
-    // trivially, we follow the requirement in a RuleStep that
-    // applying 'xform' to 'seeds' puts it into the same space as
-    // 'geom'.
-
-    v.iter().map(gen_geom).collect()
+    */
 }
-
-// Assume v0, v1, and v2 are non-collinear points.  This tries to
-// produce a transform which treats v0 as the origin of a new
-// coordinate system, the line from v0 to v1 as the new X axis, the Y
-// axis perpendicular to this along the plane that (v0,v1,v2) forms,
-// and the Z axis the normal of this same plane.
-//
-// Scale is taken into account (to the extent that the length of
-// (v1-v0) is taken as distance 1 in the new coordinate system).
-fn points_to_xform(v0: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> Mat4 {
-    let x:  Vec3 = v1 - v0;
-    let xn: Vec3 = x.normalize();
-    let zn:  Vec3 = x.cross(v2 - v0).normalize();
-    let yn:  Vec3 = zn.cross(xn);
-    let s = x.magnitude();
-
-    let _m: Mat4 = tm::Matrix4::from_cols(
-        (xn*s).extend(0.0),   // new X
-        (yn*s).extend(0.0),   // new Y
-        (zn*s).extend(0.0),   // new Z
-        v0.to_homogeneous(), // translation
-    );
-    return _m;
-}
-*/
 
 fn cube_thing_rule() -> RuleStep {
 
@@ -471,78 +463,10 @@ fn cube_thing_rule() -> RuleStep {
 
     RuleStep {
         geom: mesh,
+        final_geom: empty_mesh(), // no exit groups
         children: turns.iter().map(gen_rulestep).collect(),
     }
 }
-
-// Have I any need of this after making OpenMesh?
-/*
-struct MeshBound<'a> {
-    m: &'a Mesh,
-    start: HalfEdgeID,
-    cur: HalfEdgeID,
-    done: bool,
-}
-
-impl<'a> MeshBound<'a> {
-    fn new(m: &'a Mesh) -> Option<MeshBound> {
-        for halfedge_id in m.edge_iter() {
-            if m.is_edge_on_boundary(halfedge_id) {
-                return Some(MeshBound {
-                    m: m,
-                    start: halfedge_id,
-                    cur: halfedge_id,
-                    done: false,
-                });
-            }
-        }
-        // TODO: Maybe just return an iterator that returns None
-        // immediately if this mesh has no boundary?
-        return None;
-    }
-}
-
-impl<'a> Iterator for MeshBound<'a> {
-    type Item = HalfEdgeID;
-
-    fn next(&mut self) -> Option<Self::Item> {
-
-        if self.done {
-            return None;
-        }
-
-        // Start from our current half-edge:
-        let (v1, _) = self.m.edge_vertices(self.cur);
-        // Pick a vertex and walk around incident half-edges:
-        for halfedge_id in self.m.vertex_halfedge_iter(v1) {
-
-            // Avoid twin half-edge, which returns where we started:
-            let w = self.m.walker_from_halfedge(halfedge_id);
-            if w.twin_id().map_or(false, |twin| twin == self.cur) {
-                continue;
-            }
-            // TODO: is there a quicker way to get the twin?
-
-            // If this incident half-edge is a boundary, follow it:
-            if self.m.is_edge_on_boundary(halfedge_id) {
-                
-                self.cur = halfedge_id;
-                if self.start == self.cur {
-                    // We have returned back to start:
-                    self.done = true;
-                }
-                //println!("DEBUG:   MeshBound: edge {} is {:?}", halfedge_id, self.m.edge_positions(halfedge_id));
-                return Some(halfedge_id);
-            }
-        }
-        return None;
-    }
-    
-}
-*/
-
-//fn mesh_boundary(m: &Mesh) -> Vec<tri_mesh::HalfEdgeID> {
-//}
 
 fn main() {
 
@@ -597,28 +521,26 @@ fn main() {
             inc = inc.transform(xform);
             mesh = mesh.connect_single(&inc);
         }
-        //println!("mesh = {:?}", mesh);
     }
 
-    let r = Rule::Recurse(cube_thing_rule);
+    {
+        let r = Rule::Recurse(cube_thing_rule);
+        let max_iters = 4;
+        println!("Running rules...");
+        let (cubemesh, nodes) = r.to_mesh(max_iters);
+        println!("Merged {} nodes", nodes);
+        println!("Writing STL...");
+        cubemesh.write_stl_file("cubemesh.stl").unwrap();
+    }
 
-    let max_iters = 4;
-    println!("Running rules...");
-    let (cubemesh, nodes) = r.to_mesh(max_iters);
-    println!("Merged {} nodes", nodes);
-    println!("Writing STL...");
-    cubemesh.write_stl_file("cubemesh.stl").unwrap();
-
-    /*
-    let r2 = Rule::Recurse(curve_horn_start);
-    println!("Running rules...");
-    // Seed:
-    let seed = {
-        let indices: Vec<u32> = vec![0, 1, 2,  2, 1, 3];
-        let positions: Vec<f64> = vec![0.0, 0.0, 0.0,  1.0, 0.0, 0.0,  0.0, 1.0, 0.0,  1.0, 1.0, 0.0];
-        let mut s = tm::MeshBuilder::new().with_indices(indices).with_positions(positions).build().unwrap();
-        s.apply_transformation(tm::Matrix4::from_translation(vec3(-0.5, -0.5, 0.0)));
-        s
-    };
-    */
+    {
+        let r = Rule::Recurse(curve_horn_thing_rule);
+        let max_iters = 50;
+        println!("Running rules...");
+        let (cubemesh, nodes) = r.to_mesh(max_iters);
+        //println!("cubemesh={:?}", cubemesh);
+        println!("Merged {} nodes", nodes);
+        println!("Writing STL...");
+        cubemesh.write_stl_file("curve_horn_thing.stl").unwrap();
+    }
 }
