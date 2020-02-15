@@ -186,7 +186,6 @@ impl OpenMesh {
 }
 
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
-
 enum Rule {
     // Produce geometry, and possibly recurse further:
     Recurse(fn () -> RuleStep),
@@ -207,6 +206,49 @@ struct RuleStep {
     children: Vec<(Rule, Mat4)>,
 }
 
+impl Rule {
+
+    // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
+    // could end up having a lot of identical geometry that need not be
+    // duplicated until it is transformed into the global space.
+    //
+    // This might produce bigger gains if I rewrite rule_to_mesh so that
+    // rather than repeatedly transforming meshes, it stacks
+    // transformations and then applies them all at once.
+
+    fn to_mesh(&self, iters_left: u32) -> (OpenMesh, u32) {
+
+        let mut nodes: u32 = 1;
+
+        if iters_left <= 0 {
+            return (empty_mesh(), nodes);
+        }
+
+        match self {
+            Rule::Recurse(f) => {
+                let rs: RuleStep = f();
+
+                // Get sub-geometry (from child rules) and transform it:
+                let subgeom: Vec<(OpenMesh, Mat4, u32)> = rs.children.iter().map(|(subrule, subxform)| {
+                    let (m,n) = subrule.to_mesh(iters_left - 1);
+                    (m, *subxform, n)
+                }).collect();
+
+                // Tally up node count:
+                subgeom.iter().for_each(|(_,_,n)| nodes += n);
+
+                let g: Vec<OpenMesh> = subgeom.iter().map(|(m,x,_)| m.transform(*x)).collect();
+
+                // Connect geometry from this rule (not child rules):
+                return (rs.geom.connect(&g), nodes);
+            }
+            Rule::EmptyRule => {
+                return (empty_mesh(), nodes);
+            }
+        }
+    }
+}
+
 // is there a better way to do this?
 fn empty_mesh() -> OpenMesh {
     OpenMesh {
@@ -216,6 +258,38 @@ fn empty_mesh() -> OpenMesh {
             idxs_exit: vec![],
             idxs_body: (0, 0),
     }
+}
+
+fn cube() -> OpenMesh {
+    OpenMesh {
+        verts: vec![
+            vertex(0.0, 0.0, 0.0),
+            vertex(1.0, 0.0, 0.0),
+            vertex(0.0, 1.0, 0.0),
+            vertex(1.0, 1.0, 0.0),
+            vertex(0.0, 0.0, 1.0),
+            vertex(1.0, 0.0, 1.0),
+            vertex(0.0, 1.0, 1.0),
+            vertex(1.0, 1.0, 1.0),
+        ],
+        faces: vec![
+            0, 3, 1,
+            0, 2, 3,
+            1, 7, 5,
+            1, 3, 7,
+            5, 6, 4,
+            5, 7, 6,
+            4, 2, 0,
+            4, 6, 2,
+            2, 7, 3,
+            2, 6, 7,
+            0, 1, 5,
+            0, 5, 4,
+        ],
+        idxs_entrance: vec![],
+        idxs_exit: vec![],
+        idxs_body: (0, 8),
+    }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }
 
 /*
@@ -368,38 +442,6 @@ fn points_to_xform(v0: Point3<f64>, v1: Point3<f64>, v2: Point3<f64>) -> Mat4 {
 }
 */
 
-fn cube() -> OpenMesh {
-    OpenMesh {
-        verts: vec![
-            vertex(0.0, 0.0, 0.0),
-            vertex(1.0, 0.0, 0.0),
-            vertex(0.0, 1.0, 0.0),
-            vertex(1.0, 1.0, 0.0),
-            vertex(0.0, 0.0, 1.0),
-            vertex(1.0, 0.0, 1.0),
-            vertex(0.0, 1.0, 1.0),
-            vertex(1.0, 1.0, 1.0),
-        ],
-        faces: vec![
-            0, 3, 1,
-            0, 2, 3,
-            1, 7, 5,
-            1, 3, 7,
-            5, 6, 4,
-            5, 7, 6,
-            4, 2, 0,
-            4, 6, 2,
-            2, 7, 3,
-            2, 6, 7,
-            0, 1, 5,
-            0, 5, 4,
-        ],
-        idxs_entrance: vec![],
-        idxs_exit: vec![],
-        idxs_body: (0, 8),
-    }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
-}
-
 fn cube_thing_rule() -> RuleStep {
 
     let mesh = cube();
@@ -432,8 +474,6 @@ fn cube_thing_rule() -> RuleStep {
         children: turns.iter().map(gen_rulestep).collect(),
     }
 }
-// TODO: This doesn't produce a central cube; it's like it's half an
-// iteration off.
 
 // Have I any need of this after making OpenMesh?
 /*
@@ -504,46 +544,6 @@ impl<'a> Iterator for MeshBound<'a> {
 //fn mesh_boundary(m: &Mesh) -> Vec<tri_mesh::HalfEdgeID> {
 //}
 
-// TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
-// could end up having a lot of identical geometry that need not be
-// duplicated until it is transformed into the global space.
-//
-// This might produce bigger gains if I rewrite rule_to_mesh so that
-// rather than repeatedly transforming meshes, it stacks
-// transformations and then applies them all at once.
-
-fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (OpenMesh, u32) {
-
-    let mut nodes: u32 = 1;
-    
-    if iters_left <= 0 {
-        return (empty_mesh(), nodes);
-    }
-
-    match rule {
-        Rule::Recurse(f) => {
-            let rs: RuleStep = f();
-
-            // Get sub-geometry (from child rules) and transform it:
-            let subgeom: Vec<(OpenMesh, Mat4, u32)> = rs.children.iter().map(|(subrule, subxform)| {
-                let (m,n) = rule_to_mesh(subrule, iters_left - 1);
-                (m, *subxform, n)
-            }).collect();
-
-            // Tally up node count:
-            subgeom.iter().for_each(|(_,_,n)| nodes += n);
-
-            let g: Vec<OpenMesh> = subgeom.iter().map(|(m,x,_)| m.transform(*x)).collect();
-
-            // Connect geometry from this rule (not child rules):
-            return (rs.geom.connect(&g), nodes);
-        }
-        Rule::EmptyRule => {
-            return (empty_mesh(), nodes);
-        }
-    }
-}
-
 fn main() {
 
     // Below is so far my only example that uses entrance/exit groups:
@@ -604,7 +604,7 @@ fn main() {
 
     let max_iters = 4;
     println!("Running rules...");
-    let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
+    let (cubemesh, nodes) = r.to_mesh(max_iters);
     println!("Merged {} nodes", nodes);
     println!("Writing STL...");
     cubemesh.write_stl_file("cubemesh.stl").unwrap();
