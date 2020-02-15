@@ -2,8 +2,6 @@
 
 ## Highest priority:
 
-- Fix my fucked STL export at max_iters=4.  Blender & Wings refuse to
-  load.
 - Fix `OpenMesh.connect()`.
 - Continue converting `curve_horn_*`.
 
@@ -19,3 +17,6 @@
 ## If I'm bored:
 
 - Fix links in tri_mesh docs that use relative paths & do a PR?
+- Look in https://www.nalgebra.org/quick_reference/# for "pour
+  obtain".  Can I fix this somehow?  Looks like a French-ism that made
+  its way in.

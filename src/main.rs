@@ -49,7 +49,7 @@ impl OpenMesh {
     }
 
     fn write_stl_file(&self, fname: &str) -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true).create(true).open(fname)?;
+        let mut file = OpenOptions::new().write(true).create(true).truncate(true).open(fname)?;
         self.write_stl(&mut file)
     }
     
@@ -602,7 +602,7 @@ fn main() {
 
     let r = Rule::Recurse(cube_thing_rule);
 
-    let max_iters = 5;
+    let max_iters = 4;
     println!("Running rules...");
     let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
     println!("Merged {} nodes", nodes);
