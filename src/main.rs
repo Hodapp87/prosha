@@ -1,4 +1,3 @@
-//use std::io;
 use nalgebra::*;
 use std::fs::OpenOptions;
 use std::io;
@@ -66,14 +65,16 @@ impl OpenMesh {
         
         // Turn every face into an stl_io::Triangle:
         for i in 0..num_faces {
-            let v0 = self.verts[self.faces[3*i + 0]].as_slice();
-            let v1 = self.verts[self.faces[3*i + 1]].as_slice();
-            let v2 = self.verts[self.faces[3*i + 2]].as_slice();
+            let v0 = self.verts[self.faces[3*i + 0]].xyz();
+            let v1 = self.verts[self.faces[3*i + 1]].xyz();
+            let v2 = self.verts[self.faces[3*i + 2]].xyz();
 
-            // TODO: Normals
-            triangles[i].vertices[0].copy_from_slice(&v0[0..3]);
-            triangles[i].vertices[1].copy_from_slice(&v1[0..3]);
-            triangles[i].vertices[2].copy_from_slice(&v2[0..3]);
+            let normal = (v1-v0).cross(&(v2-v0));
+
+            triangles[i].normal.copy_from_slice(&normal.as_slice());
+            triangles[i].vertices[0].copy_from_slice(v0.as_slice());
+            triangles[i].vertices[1].copy_from_slice(v1.as_slice());
+            triangles[i].vertices[2].copy_from_slice(v2.as_slice());
             // TODO: Is there a cleaner way to do the above?
         }
 
@@ -545,6 +546,7 @@ fn rule_to_mesh(rule: &Rule, iters_left: u32) -> (OpenMesh, u32) {
 
 fn main() {
 
+    // Below is so far my only example that uses entrance/exit groups:
     println!("DEBUG-------------------------------");
     let m = OpenMesh {
         verts: vec![
@@ -595,15 +597,15 @@ fn main() {
             inc = inc.transform(xform);
             mesh = mesh.connect_single(&inc);
         }
-        println!("mesh = {:?}", mesh);
-        //try_save(&mesh, "openmesh_cube_several.obj");
+        //println!("mesh = {:?}", mesh);
     }
 
     let r = Rule::Recurse(cube_thing_rule);
 
-    let max_iters = 4;
+    let max_iters = 5;
     println!("Running rules...");
     let (cubemesh, nodes) = rule_to_mesh(&r, max_iters);
+    println!("Merged {} nodes", nodes);
     println!("Writing STL...");
     cubemesh.write_stl_file("cubemesh.stl").unwrap();
 

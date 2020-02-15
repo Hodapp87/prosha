@@ -2,6 +2,8 @@
 
 ## Highest priority:
 
+- Fix my fucked STL export at max_iters=4.  Blender & Wings refuse to
+  load.
 - Fix `OpenMesh.connect()`.
 - Continue converting `curve_horn_*`.
 
