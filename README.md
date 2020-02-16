@@ -2,7 +2,8 @@
 
 ## Highest priority:
 
-- Continue converting `curve_horn_*`.
+- Fix issue with `curve_horn_*` that prevents geometry being joined in
+  middle.
 - Consider trampolining `to_mesh`.  My call stack seems needlessly
   deep in spots.  Can I make tail-recursive?
 - 

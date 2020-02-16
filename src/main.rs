@@ -275,50 +275,22 @@ fn cube() -> OpenMesh {
     }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }
 
-/*
 fn curve_horn_start() -> RuleStep {
-    // Seed is a square in XY, sidelength 1, centered at (0,0,0):
-    let seed = {
-        let m = OpenMesh {
-            verts: vec![
-                vertex(0.0, 0.0, 0.0),
-                vertex(1.0, 0.0, 0.0),
-                vertex(1.0, 1.0, 0.0),
-                vertex(0.0, 1.0, 0.0),
-            ],
-            faces: vec![
-                0, 1, 2,
-                0, 2, 3,
-            ],
-            idxs_entrance: vec![0],
-            idxs_exit: vec![0],
-            idxs_body: (0, 0),
-        };
-        let xform = nalgebra::geometry::Translation3::new(-0.5, -0.5, 0.0).to_homogeneous();
-        m.transform(xform)
-    };
-    vec![
-        // Since neither of the other two rules *start* with geometry:
-        RuleStep { geom: seed.clone(),
-                   rule: Box::new(Rule::EmptyRule),
-                   xform: nalgebra::geometry::Transform3::identity().to_homogeneous(),
-        },
-        // Recurse in both directions:
-        RuleStep { geom: seed.clone(),
-                   rule: Box::new(Rule::Recurse(curve_horn_thing_rule)),
-                   xform: nalgebra::geometry::Transform3::identity().to_homogeneous(),
-        },
-        RuleStep { geom: seed.clone(),
-                   rule: Box::new(Rule::Recurse(curve_horn_thing_rule)),
-                   xform: nalgebra::geometry::Rotation3::from_axis_angle(
-                       &nalgebra::Vector3::y_axis(),
-                       std::f32::consts::FRAC_PI_2).to_homogeneous(),
-        },
-    ]
+    let id = nalgebra::geometry::Transform3::identity().to_homogeneous();
+    let flip180 = nalgebra::geometry::Rotation3::from_axis_angle(
+        &nalgebra::Vector3::y_axis(),
+        std::f32::consts::PI).to_homogeneous();
+    RuleStep {
+        geom: empty_mesh(),
+        final_geom: empty_mesh(),
+        children: vec![
+            (Rule::Recurse(curve_horn_thing_rule), id),
+            (Rule::Recurse(curve_horn_thing_rule), flip180),
+        ],
+    }
+    // TODO: This has duplicate geometry in the middle because four
+    // vertices of each start point never technically connect.
 }
-
-//use std::convert::TryFrom;
-*/
 
 fn curve_horn_thing_rule() -> RuleStep {
 
@@ -442,4 +414,5 @@ fn main() {
 
     run_test(Rule::Recurse(cube_thing_rule), 3, "cube_thing");
     run_test(Rule::Recurse(curve_horn_thing_rule), 100, "curve_horn_thing");
+    run_test(Rule::Recurse(curve_horn_start), 100, "curve_horn2");
 }
