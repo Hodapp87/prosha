@@ -12,29 +12,20 @@ pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
 }
 
 #[derive(Clone, Debug)]
+enum Tag {
+    Body(usize),
+    Exit(usize, usize),  // (group, vertex)
+}
+
+#[derive(Clone, Debug)]
 struct OpenMesh {
-    // Vertices (in homogeneous coordinates).  These must be in a
-    // specific order: 'Entrance' loops, then 'body' vertices, then
-    // 'exit' loops.
+    // Vertices (in homogeneous coordinates).
     verts: Vec<Vertex>,
     // Triangles, taken as every 3 values, treated each as indices
     // into 'verts':
-    faces: Vec<usize>,
-    // A list of indices into verts, telling the index at which each
-    // 'entrance' vertex group begins.  The group implicitly ends
-    // where the next one begins, or if it is the last group, at
-    // idxs_body._1.  Thus, this has one element per vertex group, and
-    // must go in ascending order.
-    idxs_entrance: Vec<usize>,
-    // The same as idxs_entrance, but for 'exit' vertex groups.  The
-    // final loop is taken as ending at the end of the list.
-    idxs_exit:  Vec<usize>,
-    // The start and end (non-inclusive) of the 'body' vertices -
-    // those that are neither an entrance nor an exit group.
-    idxs_body: (usize, usize),
+    faces: Vec<Tag>,
+    exit_groups: Vec<usize>,
 }
-// TODO: Do I even use idxs_entrance?  Is it still valuable as a
-// cross-check?
 
 impl OpenMesh {
     
@@ -44,9 +35,7 @@ impl OpenMesh {
             // TODO: Is the above faster if I pack vectors into a
             // bigger matrix, and transform that?
             faces: self.faces.clone(), // TODO: Use Rc?
-            idxs_entrance: self.idxs_entrance.clone(), // TODO: Use Rc?
-            idxs_exit: self.idxs_exit.clone(), // TODO: Use Rc?
-            idxs_body: self.idxs_body.clone(), // TODO: Use Rc?
+            exit_groups: self.exit_groups.clone(),
         }
     }
 
@@ -65,11 +54,19 @@ impl OpenMesh {
             vertices: [[0.0; 3]; 3],
         }; num_faces];
 
+        let get_vert = |j| {
+            match self.faces[j] {
+                Tag::Body(n) => self.verts[n].xyz(),
+                Tag::Exit(_, _) => panic!("Cannot write_stl() if mesh has exit groups!"),
+            }
+        };
+        // TODO: Handle this behavior
+        
         // Turn every face into an stl_io::Triangle:
         for i in 0..num_faces {
-            let v0 = self.verts[self.faces[3*i + 0]].xyz();
-            let v1 = self.verts[self.faces[3*i + 1]].xyz();
-            let v2 = self.verts[self.faces[3*i + 2]].xyz();
+            let v0 = get_vert(3*i + 0);
+            let v1 = get_vert(3*i + 1);
+            let v2 = get_vert(3*i + 2);
             
             let normal = (v1-v0).cross(&(v2-v0));
 
@@ -87,125 +84,71 @@ impl OpenMesh {
         stl_io::write_stl(writer, triangles.iter())
     }
 
-    fn connect_single(&self, other: &OpenMesh) -> OpenMesh {
-
-        // Imagine connecting two pieces of pipe together.  We are
-        // fitting the exit of 'self' to the entrance of 'other' - and
-        // producing a new piece of pipe which has the entrance of
-        // 'self', but the exit of 'other'.
-        
-        let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.idxs_body.1];
-        // Start out by cloning just entrance & body vertices:
-        v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
-        let mut f = self.faces.clone();
-
-        // I already know what size v will be so I can pre-allocate
-        // and then just clone_from_slice to the proper locations
-
-        // We are offsetting all vertices in 'other' by everything
-        // else in 'v', so we need to account for this when we copy
-        // 'faces' (which has vector indices):
-        let offset = self.idxs_body.1;
-        f.extend(other.faces.iter().map(|f| *f + offset));
-        v.extend(other.verts.iter());
-        // The new exit groups are those in 'other', but likewise we
-        // need to shift these indices:
-        let idxs_exit = other.idxs_exit.iter().map(|f| *f + offset).collect();
-        // Body vertices start in the same place, but end where the
-        // body vertices in 'other' end (thus needing offset):
-        let idxs_body = (self.idxs_body.0, other.idxs_body.1 + offset);
-
-        OpenMesh {
-            verts: v,
-            faces: f,
-            idxs_entrance: self.idxs_entrance.clone(),
-            idxs_exit: idxs_exit,
-            idxs_body: idxs_body,
-        }
-    }
-
-    // Just assume this is broken
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        let use_hack = true;
+        println!("DEBUG: connect(), self has {} exit groups, others have {:?}",
+                 self.exit_groups.len(), others.iter().map(|o| o.exit_groups.len()).collect::<Vec<usize>>());
+        println!("DEBUG: connect(), self: verts.len()={} faces.len()={} max face={}", self.verts.len(), self.faces.len(), self.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
+        
+        // Copy body vertices & faces:
+        let mut verts: Vec<Vertex> = self.verts.clone();
+        let mut faces = self.faces.clone();
 
-        if !use_hack && (others.len() != self.idxs_exit.len()) {
-            // TODO: Make this a Result<...>
-            panic!("connect(): each exit group must correspond to exactly one mesh");
-        }
+        let mut exit_groups: Vec<usize> = vec![];
+        
+        let mut body_offset = self.verts.len();
+        let mut exit_offset = 0;
+        let mut offsets: Vec<usize> = vec![0; others.len()];
+        for (i,other) in others.iter().enumerate() {
 
-        if use_hack {
-            // This is wrong, but close enough for now;
-            let mut mesh = self.clone();
-            for other in others {
-                mesh = mesh.connect_single(&other);
-            }
-            return mesh;
-        } else {
+            let max_ = other.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap_or(&0);
+            println!("DEBUG: connect(), other[{}]: verts.len()={} faces.len()={} max face={}", i, other.verts.len(), other.faces.len(), max_);
+            println!("DEBUG: start body_offset={}", body_offset);
             
-            let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.idxs_body.1];
-            // Start out by cloning just entrance & body vertices:
-            v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
-            let mut f = self.faces.clone();
-
-            // All exit groups in the result must be contiguous.
-            let mut num_other_verts = 0;
-            for other in others {
-                num_other_verts += other.idxs_body.1;
-            }
-            let mut exits: Vec<Vertex> = vec![];
-
-            // To clarify, three main index shifts are needed.
-
-            // 1. Indices in 'self' that refer to the exit group of
-            // 'self'.  These are remapped to point wherever the
-            // vertices from 'others' land in v.
-            // 2. Indices in 'other' that refer to anything in the
-            // same mesh (besides exit groups).  These are remapped
-            // with a constant offset based on where the vertices land
-            // in v.
-            // 3. Indices in 'other' that refer to its exit group.
-            // Since these exit groups are all relocated to the end,
-            // the indices need to be identified and have an offset.
+            // Append body vertices & exit vertices directly:
+            verts.append(&mut other.verts.clone());
             
-            let mut offset = 0;
-            let mut exit_offset = num_other_verts;
-            for other in others {
-                let l = other.verts.len();
-                
-                // Check every face in 'self'.  If it belongs to 'other'
-                // of this iteration, shift it.
-                for i in 0..f.len() {
-                    if f[i] >= other.idxs_body.1 && f[i] < l {
-                        f[i] += offset
-                    }
+            // Append faces, shifting each kind by respective offset:
+            faces.extend(other.faces.iter().map(|t| {
+                match t {
+                    Tag::Body(n) => Tag::Body(n + body_offset),
+                    Tag::Exit(g, n) => Tag::Exit(g + exit_groups.len(), n + exit_offset),
                 }
-                // Append body verts/faces from 'other', update offset to
-                // next mesh:
-                v.extend(other.verts[0..other.idxs_body.1].iter());
-                f.extend(other.faces.iter().map(|fi| {
-                    if *fi < other.idxs_body.1 {
-                        *fi + offset
-                    } else {
-                        *fi + (num_other_verts - offset) + exit_offset
-                    }
-                }));
-                offset += other.idxs_body.1;
-                
-                // Append exit groups from 'other', update exit offset:
-                exits.extend(other.verts[other.idxs_body.1..].iter());
-                exit_offset += other.verts.len() - other.idxs_body.1;
+            }));
+            if i < self.exit_groups.len() {
+                exit_offset += self.exit_groups[i];
             }
-            v.append(&mut exits);
+            exit_groups.append(&mut other.exit_groups.clone());
 
-            OpenMesh {
-                verts: v,
-                faces: f,
-                idxs_entrance: self.idxs_entrance.clone(),
-                idxs_exit: vec![self.idxs_body.1 + num_other_verts],
-                idxs_body: (0, self.idxs_body.1 + num_other_verts),
-            }
+            // Increase offsets by the number of elements we appended:
+            body_offset += other.verts.len();
+            offsets[i] = body_offset;
+
+            println!("DEBUG: end body_offset={}", body_offset);
         }
+
+        // All of the Exit face indices from 'self' need to be
+        // modified to refer to Body vertices of something in
+        // 'others':
+        for i in 0..faces.len() {
+            match faces[i] {
+                Tag::Exit(g, n) => {
+                    faces[i] = Tag::Body(n + offsets[g]);
+                },
+                _ => { },
+            };
+        }
+
+        let m = OpenMesh {
+            verts: verts,
+            faces: faces,
+            exit_groups: exit_groups,
+        };
+
+        // TODO: Why is this still ending up with Exit faces despite my loop above?
+        println!("Returning mesh with verts.len()={} faces.len()={} max face={}", m.verts.len(), m.faces.len(), m.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
+        println!("Returning: {:?}", m);
+        return m;
     }
 }
 
@@ -290,11 +233,9 @@ impl Rule {
 // is there a better way to do this?
 fn empty_mesh() -> OpenMesh {
     OpenMesh {
-            verts: vec![],
-            faces: vec![],
-            idxs_entrance: vec![],
-            idxs_exit: vec![],
-            idxs_body: (0, 0),
+        verts: vec![],
+        faces: vec![],
+        exit_groups: vec![],
     }
 }
 
@@ -311,22 +252,20 @@ fn cube() -> OpenMesh {
             vertex(1.0, 1.0, 1.0),
         ],
         faces: vec![
-            0, 3, 1,
-            0, 2, 3,
-            1, 7, 5,
-            1, 3, 7,
-            5, 6, 4,
-            5, 7, 6,
-            4, 2, 0,
-            4, 6, 2,
-            2, 7, 3,
-            2, 6, 7,
-            0, 1, 5,
-            0, 5, 4,
+            Tag::Body(0), Tag::Body(3), Tag::Body(1),
+            Tag::Body(0), Tag::Body(2), Tag::Body(3),
+            Tag::Body(1), Tag::Body(7), Tag::Body(5),
+            Tag::Body(1), Tag::Body(3), Tag::Body(7),
+            Tag::Body(5), Tag::Body(6), Tag::Body(4),
+            Tag::Body(5), Tag::Body(7), Tag::Body(6),
+            Tag::Body(4), Tag::Body(2), Tag::Body(0),
+            Tag::Body(4), Tag::Body(6), Tag::Body(2),
+            Tag::Body(2), Tag::Body(7), Tag::Body(3),
+            Tag::Body(2), Tag::Body(6), Tag::Body(7),
+            Tag::Body(0), Tag::Body(1), Tag::Body(5),
+            Tag::Body(0), Tag::Body(5), Tag::Body(4),
         ],
-        idxs_entrance: vec![],
-        idxs_exit: vec![],
-        idxs_body: (0, 8),
+        exit_groups: vec![],
     }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }
 
@@ -398,29 +337,25 @@ fn curve_horn_thing_rule() -> RuleStep {
         faces: vec![
             // Endcaps purposely left off for now.
             // TODO: I should really generate these, not hard-code them.
-            1, 7, 5,
-            1, 3, 7,
-            4, 2, 0,
-            4, 6, 2,
-            2, 7, 3,
-            2, 6, 7,
-            0, 1, 5,
-            0, 5, 4,
+            Tag::Body(1), Tag::Exit(0, 7), Tag::Exit(0, 5),
+            Tag::Body(1), Tag::Body(3), Tag::Exit(0, 7),
+            Tag::Exit(0, 4), Tag::Body(2), Tag::Body(0),
+            Tag::Exit(0, 4), Tag::Exit(0, 6), Tag::Body(2),
+            Tag::Body(2), Tag::Exit(0, 7), Tag::Body(3),
+            Tag::Body(2), Tag::Exit(0, 6), Tag::Exit(0, 7),
+            Tag::Body(0), Tag::Body(1), Tag::Exit(0, 5),
+            Tag::Body(0), Tag::Exit(0, 5), Tag::Exit(0, 4),
         ],
-        idxs_entrance: vec![0],
-        idxs_exit: vec![4],
-        idxs_body: (4, 4),
+        exit_groups: vec![4],
     };
 
     let final_geom = OpenMesh {
         verts: final_verts,
         faces: vec![
-            0, 3, 1,
-            0, 2, 3,
+            Tag::Body(0), Tag::Body(3), Tag::Body(1),
+            Tag::Body(0), Tag::Body(2), Tag::Body(3),
         ],
-        idxs_entrance: vec![0],
-        idxs_exit: vec![],
-        idxs_body: (4, 4),
+        exit_groups: vec![],
     };
     
     RuleStep{
@@ -493,6 +428,7 @@ fn cube_thing_rule() -> RuleStep {
 fn main() {
 
     // Below is so far my only example that uses entrance/exit groups:
+    /*
     println!("DEBUG-------------------------------");
     let m = OpenMesh {
         verts: vec![
@@ -500,35 +436,24 @@ fn main() {
             vertex(1.0, 0.0, 0.0),
             vertex(0.0, 1.0, 0.0),
             vertex(1.0, 1.0, 0.0),
-            vertex(0.0, 0.0, 1.0),
-            vertex(1.0, 0.0, 1.0),
-            vertex(0.0, 1.0, 1.0),
-            vertex(1.0, 1.0, 1.0),
         ],
         faces: vec![
-            // End caps disabled for now to test connect_single
-            // 0, 3, 1,
-            // 0, 2, 3,
-            1, 7, 5,
-            1, 3, 7,
-            // 5, 6, 4,
-            // 5, 7, 6,
-            4, 2, 0,
-            4, 6, 2,
-            2, 7, 3,
-            2, 6, 7,
-            0, 1, 5,
-            0, 5, 4,
+            Tag::Body(1), Tag::Exit(0,3), Tag::Exit(0,1),
+            Tag::Body(1), Tag::Body(3), Tag::Exit(0,3),
+            Tag::Exit(0,0), Tag::Body(2), Tag::Body(0),
+            Tag::Exit(0,0), Tag::Exit(0,2), Tag::Body(2),
+            Tag::Body(2), Tag::Exit(0,3), Tag::Body(3),
+            Tag::Body(2), Tag::Exit(0,2), Tag::Exit(0,3),
+            Tag::Body(0), Tag::Body(1), Tag::Exit(0,1),
+            Tag::Body(0), Tag::Exit(0,1), Tag::Exit(0,0),
         ],
-        idxs_entrance: vec![0],
-        idxs_exit: vec![4],
-        idxs_body: (4, 4),
+        exit_groups: vec![4],
     };
 
     let xform = geometry::Translation3::new(0.0, 0.0, 1.0).to_homogeneous();
     let m2 = m.transform(xform);
-    let m3 = m.connect_single(&m2);
-    let m4 = m3.connect_single(&m2.transform(xform));
+    let m3 = m.connect(&vec![m2.clone()]);
+    let m4 = m3.connect(&vec![m2.transform(xform)]);
     println!("m4 = {:?}", m4);
 
     m.write_stl_file("openmesh_cube.obj").unwrap();
@@ -541,14 +466,15 @@ fn main() {
         let mut inc = m.clone();
         for _ in 0..count {
             inc = inc.transform(xform);
-            mesh = mesh.connect_single(&inc);
+            mesh = mesh.connect(&vec![inc.clone()]);
         }
     }
+    */
 
     {
         let r = Rule::Recurse(cube_thing_rule);
-        let max_iters = 4;
-        println!("Running rules...");
+        let max_iters = 3;
+        println!("Running cube_thing_rule...");
         let (cubemesh, nodes) = r.to_mesh(max_iters);
         println!("Merged {} nodes", nodes);
         println!("Writing STL...");
@@ -558,7 +484,7 @@ fn main() {
     {
         let r = Rule::Recurse(curve_horn_thing_rule);
         let max_iters = 50;
-        println!("Running rules...");
+        println!("Running curve_horn_thing_rule...");
         let (cubemesh, nodes) = r.to_mesh(max_iters);
         //println!("cubemesh={:?}", cubemesh);
         println!("Merged {} nodes", nodes);
