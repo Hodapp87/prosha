@@ -42,7 +42,7 @@ impl OpenMesh {
         OpenMesh {
             verts: self.verts.iter().map(|v| xfm * v).collect(),
             // TODO: Is the above faster if I pack vectors into a
-            // bigger matrix?
+            // bigger matrix, and transform that?
             faces: self.faces.clone(), // TODO: Use Rc?
             idxs_entrance: self.idxs_entrance.clone(), // TODO: Use Rc?
             idxs_exit: self.idxs_exit.clone(), // TODO: Use Rc?
@@ -127,63 +127,85 @@ impl OpenMesh {
     // Just assume this is broken
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        if others.len() > 1 && self.idxs_exit.len() > 0 {
-            panic!("connect() is implemented for only one mesh if exit groups are present")
+        let use_hack = true;
+
+        if !use_hack && (others.len() != self.idxs_exit.len()) {
+            // TODO: Make this a Result<...>
+            panic!("connect(): each exit group must correspond to exactly one mesh");
         }
 
-        if false {
-            let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.verts.len()];
+        if use_hack {
+            // This is wrong, but close enough for now;
+            let mut mesh = self.clone();
+            for other in others {
+                mesh = mesh.connect_single(&other);
+            }
+            return mesh;
+        } else {
+            
+            let mut v: Vec<Vertex> = vec![vertex(0.0,0.0,0.0); self.idxs_body.1];
             // Start out by cloning just entrance & body vertices:
             v.copy_from_slice(&self.verts[0..self.idxs_body.1]);
             let mut f = self.faces.clone();
-            // TODO: Don't I need to patch up 'f'?  self.faces refers to
-            // exit vertices which - if others.len() > 1 - need to be
-            // manually patched up.  This patching up should consist
-            // solely of an offset to all indices in a certain range.
-            //
-            // e.g. let idxs_exit be [e0, e1, e2, ... e_(n-1)]
-            // indices in range [e0, e1-1] are for exit group 0.
-            // indices in range [e1, e2-1] are for exit group 1.
-            // indices in range [e2, e3-1] are for exit group 2, etc.
-            //
-            // exit group 0 requires no offset (we'll be putting entrance
-            // group vertices of self.others[0] right over top of them).
-            // 
-            // exit group 1 requires an offset of the number of entrace &
-            // body vertices of self.others[0] (because we have appended
-            // this all)... with some additional adjustment maybe?  not
-            // sure.
-            //
-            // exit group 2 requires an offset of the same for
-            // self.others[0] and self.others[1].
 
+            // All exit groups in the result must be contiguous.
+            let mut num_other_verts = 0;
             for other in others {
-                // We are offsetting all vertices in 'other' by everything
-                // else in 'v', so we need to account for this when we
-                // copy 'faces' (which has vector indices):
-                let offset = v.len();
-                v.extend(other.verts[0..other.idxs_body.1].iter());
-                f.extend(other.faces.iter().map(|f| *f + offset));
+                num_other_verts += other.idxs_body.1;
             }
-            
-            // - Connect up so that each of self's exit groups is an
-            // entrance group from one of 'other'
+            let mut exits: Vec<Vertex> = vec![];
 
-            return OpenMesh {
+            // To clarify, three main index shifts are needed.
+
+            // 1. Indices in 'self' that refer to the exit group of
+            // 'self'.  These are remapped to point wherever the
+            // vertices from 'others' land in v.
+            // 2. Indices in 'other' that refer to anything in the
+            // same mesh (besides exit groups).  These are remapped
+            // with a constant offset based on where the vertices land
+            // in v.
+            // 3. Indices in 'other' that refer to its exit group.
+            // Since these exit groups are all relocated to the end,
+            // the indices need to be identified and have an offset.
+            
+            let mut offset = 0;
+            let mut exit_offset = num_other_verts;
+            for other in others {
+                let l = other.verts.len();
+                
+                // Check every face in 'self'.  If it belongs to 'other'
+                // of this iteration, shift it.
+                for i in 0..f.len() {
+                    if f[i] >= other.idxs_body.1 && f[i] < l {
+                        f[i] += offset
+                    }
+                }
+                // Append body verts/faces from 'other', update offset to
+                // next mesh:
+                v.extend(other.verts[0..other.idxs_body.1].iter());
+                f.extend(other.faces.iter().map(|fi| {
+                    if *fi < other.idxs_body.1 {
+                        *fi + offset
+                    } else {
+                        *fi + (num_other_verts - offset) + exit_offset
+                    }
+                }));
+                offset += other.idxs_body.1;
+                
+                // Append exit groups from 'other', update exit offset:
+                exits.extend(other.verts[other.idxs_body.1..].iter());
+                exit_offset += other.verts.len() - other.idxs_body.1;
+            }
+            v.append(&mut exits);
+
+            OpenMesh {
                 verts: v,
                 faces: f,
                 idxs_entrance: self.idxs_entrance.clone(),
-                idxs_exit: self.idxs_exit.clone(), // TODO
-                idxs_body: self.idxs_body.clone(), // TODO
-            };
+                idxs_exit: vec![self.idxs_body.1 + num_other_verts],
+                idxs_body: (0, self.idxs_body.1 + num_other_verts),
+            }
         }
-
-        // This is wrong, but close enough for now;
-        let mut mesh = self.clone();
-        for other in others {
-            mesh = mesh.connect_single(&other);
-        }
-        return mesh;
     }
 }
 
