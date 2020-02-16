@@ -86,9 +86,9 @@ impl OpenMesh {
 
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        println!("DEBUG: connect(), self has {} exit groups, others have {:?}",
-                 self.exit_groups.len(), others.iter().map(|o| o.exit_groups.len()).collect::<Vec<usize>>());
-        println!("DEBUG: connect(), self: verts.len()={} faces.len()={} max face={}", self.verts.len(), self.faces.len(), self.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
+        //println!("DEBUG: connect(), self has {} exit groups, others have {:?}",
+        //         self.exit_groups.len(), others.iter().map(|o| o.exit_groups.len()).collect::<Vec<usize>>());
+        //println!("DEBUG: connect(), self: verts.len()={} faces.len()={} max face={}", self.verts.len(), self.faces.len(), self.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
         
         // Copy body vertices & faces:
         let mut verts: Vec<Vertex> = self.verts.clone();
@@ -101,9 +101,10 @@ impl OpenMesh {
         let mut offsets: Vec<usize> = vec![0; others.len()];
         for (i,other) in others.iter().enumerate() {
 
-            let max_ = other.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap_or(&0);
-            println!("DEBUG: connect(), other[{}]: verts.len()={} faces.len()={} max face={}", i, other.verts.len(), other.faces.len(), max_);
-            println!("DEBUG: start body_offset={}", body_offset);
+            //let max_ = other.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap_or(&0);
+            //println!("DEBUG: connect(), other[{}]: verts.len()={} faces.len()={} max face={}", i, other.verts.len(), other.faces.len(), max_);
+            //println!("DEBUG: start body_offset={}", body_offset);
+            //println!("DEBUG: start exit_offset={}", exit_offset);
             
             // Append body vertices & exit vertices directly:
             verts.append(&mut other.verts.clone());
@@ -120,16 +121,20 @@ impl OpenMesh {
             }
             exit_groups.append(&mut other.exit_groups.clone());
 
+            offsets[i] = body_offset;
             // Increase offsets by the number of elements we appended:
             body_offset += other.verts.len();
-            offsets[i] = body_offset;
 
-            println!("DEBUG: end body_offset={}", body_offset);
+            //println!("DEBUG: end body_offset={}", body_offset);
+            //println!("DEBUG: end exit_offset={}", exit_offset);
         }
+
+        //println!("DEBUG: offsets={:?}", offsets);
 
         // All of the Exit face indices from 'self' need to be
         // modified to refer to Body vertices of something in
         // 'others':
+        //println!("DEBUG: initial faces={:?}", faces);
         for i in 0..faces.len() {
             match faces[i] {
                 Tag::Exit(g, n) => {
@@ -138,6 +143,7 @@ impl OpenMesh {
                 _ => { },
             };
         }
+        //println!("DEBUG: final faces={:?}", faces);
 
         let m = OpenMesh {
             verts: verts,
@@ -146,8 +152,8 @@ impl OpenMesh {
         };
 
         // TODO: Why is this still ending up with Exit faces despite my loop above?
-        println!("Returning mesh with verts.len()={} faces.len()={} max face={}", m.verts.len(), m.faces.len(), m.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
-        println!("Returning: {:?}", m);
+        //println!("DEBUG: Returning mesh with verts.len()={} faces.len()={} max face={}", m.verts.len(), m.faces.len(), m.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
+        //println!("Returning: {:?}", m);
         return m;
     }
 }
@@ -322,29 +328,27 @@ fn curve_horn_thing_rule() -> RuleStep {
         Matrix4::new_scaling(0.95) *
         geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous();
 
-    let mut verts = vec![
+    let verts = vec![
         vertex(-0.5, -0.5, 0.0),
         vertex(0.5, -0.5, 0.0),
         vertex(-0.5, 0.5, 0.0),
         vertex(0.5, 0.5, 0.0),
     ];
-    let mut v2: Vec<Vertex> = verts.iter().map(|v| m * v).collect();
-    let final_verts: Vec<Vertex> = v2.clone();
-    verts.append(&mut v2);
+    let final_verts: Vec<Vertex> = verts.iter().map(|v| m * v).collect();
     
     let geom = OpenMesh {
         verts: verts,
         faces: vec![
             // Endcaps purposely left off for now.
             // TODO: I should really generate these, not hard-code them.
-            Tag::Body(1), Tag::Exit(0, 7), Tag::Exit(0, 5),
-            Tag::Body(1), Tag::Body(3), Tag::Exit(0, 7),
-            Tag::Exit(0, 4), Tag::Body(2), Tag::Body(0),
-            Tag::Exit(0, 4), Tag::Exit(0, 6), Tag::Body(2),
-            Tag::Body(2), Tag::Exit(0, 7), Tag::Body(3),
-            Tag::Body(2), Tag::Exit(0, 6), Tag::Exit(0, 7),
-            Tag::Body(0), Tag::Body(1), Tag::Exit(0, 5),
-            Tag::Body(0), Tag::Exit(0, 5), Tag::Exit(0, 4),
+            Tag::Body(1), Tag::Exit(0, 3), Tag::Exit(0, 1),
+            Tag::Body(1), Tag::Body(3), Tag::Exit(0, 3),
+            Tag::Exit(0, 0), Tag::Body(2), Tag::Body(0),
+            Tag::Exit(0, 0), Tag::Exit(0, 2), Tag::Body(2),
+            Tag::Body(2), Tag::Exit(0, 3), Tag::Body(3),
+            Tag::Body(2), Tag::Exit(0, 2), Tag::Exit(0, 3),
+            Tag::Body(0), Tag::Body(1), Tag::Exit(0, 1),
+            Tag::Body(0), Tag::Exit(0, 1), Tag::Exit(0, 0),
         ],
         exit_groups: vec![4],
     };
@@ -427,68 +431,15 @@ fn cube_thing_rule() -> RuleStep {
 
 fn main() {
 
-    // Below is so far my only example that uses entrance/exit groups:
-    /*
-    println!("DEBUG-------------------------------");
-    let m = OpenMesh {
-        verts: vec![
-            vertex(0.0, 0.0, 0.0),
-            vertex(1.0, 0.0, 0.0),
-            vertex(0.0, 1.0, 0.0),
-            vertex(1.0, 1.0, 0.0),
-        ],
-        faces: vec![
-            Tag::Body(1), Tag::Exit(0,3), Tag::Exit(0,1),
-            Tag::Body(1), Tag::Body(3), Tag::Exit(0,3),
-            Tag::Exit(0,0), Tag::Body(2), Tag::Body(0),
-            Tag::Exit(0,0), Tag::Exit(0,2), Tag::Body(2),
-            Tag::Body(2), Tag::Exit(0,3), Tag::Body(3),
-            Tag::Body(2), Tag::Exit(0,2), Tag::Exit(0,3),
-            Tag::Body(0), Tag::Body(1), Tag::Exit(0,1),
-            Tag::Body(0), Tag::Exit(0,1), Tag::Exit(0,0),
-        ],
-        exit_groups: vec![4],
+    let run_test = |r: Rule, iters, name| {
+        println!("Running {}...", name);
+        let (mesh, nodes) = r.to_mesh(iters);
+        println!("Merged {} nodes", nodes);
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        mesh.write_stl_file(&fname).unwrap();
     };
 
-    let xform = geometry::Translation3::new(0.0, 0.0, 1.0).to_homogeneous();
-    let m2 = m.transform(xform);
-    let m3 = m.connect(&vec![m2.clone()]);
-    let m4 = m3.connect(&vec![m2.transform(xform)]);
-    println!("m4 = {:?}", m4);
-
-    m.write_stl_file("openmesh_cube.obj").unwrap();
-    m2.write_stl_file("openmesh_cube2.obj").unwrap();
-    m3.write_stl_file("openmesh_cube3.obj").unwrap();
-
-    {
-        let count = 10;
-        let mut mesh = m.clone();
-        let mut inc = m.clone();
-        for _ in 0..count {
-            inc = inc.transform(xform);
-            mesh = mesh.connect(&vec![inc.clone()]);
-        }
-    }
-    */
-
-    {
-        let r = Rule::Recurse(cube_thing_rule);
-        let max_iters = 3;
-        println!("Running cube_thing_rule...");
-        let (cubemesh, nodes) = r.to_mesh(max_iters);
-        println!("Merged {} nodes", nodes);
-        println!("Writing STL...");
-        cubemesh.write_stl_file("cubemesh.stl").unwrap();
-    }
-
-    {
-        let r = Rule::Recurse(curve_horn_thing_rule);
-        let max_iters = 50;
-        println!("Running curve_horn_thing_rule...");
-        let (cubemesh, nodes) = r.to_mesh(max_iters);
-        //println!("cubemesh={:?}", cubemesh);
-        println!("Merged {} nodes", nodes);
-        println!("Writing STL...");
-        cubemesh.write_stl_file("curve_horn_thing.stl").unwrap();
-    }
+    run_test(Rule::Recurse(cube_thing_rule), 3, "cube_thing");
+    run_test(Rule::Recurse(curve_horn_thing_rule), 100, "curve_horn_thing");
 }

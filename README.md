@@ -2,13 +2,10 @@
 
 ## Highest priority:
 
-- Fix my new ADTs for meshes.  It's working for the cube example
-  (which doesn't touch exit groups/exit vertices) but not for the
-  `curve_horn_*` one.
-- Fix `OpenMesh.connect()`.
 - Continue converting `curve_horn_*`.
-- Consider trampolining to_mesh.  My call stack seems needlessly deep
-  in spots.
+- Consider trampolining `to_mesh`.  My call stack seems needlessly
+  deep in spots.  Can I make tail-recursive?
+- 
 
 ## Important:
 
