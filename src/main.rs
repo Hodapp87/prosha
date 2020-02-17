@@ -86,10 +86,6 @@ impl OpenMesh {
 
     fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
 
-        //println!("DEBUG: connect(), self has {} exit groups, others have {:?}",
-        //         self.exit_groups.len(), others.iter().map(|o| o.exit_groups.len()).collect::<Vec<usize>>());
-        //println!("DEBUG: connect(), self: verts.len()={} faces.len()={} max face={}", self.verts.len(), self.faces.len(), self.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
-        
         // Copy body vertices & faces:
         let mut verts: Vec<Vertex> = self.verts.clone();
         let mut faces = self.faces.clone();
@@ -101,11 +97,6 @@ impl OpenMesh {
         let mut offsets: Vec<usize> = vec![0; others.len()];
         for (i,other) in others.iter().enumerate() {
 
-            //let max_ = other.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap_or(&0);
-            //println!("DEBUG: connect(), other[{}]: verts.len()={} faces.len()={} max face={}", i, other.verts.len(), other.faces.len(), max_);
-            //println!("DEBUG: start body_offset={}", body_offset);
-            //println!("DEBUG: start exit_offset={}", exit_offset);
-            
             // Append body vertices & exit vertices directly:
             verts.append(&mut other.verts.clone());
             
@@ -124,17 +115,11 @@ impl OpenMesh {
             offsets[i] = body_offset;
             // Increase offsets by the number of elements we appended:
             body_offset += other.verts.len();
-
-            //println!("DEBUG: end body_offset={}", body_offset);
-            //println!("DEBUG: end exit_offset={}", exit_offset);
         }
-
-        //println!("DEBUG: offsets={:?}", offsets);
 
         // All of the Exit face indices from 'self' need to be
         // modified to refer to Body vertices of something in
         // 'others':
-        //println!("DEBUG: initial faces={:?}", faces);
         for i in 0..faces.len() {
             match faces[i] {
                 Tag::Exit(g, n) => {
@@ -143,18 +128,12 @@ impl OpenMesh {
                 _ => { },
             };
         }
-        //println!("DEBUG: final faces={:?}", faces);
 
-        let m = OpenMesh {
+        OpenMesh {
             verts: verts,
             faces: faces,
             exit_groups: exit_groups,
-        };
-
-        // TODO: Why is this still ending up with Exit faces despite my loop above?
-        //println!("DEBUG: Returning mesh with verts.len()={} faces.len()={} max face={}", m.verts.len(), m.faces.len(), m.faces.iter().map(|f| match f { Tag::Body(n) => n, Tag::Exit(_,n) => n }).max().unwrap());
-        //println!("Returning: {:?}", m);
-        return m;
+        }
     }
 }
 
@@ -281,15 +260,34 @@ fn curve_horn_start() -> RuleStep {
         &nalgebra::Vector3::y_axis(),
         std::f32::consts::PI).to_homogeneous();
     RuleStep {
-        geom: empty_mesh(),
+        geom: OpenMesh {
+            verts: vec![],
+            faces: vec![
+                Tag::Exit(1, 0), Tag::Exit(1, 2), Tag::Exit(0, 1),
+                Tag::Exit(1, 2), Tag::Exit(0, 3), Tag::Exit(0, 1), 
+                Tag::Exit(0, 0), Tag::Exit(0, 2), Tag::Exit(1, 1), 
+                Tag::Exit(0, 2), Tag::Exit(1, 3), Tag::Exit(1, 1), 
+                Tag::Exit(0, 3), Tag::Exit(1, 2), Tag::Exit(0, 2), 
+                Tag::Exit(1, 2), Tag::Exit(1, 3), Tag::Exit(0, 2), 
+                Tag::Exit(1, 0), Tag::Exit(0, 1), Tag::Exit(0, 0),
+                Tag::Exit(1, 1), Tag::Exit(1, 0), Tag::Exit(0, 0), 
+                // The above is connecting group 0 to group 1,
+                // straight across + with diagonal - but with group 1
+                // being flipped 180, so we remap vertices (0,1,2,3)
+                // to (1,0,3,2) and then flip winding order.
+            ],
+            exit_groups: vec![4, 4],
+        },
         final_geom: empty_mesh(),
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), id),
-            (Rule::Recurse(curve_horn_thing_rule), flip180),
+            (Rule::Recurse(curve_horn_thing_rule), id), // exit group 0
+            (Rule::Recurse(curve_horn_thing_rule), flip180), // exit group 1
         ],
     }
-    // TODO: This has duplicate geometry in the middle because four
-    // vertices of each start point never technically connect.
+    // TODO: The starting vertices above are duplicated because I
+    // don't have any way for an exit vertex to stand in for multiple
+    // child vertices that happen to share the same location.  I don't
+    // yet know a good way around this, so I am duplicating vertices.
 }
 
 fn curve_horn_thing_rule() -> RuleStep {
@@ -311,8 +309,10 @@ fn curve_horn_thing_rule() -> RuleStep {
     let geom = OpenMesh {
         verts: verts,
         faces: vec![
-            // Endcaps purposely left off for now.
-            // TODO: I should really generate these, not hard-code them.
+            // The below is just connecting two groups of 4 vertices
+            // each, straight across and then to the next.  Note that
+            // since 'verts' doesn't go in a circle, it will look a
+            // little strange.
             Tag::Body(1), Tag::Exit(0, 3), Tag::Exit(0, 1),
             Tag::Body(1), Tag::Body(3), Tag::Exit(0, 3),
             Tag::Exit(0, 0), Tag::Body(2), Tag::Body(0),
@@ -321,15 +321,19 @@ fn curve_horn_thing_rule() -> RuleStep {
             Tag::Body(2), Tag::Exit(0, 2), Tag::Exit(0, 3),
             Tag::Body(0), Tag::Body(1), Tag::Exit(0, 1),
             Tag::Body(0), Tag::Exit(0, 1), Tag::Exit(0, 0),
+            // TODO: I should really generate these, not hard-code them.
         ],
         exit_groups: vec![4],
     };
 
+    // TODO: This could be made slightly nicer by taking it to a peak
+    // instead of just flattening it in XY, but this is a pretty minor
+    // change.
     let final_geom = OpenMesh {
         verts: final_verts,
         faces: vec![
-            Tag::Body(0), Tag::Body(3), Tag::Body(1),
-            Tag::Body(0), Tag::Body(2), Tag::Body(3),
+            Tag::Body(0), Tag::Body(1), Tag::Body(3),
+            Tag::Body(0), Tag::Body(3), Tag::Body(2),
         ],
         exit_groups: vec![],
     };
@@ -338,33 +342,9 @@ fn curve_horn_thing_rule() -> RuleStep {
         geom: geom,
         final_geom: final_geom,
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), m),
+            (Rule::Recurse(curve_horn_thing_rule), m), // exit group 0
         ],
     }
-
-    /*
-        // We need 3 indices per face, 2 faces per (boundary) vertex:
-        let num_verts = seed.no_vertices();
-        let mut idxs: Vec<u32> = vec![0; 2 * num_verts * 3];
-        for i in 0..num_verts {
-            let a1: u32 = i                                   as _;
-            let a2: u32 = ((i + 1) % num_verts)               as _;
-            let b1: u32 = (i + num_verts)                     as _;
-            let b2: u32 = (((i + 1) % num_verts) + num_verts) as _;
-            // Connect vertices into faces with a zig-zag pattern
-            // (mind the winding order).  First face:
-            
-            idxs[6*i + 0] = a1;
-            idxs[6*i + 1] = a2;
-            idxs[6*i + 2] = b1;
-            //println!("connect vert {}, face 1: ({}, {}, {}) = {}, {}, {}", i, a1, a2, b1, vert2str(a1), vert2str(a2), vert2str(b1));
-            // Second face:
-            idxs[6*i + 3] = b1;
-            idxs[6*i + 4] = a2;
-            idxs[6*i + 5] = b2;
-            //println!("connect vert {}, face 2: ({}, {}, {}) = {}, {}, {}", i, b1, a2, b2, vert2str(b1), vert2str(a2), vert2str(b2));
-        }
-    */
 }
 
 fn cube_thing_rule() -> RuleStep {
