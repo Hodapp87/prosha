@@ -2,6 +2,7 @@
 
 ## Highest priority:
 
+- Try a more complex case with multiple exit groups
 - Consider trampolining `to_mesh`.  My call stack seems needlessly
   deep in spots.  Can I make tail-recursive?
 
