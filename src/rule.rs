@@ -24,8 +24,8 @@ pub struct RuleStep {
     pub final_geom: OpenMesh,
 
     // Child rules, paired with the transform that will be applied to
-    // all of their geometry
-    pub children: Vec<(Rule, Mat4)>,
+    // all of their geometry and parent vertex mappings
+    pub children: Vec<(Rule, Mat4, Vec<usize>)>,
 }
 
 impl Rule {
@@ -59,16 +59,17 @@ impl Rule {
                 let rs: RuleStep = f();
 
                 // Get sub-geometry (from child rules) and transform it:
-                let subgeom: Vec<(OpenMesh, Mat4, u32)> = rs.children.iter().map(|(subrule, subxform)| {
+                let subgeom: Vec<(OpenMesh, Mat4, u32, Vec<usize>)> = rs.children.iter().map(|(subrule, subxform, mapping)| {
                     let (m,n) = subrule.to_mesh(iters_left - 1);
-                    (m, *subxform, n)
+                    (m, *subxform, n, mapping.clone())
                 }).collect();
 
                 // Tally up node count:
-                subgeom.iter().for_each(|(_,_,n)| nodes += n);
+                subgeom.iter().for_each(|(_,_,n,_)| nodes += n);
 
-                let g: Vec<OpenMesh> = subgeom.iter().map(|(m,x,_)| m.transform(*x)).collect();
-
+                let g: Vec<(OpenMesh, Vec<usize>)> = subgeom.iter().map(|(m,x,_,mv)| (m.transform(*x), mv.clone())).collect();
+                // TODO: Not clone twice
+                
                 // Connect geometry from this rule (not child rules):
                 return (rs.geom.connect(&g), nodes);
             }

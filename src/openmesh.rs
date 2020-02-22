@@ -84,13 +84,13 @@ impl OpenMesh {
         stl_io::write_stl(writer, triangles.iter())
     }
 
-    pub fn connect(&self, others: &Vec<OpenMesh>) -> OpenMesh {
+    pub fn connect(&self, others: &Vec<(OpenMesh, Vec<usize>)>) -> OpenMesh {
 
         // Copy body vertices & faces:
         let mut verts: Vec<Vertex> = self.verts.clone();
         let mut faces = self.faces.clone();
 
-        for other in others {
+        for (other,mapping) in others {
 
             // body_offset corresponds to the position in 'verts' at
             // which we're appending everything in 'other.verts' -
@@ -107,7 +107,7 @@ impl OpenMesh {
                     Tag::Body(n) => Tag::Body(n + body_offset),
                     // Since 'self' vertices are in the same order,
                     // parent vertex references retain same index:
-                    Tag::Parent(n) => Tag::Body(*n),
+                    Tag::Parent(n) => Tag::Body(mapping[*n]),
                 }
             }));
         }

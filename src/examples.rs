@@ -22,8 +22,8 @@ fn curve_horn_start() -> RuleStep {
         },
         final_geom: prim::empty_mesh(),
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), id),
-            (Rule::Recurse(curve_horn_thing_rule), flip180),
+            (Rule::Recurse(curve_horn_thing_rule), id, vec![0,1,2,3]),
+            (Rule::Recurse(curve_horn_thing_rule), flip180, vec![3,2,1,0]),
         ],
     }
     // TODO: Fix the consequences of the 180 flip
@@ -77,7 +77,7 @@ fn curve_horn_thing_rule() -> RuleStep {
         geom: geom,
         final_geom: final_geom,
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), m),
+            (Rule::Recurse(curve_horn_thing_rule), m, vec![0,1,2,3]),
         ],
     }
 }
@@ -102,11 +102,11 @@ fn cube_thing_rule() -> RuleStep {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
-    let gen_rulestep = |rot: &Mat4| -> (Rule, Mat4) {
+    let gen_rulestep = |rot: &Mat4| -> (Rule, Mat4, Vec<usize>) {
         let m: Mat4 = rot *
             Matrix4::new_scaling(0.5) *
             geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
-        (Rule::Recurse(cube_thing_rule), m)
+        (Rule::Recurse(cube_thing_rule), m, vec![])
     };
 
     RuleStep {
@@ -171,10 +171,10 @@ fn ram_horn_start() -> RuleStep {
         },
         final_geom: prim::empty_mesh(),
         children: vec![
-            (Rule::Recurse(ram_horn), opening_xform(0.0)),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2)),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*2.0)),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*3.0)),
+            (Rule::Recurse(ram_horn), opening_xform(0.0), vec![0,4,8,7]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2), vec![1,5,8,4]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*2.0), vec![2,6,8,5]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*3.0), vec![3,7,8,6]),
         ],
     }
 }
@@ -221,7 +221,7 @@ fn ram_horn() -> RuleStep {
         geom: geom,
         final_geom: final_geom,
         children: vec![
-            (Rule::Recurse(ram_horn), incr),
+            (Rule::Recurse(ram_horn), incr, vec![0,1,2,3]),
         ],
     }
 }
