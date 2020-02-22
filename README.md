@@ -4,20 +4,19 @@
 
 - Clean up my 'parent vertex mapping' thingy, *and* come up with
   meaningful terms to discuss it.
-- Terminology: "run" a rule versus "evaluate" a rule.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.
 
 ## Important but less critical:
 
 - Why must I repeat myself so much in these definitions?
+- Docs on modules
 - Consider trampolining `to_mesh`.  My call stack seems needlessly
   deep in spots.  Can I make tail-recursive?
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
 - Implement some of the tougher examples from the above too, e.g. the
   triple nested spiral.  See `examples.py`.
-- Actual Rust-style docs!
 
 ## If I'm bored:
 

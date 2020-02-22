@@ -243,8 +243,6 @@ fn ram_horn() -> RuleStep {
         faces: vec![
             Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
             Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
-            // TODO: Parent in 'final_geom' refers always to vertices
-            // in 'geom' - right?
         ],
     };
     RuleStep {
@@ -259,6 +257,30 @@ fn ram_horn() -> RuleStep {
         ],
     }
 }
+
+/*
+fn ram_horn_branch() -> RuleStep {
+    
+}
+ */
+
+/*
+pub fn twist() -> RuleStep {
+    let ang=0.1;
+    let dz=0.2;
+    let dx0=2;
+    let count=4;
+    let scale=0.98;
+
+    let seed = vec![
+        vertex(-0.5, -0.5, 0),
+        vertex(-0.5,  0.5, 0),
+        vertex( 0.5,  0.5, 0),
+        vertex( 0.5, -0.5, 0),        
+    ];
+    
+}
+ */
 
 pub fn main() {
 
