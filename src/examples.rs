@@ -66,10 +66,10 @@ fn curve_horn_thing_rule() -> RuleStep {
     // instead of just flattening it in XY, but this is a pretty minor
     // change.
     let final_geom = OpenMesh {
-        verts: next_verts,
+        verts: vec![],
         faces: vec![
-            Tag::Body(0), Tag::Body(1), Tag::Body(3),
-            Tag::Body(0), Tag::Body(3), Tag::Body(2),
+            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
+            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
         ],
     };
     
@@ -116,7 +116,6 @@ fn cube_thing_rule() -> RuleStep {
     }
 }
 
-/*
 // Conversion from Python & automata_scratch
 fn ram_horn_start() -> RuleStep {
     let id = nalgebra::geometry::Transform3::identity().to_homogeneous();
@@ -125,36 +124,47 @@ fn ram_horn_start() -> RuleStep {
         std::f32::consts::PI).to_homogeneous();
     RuleStep {
         geom: OpenMesh {
-            // 'Bottom' vertices:
             verts: vec![
-                vertex(-0.5, -0.5, -0.5),
-                vertex(-0.5,  0.5, -0.5),
-                vertex( 0.5,  0.5, -0.5),
-                vertex( 0.5, -0.5, -0.5),
+                // 'Bottom' vertices:
+                vertex(-0.5, -0.5, -0.5), // 0
+                vertex(-0.5,  0.5, -0.5), // 1
+                vertex( 0.5,  0.5, -0.5), // 2
+                vertex( 0.5, -0.5, -0.5), // 3
+                // 'Top' vertices:
+                vertex(-0.5, -0.5, 0.5),  // 4 (above 0)
+                vertex(-0.5,  0.5, 0.5),  // 5 (above 1)
+                vertex( 0.5,  0.5, 0.5),  // 6 (above 2)
+                vertex( 0.5, -0.5, 0.5),  // 7 (above 3)
+                // Top edge midpoints:
+                vertex(-0.5,  0.0, 0.5),  // 8 (connects 4-5)
+                vertex( 0.0,  0.5, 0.5),  // 9 (connects 5-6)
+                vertex( 0.5,  0.0, 0.5),  // 10 (connects 6-7)
+                vertex( 0.0, -0.5, 0.5),  // 11 (connects 7-4)
+                // Top middle:
+                vertex( 0.0,  0.0, 0.5),
             ],
             faces: vec![
                 // bottom face:
                 Tag::Body(0), Tag::Body(1), Tag::Body(2),
                 Tag::Body(0), Tag::Body(2), Tag::Body(3),
                 // two faces straddling edge from vertex 0:
-                Tag::Body(0), Tag::Exit(0, 0), Tag::Exit(0, 1),
-                Tag::Body(0), Tag::Exit(0, 3), Tag::Exit(0, 0),
+                Tag::Body(0), Tag::Body(4), Tag::Body(8),
+                Tag::Body(0), Tag::Body(11), Tag::Body(4),
                 // two faces straddling edge from vertex 1:
-                Tag::Body(1), Tag::Exit(1, 0), Tag::Exit(1, 1),
-                Tag::Body(1), Tag::Exit(1, 3), Tag::Exit(1, 0),
+                Tag::Body(1), Tag::Body(5), Tag::Body(9),
+                Tag::Body(1), Tag::Body(8), Tag::Body(5),
                 // two faces straddling edge from vertex 2:
-                Tag::Body(2), Tag::Exit(2, 0), Tag::Exit(2, 1),
-                Tag::Body(2), Tag::Exit(2, 3), Tag::Exit(2, 0),
+                Tag::Body(2), Tag::Body(6), Tag::Body(10),
+                Tag::Body(2), Tag::Body(9), Tag::Body(6),
                 // two faces straddling edge from vertex 3:
-                Tag::Body(3), Tag::Exit(3, 0), Tag::Exit(3, 1),
-                Tag::Body(3), Tag::Exit(3, 3), Tag::Exit(3, 0),
+                Tag::Body(3), Tag::Body(7), Tag::Body(11),
+                Tag::Body(3), Tag::Body(10), Tag::Body(7),
                 // four faces from edge (0,1), (1,2), (2,3), (3,0):
-                Tag::Body(0), Tag::Exit(0, 1)/*=Tag::Exit(1, 3)*/, Tag::Body(1),
-                Tag::Body(1), Tag::Exit(1, 1)/*=Tag::Exit(2, 3)*/, Tag::Body(2),
-                Tag::Body(2), Tag::Exit(2, 1)/*=Tag::Exit(3, 3)*/, Tag::Body(3),
-                Tag::Body(3), Tag::Exit(3, 1)/*=Tag::Exit(0, 3)*/, Tag::Body(0),
+                Tag::Body(0), Tag::Body(8), Tag::Body(1),
+                Tag::Body(1), Tag::Body(9), Tag::Body(2),
+                Tag::Body(2), Tag::Body(10), Tag::Body(3),
+                Tag::Body(3), Tag::Body(11), Tag::Body(0),
             ],
-            exit_groups: vec![4, 4, 4, 4],
         },
         final_geom: prim::empty_mesh(),
         children: vec![
@@ -164,15 +174,19 @@ fn ram_horn_start() -> RuleStep {
             (Rule::Recurse(ram_horn), id), // exit group 3
         ],
     }
-    // TODO: How do I handle *duplicated* exit vertices?  In this
-    // instance, multiple children connect to some of them - e.g. all
-    // Tag::Exit(n,2) are together, and Tag::Exit(n,1) is the same as
-    // Tag::Exit((n+1)%4, 3).
 }
 
 fn ram_horn() -> RuleStep {
+    // Incomplete
+    RuleStep {
+        geom: OpenMesh {
+            verts: vec![],
+            faces: vec![],
+        },
+        final_geom: prim::empty_mesh(),
+        children: vec![],
+    }
 }
-*/
 
 pub fn main() {
 
@@ -188,4 +202,5 @@ pub fn main() {
     run_test(Rule::Recurse(cube_thing_rule), 3, "cube_thing");
     //run_test(Rule::Recurse(curve_horn_thing_rule), 100, "curve_horn_thing");
     run_test(Rule::Recurse(curve_horn_start), 100, "curve_horn2");
+    run_test(Rule::Recurse(ram_horn_start), 10, "ram_horn");
 }
