@@ -1,7 +1,7 @@
 use nalgebra::*;
 use crate::openmesh::{OpenMesh, Tag, vertex};
 
-// is there a better way to do this?
+/// Returns an empty mesh (no vertices, no faces).
 pub fn empty_mesh() -> OpenMesh {
     OpenMesh {
         verts: vec![],
@@ -9,6 +9,7 @@ pub fn empty_mesh() -> OpenMesh {
     }
 }
 
+/// Returns a cube of sidelength one centered at (0,0,0).
 pub fn cube() -> OpenMesh {
     OpenMesh {
         verts: vec![

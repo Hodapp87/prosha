@@ -59,10 +59,11 @@ pub struct Child {
     /// as all sub-geometry produced recursively).
     pub xf: Mat4,
 
-    /// The mapping to apply to turn a Tag::Parent vertex reference
-    /// into a vertex index of the parent mesh.  That is, if `rule`
-    /// produces an `OpenMesh` with a face of `Tag::Parent(n)`, this
-    /// will correspond to index `vmap[n]` in the parent mesh.
+    /// The parent vertex mapping: a mapping to apply to turn a
+    /// Tag::Parent vertex reference into a vertex index of the parent
+    /// mesh.  That is, if `rule` produces an `OpenMesh` with a face
+    /// of `Tag::Parent(n)`, this will correspond to index `vmap[n]`
+    /// in the parent mesh.
     pub vmap: Vec<usize>,
 }
 
