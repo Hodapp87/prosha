@@ -26,6 +26,9 @@ pub struct RuleStep {
     // Child rules, paired with the transform that will be applied to
     // all of their geometry and parent vertex mappings
     pub children: Vec<(Rule, Mat4, Vec<usize>)>,
+    // TODO: Clean this up, perhaps change the tuple to something
+    // saner.
+    // TODO: Also, document & rename this more clearly.
 }
 
 impl Rule {
@@ -57,21 +60,23 @@ impl Rule {
         match self {
             Rule::Recurse(f) => {
                 let rs: RuleStep = f();
+                // TODO: This logic is more or less right, but it
+                // could perhaps use some un-tupling or something.
 
-                // Get sub-geometry (from child rules) and transform it:
-                let subgeom: Vec<(OpenMesh, Mat4, u32, Vec<usize>)> = rs.children.iter().map(|(subrule, subxform, mapping)| {
-                    let (m,n) = subrule.to_mesh(iters_left - 1);
-                    (m, *subxform, n, mapping.clone())
-                }).collect();
-
-                // Tally up node count:
-                subgeom.iter().for_each(|(_,_,n,_)| nodes += n);
-
-                let g: Vec<(OpenMesh, Vec<usize>)> = subgeom.iter().map(|(m,x,_,mv)| (m.transform(*x), mv.clone())).collect();
-                // TODO: Not clone twice
+                let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(
+                    |(subrule, subxform, vmap)| {
+                        // Get sub-geometry (still un-transformed):
+                        let (submesh,n) = subrule.to_mesh(iters_left - 1);
+                        // Tally up node count:
+                        nodes += n;
+                        
+                        let m2 = submesh.transform(*subxform);
+                        
+                        (m2, vmap)
+                    }).collect();
                 
                 // Connect geometry from this rule (not child rules):
-                return (rs.geom.connect(&g), nodes);
+                return (rs.geom.connect(&subgeom), nodes);
             }
             Rule::EmptyRule => {
                 return (prim::empty_mesh(), nodes);

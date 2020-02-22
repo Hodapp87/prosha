@@ -2,15 +2,15 @@
 
 ## Highest priority:
 
-- See `ram_horn_*` and `curve_horn_*` TODOs: these are both solved by
-  some sort of parent-vertex-mapping layer.  The only other way around
-  this that I need is to require that rule functions exist in
-  explictly separate forms.
-- Consider trampolining `to_mesh`.  My call stack seems needlessly
-  deep in spots.  Can I make tail-recursive?
+- Clean up my 'parent vertex mapping' thingy, *and* come up with
+  meaningful terms to discuss it.
+- Do transforms compose in the *reverse* of automata_scratch? This
+  appears to be the case.
 
 ## Important but less critical:
 
+- Consider trampolining `to_mesh`.  My call stack seems needlessly
+  deep in spots.  Can I make tail-recursive?
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
 - Implement some of the tougher examples from the above too, e.g. the

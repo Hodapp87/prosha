@@ -119,11 +119,11 @@ fn cube_thing_rule() -> RuleStep {
 // Conversion from Python & automata_scratch
 fn ram_horn_start() -> RuleStep {
     let opening_xform = |i| {
-        (geometry::Translation3::new(0.0, 0.0, -1.0).to_homogeneous() *
-         Matrix4::new_scaling(0.5) *
+        ((geometry::Rotation3::from_axis_angle(
+            &nalgebra::Vector3::z_axis(), i).to_homogeneous()) *
          geometry::Translation3::new(0.25, 0.25, 1.0).to_homogeneous() *
-         geometry::Rotation3::from_axis_angle(
-             &nalgebra::Vector3::z_axis(), i).to_homogeneous())
+         Matrix4::new_scaling(0.5) *
+         geometry::Translation3::new(0.0, 0.0, -1.0).to_homogeneous())
     };
     RuleStep {
         geom: OpenMesh {
@@ -171,19 +171,21 @@ fn ram_horn_start() -> RuleStep {
         },
         final_geom: prim::empty_mesh(),
         children: vec![
-            (Rule::Recurse(ram_horn), opening_xform(0.0), vec![0,4,8,7]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2), vec![1,5,8,4]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*2.0), vec![2,6,8,5]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*3.0), vec![3,7,8,6]),
+            (Rule::Recurse(ram_horn), opening_xform(0.0), vec![5,2,6,8]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2), vec![4,1,5,8]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*2.0), vec![7,0,4,8]),
+            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*3.0), vec![6,3,7,8]),
+            // TODO: These vertex mappings appear to be right.
+            // Understand *why* they are right.
         ],
     }
 }
 
 fn ram_horn() -> RuleStep {
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
-    let incr: Mat4 = Matrix4::new_scaling(0.9) *
+    let incr: Mat4 = geometry::Translation3::new(0.0, 0.0, 0.8).to_homogeneous() *
         geometry::Rotation3::from_axis_angle(&v, 0.3).to_homogeneous() *
-        geometry::Translation3::new(0.0, 0.0, 0.8).to_homogeneous();
+        Matrix4::new_scaling(0.9);
     let seed = vec![
         vertex(-0.5, -0.5, 1.0),
         vertex(-0.5,  0.5, 1.0),
@@ -202,10 +204,6 @@ fn ram_horn() -> RuleStep {
             Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
             Tag::Body(0), Tag::Parent(3), Tag::Body(3),
             Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
-            // TODO: These are correct once the recursion is already
-            // going - but they are wrong at the start!  Note how I'm
-            // never using the 'midpoint' vertex from the parent,
-            // Tag::Parent(8).
         ],
     };
     let final_geom = OpenMesh {
@@ -238,6 +236,8 @@ pub fn main() {
     };
 
     run_test(Rule::Recurse(cube_thing_rule), 3, "cube_thing");
+    // this can't work on its own because the resultant OpenMesh still
+    // has parent references:
     //run_test(Rule::Recurse(curve_horn_thing_rule), 100, "curve_horn_thing");
     run_test(Rule::Recurse(curve_horn_start), 100, "curve_horn2");
     run_test(Rule::Recurse(ram_horn_start), 200, "ram_horn");

@@ -84,7 +84,8 @@ impl OpenMesh {
         stl_io::write_stl(writer, triangles.iter())
     }
 
-    pub fn connect(&self, others: &Vec<(OpenMesh, Vec<usize>)>) -> OpenMesh {
+    pub fn connect(&self, others: &Vec<(OpenMesh, &Vec<usize>)>) -> OpenMesh {
+        // TODO: Clean up Vec<usize> stuff
 
         // Copy body vertices & faces:
         let mut verts: Vec<Vertex> = self.verts.clone();
