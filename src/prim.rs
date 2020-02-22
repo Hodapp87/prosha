@@ -6,7 +6,6 @@ pub fn empty_mesh() -> OpenMesh {
     OpenMesh {
         verts: vec![],
         faces: vec![],
-        exit_groups: vec![],
     }
 }
 
@@ -36,6 +35,5 @@ pub fn cube() -> OpenMesh {
             Tag::Body(0), Tag::Body(1), Tag::Body(5),
             Tag::Body(0), Tag::Body(5), Tag::Body(4),
         ],
-        exit_groups: vec![],
     }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }

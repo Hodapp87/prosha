@@ -40,8 +40,6 @@ impl Rule {
 
     pub fn to_mesh(&self, iters_left: u32) -> (OpenMesh, u32) {
 
-        
-        
         let mut nodes: u32 = 1;
 
         if iters_left <= 0 {

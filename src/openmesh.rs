@@ -16,7 +16,7 @@ pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
 #[derive(Clone, Debug)]
 pub enum Tag {
     Body(usize),
-    Exit(usize, usize),  // (group, vertex)
+    Parent(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -26,7 +26,6 @@ pub struct OpenMesh {
     // Triangles, taken as every 3 values, treated each as indices
     // into 'verts':
     pub faces: Vec<Tag>,
-    pub exit_groups: Vec<usize>,
 }
 
 impl OpenMesh {
@@ -37,7 +36,6 @@ impl OpenMesh {
             // TODO: Is the above faster if I pack vectors into a
             // bigger matrix, and transform that?
             faces: self.faces.clone(), // TODO: Use Rc?
-            exit_groups: self.exit_groups.clone(),
         }
     }
 
@@ -59,7 +57,7 @@ impl OpenMesh {
         let get_vert = |j| {
             match self.faces[j] {
                 Tag::Body(n) => self.verts[n].xyz(),
-                Tag::Exit(_, _) => panic!("Cannot write_stl() if mesh has exit groups!"),
+                Tag::Parent(_) => panic!("Cannot write_stl() if mesh has parent references!"),
             }
         };
         // TODO: Handle this behavior
@@ -92,49 +90,31 @@ impl OpenMesh {
         let mut verts: Vec<Vertex> = self.verts.clone();
         let mut faces = self.faces.clone();
 
-        let mut exit_groups: Vec<usize> = vec![];
-        
-        let mut body_offset = self.verts.len();
-        let mut exit_offset = 0;
-        let mut offsets: Vec<usize> = vec![0; others.len()];
-        for (i,other) in others.iter().enumerate() {
+        for other in others {
 
-            // Append body vertices & exit vertices directly:
-            verts.append(&mut other.verts.clone());
+            // body_offset corresponds to the position in 'verts' at
+            // which we're appending everything in 'other.verts' -
+            // thus, the offset we shift all indices in 'others' by.
+            let body_offset = verts.len();
             
-            // Append faces, shifting each kind by respective offset:
+            // Copy all vertices from 'other':
+            verts.append(&mut other.verts.clone());
+
+            // Append its faces:
             faces.extend(other.faces.iter().map(|t| {
                 match t {
+                    // Apply aforementioned shift to its body vertices:
                     Tag::Body(n) => Tag::Body(n + body_offset),
-                    Tag::Exit(g, n) => Tag::Exit(g + exit_groups.len(), n + exit_offset),
+                    // Since 'self' vertices are in the same order,
+                    // parent vertex references retain same index:
+                    Tag::Parent(n) => Tag::Body(*n),
                 }
             }));
-            if i < self.exit_groups.len() {
-                exit_offset += self.exit_groups[i];
-            }
-            exit_groups.append(&mut other.exit_groups.clone());
-
-            offsets[i] = body_offset;
-            // Increase offsets by the number of elements we appended:
-            body_offset += other.verts.len();
-        }
-
-        // All of the Exit face indices from 'self' need to be
-        // modified to refer to Body vertices of something in
-        // 'others':
-        for i in 0..faces.len() {
-            match faces[i] {
-                Tag::Exit(g, n) => {
-                    faces[i] = Tag::Body(n + offsets[g]);
-                },
-                _ => { },
-            };
         }
 
         OpenMesh {
             verts: verts,
             faces: faces,
-            exit_groups: exit_groups,
         }
     }
 }
