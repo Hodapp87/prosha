@@ -105,9 +105,9 @@ impl Rule {
                     // Get sub-geometry (still un-transformed):
                     let (submesh, eval) = sub.rule.to_mesh(iters_left - 1);
                     // Tally up eval count:
-                    evals += n;
+                    evals += eval;
                     
-                    let m2 = submesh.transform(sub.xf);
+                    let m2 = submesh.transform(&sub.xf);
                     
                     (m2, &sub.vmap)
                 }).collect();

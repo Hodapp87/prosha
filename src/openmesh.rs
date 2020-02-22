@@ -30,7 +30,7 @@ pub struct OpenMesh {
 
 impl OpenMesh {
     
-    pub fn transform(&self, xfm: Mat4) -> OpenMesh {
+    pub fn transform(&self, xfm: &Mat4) -> OpenMesh {
         OpenMesh {
             verts: self.verts.iter().map(|v| xfm * v).collect(),
             // TODO: Is the above faster if I pack vectors into a

@@ -35,5 +35,5 @@ pub fn cube() -> OpenMesh {
             Tag::Body(0), Tag::Body(1), Tag::Body(5),
             Tag::Body(0), Tag::Body(5), Tag::Body(4),
         ],
-    }.transform(geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
+    }.transform(&geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
 }
