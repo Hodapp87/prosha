@@ -4,11 +4,13 @@
 
 - Clean up my 'parent vertex mapping' thingy, *and* come up with
   meaningful terms to discuss it.
+- Terminology: "run" a rule versus "evaluate" a rule.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.
 
 ## Important but less critical:
 
+- Why must I repeat myself so much in these definitions?
 - Consider trampolining `to_mesh`.  My call stack seems needlessly
   deep in spots.  Can I make tail-recursive?
 - Grep for all TODOs in code, really.

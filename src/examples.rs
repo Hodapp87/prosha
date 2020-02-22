@@ -2,7 +2,7 @@ use nalgebra::*;
 //pub mod examples;
 
 use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex};
-use crate::rule::{Rule, RuleStep};
+use crate::rule::{Rule, RuleStep, Child};
 use crate::prim;
 
 fn curve_horn_start() -> RuleStep {
@@ -22,11 +22,18 @@ fn curve_horn_start() -> RuleStep {
         },
         final_geom: prim::empty_mesh(),
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), id, vec![0,1,2,3]),
-            (Rule::Recurse(curve_horn_thing_rule), flip180, vec![3,2,1,0]),
+            Child {
+                rule: Rule::Recurse(curve_horn_thing_rule),
+                xf: id,
+                vmap: vec![0,1,2,3],
+            },
+            Child {
+                rule: Rule::Recurse(curve_horn_thing_rule),
+                xf: flip180,
+                vmap: vec![3,2,1,0],
+            },
         ],
     }
-    // TODO: Fix the consequences of the 180 flip
 }
 
 fn curve_horn_thing_rule() -> RuleStep {
@@ -77,7 +84,11 @@ fn curve_horn_thing_rule() -> RuleStep {
         geom: geom,
         final_geom: final_geom,
         children: vec![
-            (Rule::Recurse(curve_horn_thing_rule), m, vec![0,1,2,3]),
+            Child {
+                rule: Rule::Recurse(curve_horn_thing_rule),
+                xf: m,
+                vmap: vec![0,1,2,3],
+            },
         ],
     }
 }
@@ -102,11 +113,15 @@ fn cube_thing_rule() -> RuleStep {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
-    let gen_rulestep = |rot: &Mat4| -> (Rule, Mat4, Vec<usize>) {
+    let gen_rulestep = |rot: &Mat4| -> Child {
         let m: Mat4 = rot *
             Matrix4::new_scaling(0.5) *
             geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
-        (Rule::Recurse(cube_thing_rule), m, vec![])
+        Child {
+            rule: Rule::Recurse(cube_thing_rule),
+            xf: m,
+            vmap: vec![],
+        }
     };
 
     RuleStep {
@@ -119,8 +134,9 @@ fn cube_thing_rule() -> RuleStep {
 // Conversion from Python & automata_scratch
 fn ram_horn_start() -> RuleStep {
     let opening_xform = |i| {
+        let r = std::f32::consts::FRAC_PI_2 * i;
         ((geometry::Rotation3::from_axis_angle(
-            &nalgebra::Vector3::z_axis(), i).to_homogeneous()) *
+            &nalgebra::Vector3::z_axis(), r).to_homogeneous()) *
          geometry::Translation3::new(0.25, 0.25, 1.0).to_homogeneous() *
          Matrix4::new_scaling(0.5) *
          geometry::Translation3::new(0.0, 0.0, -1.0).to_homogeneous())
@@ -171,12 +187,28 @@ fn ram_horn_start() -> RuleStep {
         },
         final_geom: prim::empty_mesh(),
         children: vec![
-            (Rule::Recurse(ram_horn), opening_xform(0.0), vec![5,2,6,8]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2), vec![4,1,5,8]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*2.0), vec![7,0,4,8]),
-            (Rule::Recurse(ram_horn), opening_xform(std::f32::consts::FRAC_PI_2*3.0), vec![6,3,7,8]),
+            Child {
+                rule: Rule::Recurse(ram_horn),
+                xf: opening_xform(0.0),
+                vmap: vec![5,2,6,8],
+            },
+            Child {
+                rule: Rule::Recurse(ram_horn),
+                xf: opening_xform(1.0),
+                vmap: vec![4,1,5,8],
+            },
+            Child {
+                rule: Rule::Recurse(ram_horn),
+                xf: opening_xform(2.0),
+                vmap: vec![7,0,4,8],
+            },
+            Child {
+                rule: Rule::Recurse(ram_horn),
+                xf: opening_xform(3.0),
+                vmap: vec![6,3,7,8],
+            },
             // TODO: These vertex mappings appear to be right.
-            // Understand *why* they are right.
+            // Explain *why* they are right.
         ],
     }
 }
@@ -219,7 +251,11 @@ fn ram_horn() -> RuleStep {
         geom: geom,
         final_geom: final_geom,
         children: vec![
-            (Rule::Recurse(ram_horn), incr, vec![0,1,2,3]),
+            Child {
+                rule: Rule::Recurse(ram_horn),
+                xf: incr,
+                vmap: vec![0,1,2,3],
+            },
         ],
     }
 }
