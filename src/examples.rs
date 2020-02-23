@@ -264,23 +264,104 @@ fn ram_horn_branch() -> RuleStep {
 }
  */
 
-/*
+// Meant to be a copy of twist_from_gen from Python & automata_scratch
+pub fn twist_start() -> RuleStep {
+    //let ang=0.1;
+    let dz=0.2;
+    let dx0=2.0;
+    let dy=0.1;
+    let count=4;
+    // TODO: Factor these out (see twist)
+
+    let seed = vec![
+        vertex(-0.5,  0.0, -0.5),
+        vertex(-0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0, -0.5),        
+    ];
+    // TODO: Subdivide method
+    
+    // Quarter-turn in radians:
+    let qtr = std::f32::consts::FRAC_PI_2;
+    let y = &Vector3::y_axis();
+    let xform = |i| {
+        (geometry::Rotation3::from_axis_angle(y, qtr * (i as f32)).to_homogeneous() *
+         geometry::Translation3::new(dx0, 0.0, 0.0).to_homogeneous())
+    };
+    
+    // First generate 'count' children, each one shifted/rotated
+    // differently:
+    let children: Vec<Child> = (0..count).map(|i| {
+        let xf = xform(i);
+        Child {
+            rule: Rule::Recurse(twist),
+            xf: xf,
+            vmap: (4*i..4*(i+count)).collect(), // N.B.
+        }
+    }).collect();
+
+    // Use byproducts of this to make 'count' copies of 'seed' with
+    // this same transform:
+    let mut verts = vec![];
+    for child in &children {
+        verts.extend(seed.iter().map(|v| child.xf * v));
+    }
+    
+    RuleStep {
+        geom: OpenMesh {
+            verts: verts,
+            faces: vec![],
+            // TODO: Close these initial faces off
+        },
+        final_geom: prim::empty_mesh(),
+        children: children,
+    }
+}
+
 pub fn twist() -> RuleStep {
     let ang=0.1;
     let dz=0.2;
-    let dx0=2;
+    let dx0=2.0;
+    let dy=0.1;
     let count=4;
-    let scale=0.98;
+    // TODO: Factor these out (see twist_start)
 
-    let seed = vec![
-        vertex(-0.5, -0.5, 0),
-        vertex(-0.5,  0.5, 0),
-        vertex( 0.5,  0.5, 0),
-        vertex( 0.5, -0.5, 0),        
-    ];
+    let y = &Vector3::y_axis();
+    let incr = geometry::Rotation3::from_axis_angle(y, ang).to_homogeneous() *
+        geometry::Translation3::new(0.0, dy, 0.0).to_homogeneous();
     
+    let seed = vec![
+        vertex(-0.5,  0.0, -0.5),
+        vertex(-0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0, -0.5),        
+        // TODO: Likewise factor these out
+    ].iter().map(|v| incr * v).collect();
+    
+    RuleStep {
+        geom: OpenMesh {
+            verts: seed,
+            faces: vec![
+                Tag::Body(1), Tag::Parent(0), Tag::Body(0),
+                Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
+                Tag::Body(2), Tag::Parent(1), Tag::Body(1),
+                Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
+                Tag::Body(3), Tag::Parent(2), Tag::Body(2),
+                Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
+                Tag::Body(0), Tag::Parent(3), Tag::Body(3),
+                Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
+            ],
+        },
+        final_geom: prim::empty_mesh(), // TODO: Close properly
+        children: vec![
+            Child {
+                rule: Rule::Recurse(twist),
+                xf: incr,
+                vmap: vec![0,1,2,3],
+            },
+        ],
+    }
 }
- */
 
 pub fn main() {
 
@@ -299,4 +380,5 @@ pub fn main() {
     //run_test(Rule::Recurse(curve_horn_thing_rule), 100, "curve_horn_thing");
     run_test(Rule::Recurse(curve_horn_start), 100, "curve_horn2");
     run_test(Rule::Recurse(ram_horn_start), 200, "ram_horn");
+    run_test(Rule::Recurse(twist_start), 200, "twist");
 }

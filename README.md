@@ -2,14 +2,18 @@
 
 ## Highest priority:
 
-- Clean up my 'parent vertex mapping' thingy, *and* come up with
-  meaningful terms to discuss it.
+- Fix `twist` example.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.
 
 ## Important but less critical:
 
 - Why must I repeat myself so much in these definitions?
+- The notation for transforms is really cumbersome.  Some syntactic
+  sugar might go far.
+- What patterns can I factor out?  I do some things regularly, like:
+  the clockwise boundaries, the zigzag connections, the iterating over
+  a `Vec<Vertex>` to transform each element and make another vector.
 - Docs on modules
 - Consider trampolining `to_mesh`.  My call stack seems needlessly
   deep in spots.  Can I make tail-recursive?
