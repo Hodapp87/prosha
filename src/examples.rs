@@ -327,8 +327,9 @@ pub fn twist() -> RuleStep {
     // TODO: Factor these out (see twist_start)
 
     let y = &Vector3::y_axis();
-    let incr = geometry::Rotation3::from_axis_angle(y, ang).to_homogeneous() *
-        geometry::Translation3::new(0.0, dy, 0.0).to_homogeneous();
+    let incr = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
+        geometry::Rotation3::from_axis_angle(y, ang).to_homogeneous() *
+        geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
     
     let seed = vec![
         vertex(-0.5,  0.0, -0.5),
