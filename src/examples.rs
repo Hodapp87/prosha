@@ -4,6 +4,7 @@ use nalgebra::*;
 use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex};
 use crate::rule::{Rule, RuleStep, Child};
 use crate::prim;
+use crate::util;
 
 fn curve_horn_start() -> RuleStep {
     let id = nalgebra::geometry::Transform3::identity().to_homogeneous();
@@ -267,19 +268,19 @@ fn ram_horn_branch() -> RuleStep {
 // Meant to be a copy of twist_from_gen from Python & automata_scratch
 pub fn twist_start() -> RuleStep {
     //let ang=0.1;
-    let dz=0.2;
     let dx0=2.0;
-    let dy=0.1;
     let count=4;
     // TODO: Factor these out (see twist)
 
-    let seed = vec![
+    let seed = util::subdivide_cycle(&vec![
         vertex(-0.5,  0.0, -0.5),
-        vertex(-0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0, -0.5),
         vertex( 0.5,  0.0,  0.5),
-        vertex( 0.5,  0.0, -0.5),        
-    ];
-    // TODO: Subdivide method
+        vertex(-0.5,  0.0,  0.5),
+    ], 2);
+    // TODO: Factor out
+    let n = seed.len();
+    // TODO: Factor out subdiv size
     
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
@@ -296,7 +297,7 @@ pub fn twist_start() -> RuleStep {
         Child {
             rule: Rule::Recurse(twist),
             xf: xf,
-            vmap: (4*i..4*(i+count)).collect(), // N.B.
+            vmap: (n*i..n*(i+count)).collect(), // N.B.
         }
     }).collect();
 
@@ -320,10 +321,8 @@ pub fn twist_start() -> RuleStep {
 
 pub fn twist() -> RuleStep {
     let ang=0.1;
-    let dz=0.2;
     let dx0=2.0;
     let dy=0.1;
-    let count=4;
     // TODO: Factor these out (see twist_start)
 
     let y = &Vector3::y_axis();
@@ -331,34 +330,28 @@ pub fn twist() -> RuleStep {
         geometry::Rotation3::from_axis_angle(y, ang).to_homogeneous() *
         geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
     
-    let seed = vec![
+    let seed_orig = vec![
         vertex(-0.5,  0.0, -0.5),
-        vertex(-0.5,  0.0,  0.5),
+        vertex( 0.5,  0.0, -0.5),
         vertex( 0.5,  0.0,  0.5),
-        vertex( 0.5,  0.0, -0.5),        
+        vertex(-0.5,  0.0,  0.5),
         // TODO: Likewise factor these out
     ].iter().map(|v| incr * v).collect();
+    let seed = util::subdivide_cycle(&seed_orig, 2);
+    let n = seed.len();
+    // TODO: Factor out subdiv size
     
     RuleStep {
         geom: OpenMesh {
             verts: seed,
-            faces: vec![
-                Tag::Body(1), Tag::Parent(0), Tag::Body(0),
-                Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
-                Tag::Body(2), Tag::Parent(1), Tag::Body(1),
-                Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
-                Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-                Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
-                Tag::Body(0), Tag::Parent(3), Tag::Body(3),
-                Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
-            ],
+            faces: util::parallel_zigzag_faces(n),
         },
         final_geom: prim::empty_mesh(), // TODO: Close properly
         children: vec![
             Child {
                 rule: Rule::Recurse(twist),
                 xf: incr,
-                vmap: vec![0,1,2,3],
+                vmap: (0..n).collect(),
             },
         ],
     }
@@ -366,6 +359,18 @@ pub fn twist() -> RuleStep {
 
 pub fn main() {
 
+    {
+        let vs = vec![
+            vertex(-0.5,  0.0, -0.5),
+            vertex( 0.5,  0.0, -0.5),
+            vertex( 0.5,  0.0,  0.5),
+            vertex(-0.5,  0.0,  0.5),
+        ];
+        let vs2 = util::subdivide_cycle(&vs, 2);
+        println!("vs={:?}", vs);
+        println!("vs2={:?}", vs2);
+    }
+    
     let run_test = |r: Rule, iters, name| {
         println!("Running {}...", name);
         let (mesh, nodes) = r.to_mesh(iters);

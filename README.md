@@ -2,7 +2,7 @@
 
 ## Highest priority:
 
-- Fix `twist` example.
+- Clean up `twist` - maybe make a struct or trait.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.
 
