@@ -6,9 +6,9 @@ use crate::prim;
 /// - produces geometry when it is evaluated
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
-pub enum Rule {
+pub enum Rule<A> {
     /// Produce some geometry, and possibly recurse further.
-    Recurse(fn () -> RuleStep),
+    Recurse(fn (&A) -> RuleStep<A>),
     /// Produce nothing and recurse no further.
     EmptyRule,
 }
@@ -28,7 +28,7 @@ pub enum Rule {
 /// - if recursion continues, the rules of `children` are evaluated,
 /// and the resultant geometry is transformed and then connected with
 /// `geom`.
-pub struct RuleStep {
+pub struct RuleStep<A> {
     /// The geometry generated at just this iteration
     pub geom: OpenMesh,
 
@@ -43,16 +43,16 @@ pub struct RuleStep {
     /// The child invocations (used if recursion continues).  The
     /// 'parent' mesh, from the perspective of all geometry produced
     /// by `children`, is `geom`.
-    pub children: Vec<Child>,
+    pub children: Vec<Child<A>>,
 }
 
 /// `Child` evaluations, pairing another `Rule` with the
 /// transformations and parent vertex mappings that should be applied
 /// to it.
-pub struct Child {
+pub struct Child<A> {
 
     /// Rule to evaluate to produce geometry
-    pub rule: Rule,
+    pub rule: Rule<A>,
 
     /// The transform to apply to all geometry produced by `rule`
     /// (including its own `geom` and `final_geom` if needed, as well
@@ -67,7 +67,7 @@ pub struct Child {
     pub vmap: Vec<usize>,
 }
 
-impl Rule {
+impl<A> Rule<A> {
 
     // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
     // could end up having a lot of identical geometry that need not be
@@ -80,14 +80,14 @@ impl Rule {
     /// Convert this `Rule` to mesh data, recursively.  `iters_left`
     /// sets the maximum recursion depth.  This returns (geometry,
     /// number of rule evaluations).
-    pub fn to_mesh(&self, iters_left: u32) -> (OpenMesh, u32) {
+    pub fn to_mesh(&self, arg: &A, iters_left: u32) -> (OpenMesh, u32) {
 
         let mut evals: u32 = 1;
 
         if iters_left <= 0 {
             match self {
                 Rule::Recurse(f) => {
-                    let rs: RuleStep = f();
+                    let rs: RuleStep<A> = f(arg);
                     return (rs.final_geom, 1);
                 }
                 Rule::EmptyRule => {
@@ -98,13 +98,13 @@ impl Rule {
 
         match self {
             Rule::Recurse(f) => {
-                let rs: RuleStep = f();
+                let rs: RuleStep<A> = f(arg);
                 // TODO: This logic is more or less right, but it
                 // could perhaps use some un-tupling or something.
 
                 let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
                     // Get sub-geometry (still un-transformed):
-                    let (submesh, eval) = sub.rule.to_mesh(iters_left - 1);
+                    let (submesh, eval) = sub.rule.to_mesh(arg, iters_left - 1);
                     // Tally up eval count:
                     evals += eval;
                     
