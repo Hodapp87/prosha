@@ -2,7 +2,7 @@ use nalgebra::*;
 //pub mod examples;
 
 use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex};
-use crate::rule::{Rule, RuleStep, Child};
+use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::util;
 
@@ -34,8 +34,8 @@ impl CurveHorn {
         }
     }
     
-    fn start(&self) -> RuleStep<Self> {
-        RuleStep {
+    fn start(&self) -> RuleEval<Self> {
+        RuleEval {
             geom: OpenMesh {
                 verts: self.seed.clone(),
                 faces: vec![],
@@ -56,7 +56,7 @@ impl CurveHorn {
         }
     }
 
-    fn recur(&self) -> RuleStep<Self> {
+    fn recur(&self) -> RuleEval<Self> {
 
         let verts = self.seed.clone();
         let next_verts: Vec<Vertex> = verts.iter().map(|v| self.incr * v).collect();
@@ -89,7 +89,7 @@ impl CurveHorn {
             ],
         };
         
-        RuleStep{
+        RuleEval{
             geom: geom,
             final_geom: final_geom,
             children: vec![
@@ -112,7 +112,7 @@ impl CubeThing {
         CubeThing {}
     }
     
-    fn rec(&self) -> RuleStep<Self> {
+    fn rec(&self) -> RuleEval<Self> {
 
         let mesh = prim::cube();
 
@@ -143,7 +143,7 @@ impl CubeThing {
             }
         };
 
-        RuleStep {
+        RuleEval {
             geom: mesh,
             final_geom: prim::empty_mesh(),
             children: turns.iter().map(gen_rulestep).collect(),
@@ -161,7 +161,7 @@ impl RamHorn {
     }
     
     // Conversion from Python & automata_scratch
-    fn start(&self) -> RuleStep<Self> {
+    fn start(&self) -> RuleEval<Self> {
         let opening_xform = |i| {
             let r = std::f32::consts::FRAC_PI_2 * i;
             ((geometry::Rotation3::from_axis_angle(
@@ -170,7 +170,7 @@ impl RamHorn {
              Matrix4::new_scaling(0.5) *
              geometry::Translation3::new(0.0, 0.0, -1.0).to_homogeneous())
         };
-        RuleStep {
+        RuleEval {
             geom: OpenMesh {
                 verts: vec![
                     // 'Top' vertices:
@@ -242,7 +242,7 @@ impl RamHorn {
         }
     }
 
-    fn ram_horn(&self) -> RuleStep<Self> {
+    fn ram_horn(&self) -> RuleEval<Self> {
         let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
         let incr: Mat4 = geometry::Translation3::new(0.0, 0.0, 0.8).to_homogeneous() *
             geometry::Rotation3::from_axis_angle(&v, 0.3).to_homogeneous() *
@@ -274,7 +274,7 @@ impl RamHorn {
                 Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
             ],
         };
-        RuleStep {
+        RuleEval {
             geom: geom,
             final_geom: final_geom,
             children: vec![
@@ -321,7 +321,7 @@ impl Twist {
     }
     
     // Meant to be a copy of twist_from_gen from Python & automata_scratch
-    pub fn start(&self) -> RuleStep<Twist> {
+    pub fn start(&self) -> RuleEval<Twist> {
 
         let n = self.seed.len();
         
@@ -351,7 +351,7 @@ impl Twist {
             verts.extend(self.seed_sub.iter().map(|v| child.xf * v));
         }
         
-        RuleStep {
+        RuleEval {
             geom: OpenMesh {
                 verts: verts,
                 faces: vec![],
@@ -362,7 +362,7 @@ impl Twist {
         }
     }
 
-    pub fn recur(&self) -> RuleStep<Twist> {
+    pub fn recur(&self) -> RuleEval<Twist> {
         let y = &Vector3::y_axis();
         let incr = geometry::Translation3::new(-self.dx0, 0.0, 0.0).to_homogeneous() *
             geometry::Rotation3::from_axis_angle(y, self.ang).to_homogeneous() *
@@ -372,7 +372,7 @@ impl Twist {
         let seed_sub = util::subdivide_cycle(&seed_orig, self.subdiv);
         let n = seed_sub.len();
         
-        RuleStep {
+        RuleEval {
             geom: OpenMesh {
                 verts: seed_sub,
                 faces: util::parallel_zigzag_faces(n),

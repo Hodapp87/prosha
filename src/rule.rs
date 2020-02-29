@@ -8,7 +8,7 @@ use crate::prim;
 /// geometry
 pub enum Rule<A> {
     /// Produce some geometry, and possibly recurse further.
-    Recurse(fn (&A) -> RuleStep<A>),
+    Recurse(fn (&A) -> RuleEval<A>),
     /// Produce nothing and recurse no further.
     EmptyRule,
 }
@@ -17,7 +17,7 @@ pub enum Rule<A> {
 // no function call.
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
 
-/// `RuleStep` supplies the results of evaluating some `Rule` for one
+/// `RuleEval` supplies the results of evaluating some `Rule` for one
 /// iteration: it contains the geometry produced at this step
 /// (`geom`), and it tells what to do next depending on whether
 /// recursion continues further, or is stopped here (due to hitting
@@ -28,7 +28,7 @@ pub enum Rule<A> {
 /// - if recursion continues, the rules of `children` are evaluated,
 /// and the resultant geometry is transformed and then connected with
 /// `geom`.
-pub struct RuleStep<A> {
+pub struct RuleEval<A> {
     /// The geometry generated at just this iteration
     pub geom: OpenMesh,
 
@@ -77,9 +77,9 @@ impl<A> Rule<A> {
     // rather than repeatedly transforming meshes, it stacks
     // transformations and then applies them all at once.
 
-    /// Convert this `Rule` to mesh data, recursively.  `iters_left`
-    /// sets the maximum recursion depth.  This returns (geometry,
-    /// number of rule evaluations).
+    /// Convert this `Rule` to mesh data, recursively (depth first).
+    /// `iters_left` sets the maximum recursion depth.  This returns
+    /// (geometry, number of rule evaluations).
     pub fn to_mesh(&self, arg: &A, iters_left: u32) -> (OpenMesh, u32) {
 
         let mut evals: u32 = 1;
@@ -87,7 +87,7 @@ impl<A> Rule<A> {
         if iters_left <= 0 {
             match self {
                 Rule::Recurse(f) => {
-                    let rs: RuleStep<A> = f(arg);
+                    let rs: RuleEval<A> = f(arg);
                     return (rs.final_geom, 1);
                 }
                 Rule::EmptyRule => {
@@ -98,7 +98,7 @@ impl<A> Rule<A> {
 
         match self {
             Rule::Recurse(f) => {
-                let rs: RuleStep<A> = f(arg);
+                let rs: RuleEval<A> = f(arg);
                 // TODO: This logic is more or less right, but it
                 // could perhaps use some un-tupling or something.
 
@@ -121,4 +121,96 @@ impl<A> Rule<A> {
             }
         }
     }
+
+    pub fn to_mesh_iter(&self, arg: &A, max_depth: usize) -> (OpenMesh, u32) {
+
+        let mut geom = prim::empty_mesh();
+        let mut stack: Vec<(RuleEval<A>, usize)> = vec![];
+
+        match self {
+            Rule::Recurse(f) => stack.push((f(arg), 0)),
+            Rule::EmptyRule => {},
+        }
+
+        loop {
+            let n = stack.len(); // TODO: Just keep a running total.
+            // We can increment/decrement as we push/pop.
+            let (eval, idx) = stack[n-1];
+            // note that:
+            // stack[n-2].children[idx] = eval    (so to speak)
+
+            // I can't do the above. I can either...
+            // - Implement Copy for RuleEval.
+            // - push/pop all over the place and deal with the Option
+            // unpacking and the extra state-changes.
+            // - use something nicer than RuleEval?
+
+            // I can't borrow it because a mutable borrow is already
+            // done with the pop?
+            
+            // I don't need to share geometry. I use geometry only
+            // once (though I may need to be careful on the rules with
+            // final_geom), though that's not yet implemented.
+
+            // Deriving automatically puts the Copy constraint on A,
+            // and I am not sure I want to deal with that - but I have
+            // to be able to copy Child regardless, thus Rule.
+
+            // Function pointers support Copy, so Rule is fine.
+            // Vectors by design do *not*.
+
+            // Seems a little bizarre that none of this affects
+            // recursive to_mesh... what am I doing differently?
+            
+            // See if it is time to backtrack:
+            if n > max_depth || eval.children.is_empty() {
+                // This has no parents:
+                if n < 2 {
+                    break;
+                }
+
+                // Backtrack:
+                stack.pop();
+                // TODO: Pop transform off of stack
+
+                // If possible, step to the next sibling:
+                let (parent, _) = &stack[n-2];
+                if (idx + 1) < parent.children.len() {
+                    let sib = parent.children[idx + 1];
+                    match sib.rule {
+                        Rule::Recurse(f) => {
+                            let eval_sib = f(arg);
+                            stack.push((eval_sib, idx + 1));
+                            // TODO: Push transform onto stack
+                            // TODO: Append geometry
+                        },
+                        Rule::EmptyRule => {
+                            // Nowhere to recurse further
+                        } 
+                    }
+                }
+                continue;
+            } else {
+                // Otherwise, try to recurse to first child:
+                let child = eval.children[0];
+                match child.rule {
+                    Rule::Recurse(f) => {
+                        let eval_child = f(arg);
+                        stack.push((eval_child, 0));
+                        // TODO: Push transform onto stack
+                        // TODO: Append geometry  
+                    }
+                    Rule::EmptyRule => {
+                        // Do nothing.
+                    }
+                }
+            }
+        }
+
+        // TODO: Return right number
+        return (geom, 0); 
+
+    }
+
+    
 }

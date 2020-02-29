@@ -1,5 +1,5 @@
-use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex};
-use crate::rule::{Rule, RuleStep, Child};
+use crate::openmesh::{Tag, Vertex};
+//use crate::rule::{Rule, Child};
 
 /// Linearly subdivides a list of points that are to be treated as a
 /// cycle.  This produces 'count' points for every element of 'p'
