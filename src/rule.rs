@@ -124,88 +124,79 @@ impl<A> Rule<A> {
 
     pub fn to_mesh_iter(&self, arg: &A, max_depth: usize) -> (OpenMesh, u32) {
 
+        struct State<A> {
+            // The set of rules we're currently handling:
+            rules: Vec<Child<A>>,
+            // The next element of 'children' to handle:
+            next: usize,
+            // The world transform of the *parent* of 'rules', that
+            // is, not including any transform of any element of
+            // 'rules'.
+            xf: Mat4,
+        }
+        
         let mut geom = prim::empty_mesh();
-        let mut stack: Vec<(RuleEval<A>, usize)> = vec![];
+        let mut stack: Vec<State<A>> = vec![];
 
+        // Set up starting state:
         match self {
-            Rule::Recurse(f) => stack.push((f(arg), 0)),
-            Rule::EmptyRule => {},
+            Rule::Recurse(f) => {
+                let eval = f(arg);
+                let s = State {
+                    rules: eval.children,
+                    next: 0,
+                    xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
+                };
+                stack.push(s);
+                geom = eval.geom;
+            },
+            Rule::EmptyRule => {
+                // No geometry and nowhere to recurse...
+                return (geom, 0);
+            },
         }
 
-        loop {
+        while !stack.is_empty() {
+            
             let n = stack.len(); // TODO: Just keep a running total.
             // We can increment/decrement as we push/pop.
-            let (eval, idx) = stack[n-1];
-            // note that:
-            // stack[n-2].children[idx] = eval    (so to speak)
+            let s = &mut stack[n-1];
 
-            // I can't do the above. I can either...
-            // - Implement Copy for RuleEval.
-            // - push/pop all over the place and deal with the Option
-            // unpacking and the extra state-changes.
-            // - use something nicer than RuleEval?
-
-            // I can't borrow it because a mutable borrow is already
-            // done with the pop?
-            
-            // I don't need to share geometry. I use geometry only
-            // once (though I may need to be careful on the rules with
-            // final_geom), though that's not yet implemented.
-
-            // Deriving automatically puts the Copy constraint on A,
-            // and I am not sure I want to deal with that - but I have
-            // to be able to copy Child regardless, thus Rule.
-
-            // Function pointers support Copy, so Rule is fine.
-            // Vectors by design do *not*.
-
-            // Seems a little bizarre that none of this affects
-            // recursive to_mesh... what am I doing differently?
-            
-            // See if it is time to backtrack:
-            if n > max_depth || eval.children.is_empty() {
-                // This has no parents:
-                if n < 2 {
-                    break;
-                }
-
-                // Backtrack:
+            if s.next >= s.rules.len() {
+                // If we've run out of child rules, backtrack:
                 stack.pop();
-                // TODO: Pop transform off of stack
-
-                // If possible, step to the next sibling:
-                let (parent, _) = &stack[n-2];
-                if (idx + 1) < parent.children.len() {
-                    let sib = parent.children[idx + 1];
-                    match sib.rule {
-                        Rule::Recurse(f) => {
-                            let eval_sib = f(arg);
-                            stack.push((eval_sib, idx + 1));
-                            // TODO: Push transform onto stack
-                            // TODO: Append geometry
-                        },
-                        Rule::EmptyRule => {
-                            // Nowhere to recurse further
-                        } 
-                    }
-                }
+                // TODO: If we're backtracking, then the *parent* node
+                // needs to have 'next' incremented.
                 continue;
-            } else {
-                // Otherwise, try to recurse to first child:
-                let child = eval.children[0];
-                match child.rule {
-                    Rule::Recurse(f) => {
-                        let eval_child = f(arg);
-                        stack.push((eval_child, 0));
-                        // TODO: Push transform onto stack
-                        // TODO: Append geometry  
-                    }
-                    Rule::EmptyRule => {
-                        // Do nothing.
-                    }
-                }
+            }
+
+            let child = &s.rules[s.next];
+            match child.rule {
+                Rule::Recurse(f) => {
+                    // Evaluate the rule:
+                    let eval = f(arg);
+
+                    // Compose child transform to new world transform:
+                    let xf = s.xf * child.xf; // TODO: Check order on this
+                    
+                    // TODO: Add in new geometry, transformed with 'xf'
+                    
+                    // Recurse further (i.e. put more onto stack):                    
+                    let s2 = State {
+                        rules: eval.children,
+                        next: 0,
+                        xf: xf,
+                    };
+                    stack.push(s2);
+                    
+                },
+                Rule::EmptyRule => {
+                    s.next += 1;
+                },
             }
         }
+        // TODO: Recursion depth? What does that even mean here?
+        // Maybe something more like 'branch depth'?
 
         // TODO: Return right number
         return (geom, 0); 

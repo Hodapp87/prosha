@@ -15,8 +15,10 @@
   the clockwise boundaries, the zigzag connections, the iterating over
   a `Vec<Vertex>` to transform each element and make another vector.
 - Docs on modules
-- Consider trampolining `to_mesh`.  My call stack seems needlessly
-  deep in spots.  Can I make tail-recursive?
+- Consider making `to_mesh` iterative.  My call stack seems needlessly
+  deep in spots - especially in rules which do not branch.  Sections
+  like this should be manageable with just iteration that does not
+  grow anything in size.
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
 - Implement some of the tougher examples from the above too, e.g. the
