@@ -161,7 +161,13 @@ impl<A> Rule<A> {
         }
 
         let mut count = 0;
-        
+
+        // TODO: Why is this forcing it to build up the entire stack
+        // to the recursion limit, and *then* start generating
+        // geometry and winding the stack back down?
+        //
+        // Isn't there some way that it can generate geometry at every
+        // step and only have to add to the stack to handle a branch?
         while !stack.is_empty() {
 
             // TODO: This, more elegantly?
