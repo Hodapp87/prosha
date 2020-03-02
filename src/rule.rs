@@ -156,17 +156,30 @@ impl<A> Rule<A> {
             },
         }
 
+        let mut count = 0;
+        
         while !stack.is_empty() {
+
+            // TODO: This, more elegantly?
+            count += 1;
+            if count > max_depth {
+                break;
+            }
             
             let n = stack.len(); // TODO: Just keep a running total.
+            println!("DEBUG: stack has len {}", n);
             // We can increment/decrement as we push/pop.
             let s = &mut stack[n-1];
 
             if s.next >= s.rules.len() {
                 // If we've run out of child rules, backtrack:
                 stack.pop();
-                // TODO: If we're backtracking, then the *parent* node
-                // needs to have 'next' incremented.
+                // and have the *parent* node (if one) move on:
+                if n >= 2 {
+                    stack[n-2].next += 1;
+                }
+                // (if there isn't one, it makes no difference,
+                // because the loop will end)
                 continue;
             }
 
@@ -178,8 +191,9 @@ impl<A> Rule<A> {
 
                     // Compose child transform to new world transform:
                     let xf = s.xf * child.xf; // TODO: Check order on this
-                    
-                    // TODO: Add in new geometry, transformed with 'xf'
+
+                    let new_geom = eval.geom.transform(&xf);
+                    geom = geom.connect(&vec![(new_geom, &child.vmap)]);
                     
                     // Recurse further (i.e. put more onto stack):                    
                     let s2 = State {

@@ -412,6 +412,15 @@ pub fn main() {
         mesh.write_stl_file(&fname).unwrap();
     }
 
+    fn run_test_iter<A>(a: A, r: Rule<A>, iters: usize, name: &str) {
+        println!("Running {}...", name);
+        let (mesh, nodes) = r.to_mesh_iter(&a, iters);
+        println!("Merged {} nodes", nodes);
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        mesh.write_stl_file(&fname).unwrap();
+    }
+    
     run_test(CubeThing::init(), Rule::Recurse(CubeThing::rec), 3, "cube_thing");
     // this can't work on its own because the resultant OpenMesh still
     // has parent references:
@@ -419,4 +428,6 @@ pub fn main() {
     run_test(CurveHorn::init(), Rule::Recurse(CurveHorn::start), 100, "curve_horn2");
     run_test(RamHorn::init(), Rule::Recurse(RamHorn::start), 200, "ram_horn");
     run_test(Twist::init(), Rule::Recurse(Twist::start), 200, "twist");
+
+    run_test_iter(CurveHorn::init(), Rule::Recurse(CurveHorn::start), 100, "curve_horn2_iter");
 }
