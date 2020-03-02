@@ -102,15 +102,16 @@ impl<A> Rule<A> {
                 // TODO: This logic is more or less right, but it
                 // could perhaps use some un-tupling or something.
 
-                let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
+                let subgeom: Vec<(OpenMesh, Vec<usize>)> = rs.children.iter().map(|sub| {
                     // Get sub-geometry (still un-transformed):
                     let (submesh, eval) = sub.rule.to_mesh(arg, iters_left - 1);
                     // Tally up eval count:
                     evals += eval;
                     
                     let m2 = submesh.transform(&sub.xf);
-                    
-                    (m2, &sub.vmap)
+
+                    // TODO: Can I avoid the .clone() here?
+                    (m2, sub.vmap.clone())
                 }).collect();
                 
                 // Connect geometry from this rule (not child rules):
@@ -133,6 +134,8 @@ impl<A> Rule<A> {
             // is, not including any transform of any element of
             // 'rules'.
             xf: Mat4,
+            // Child geometry for 'rules', waiting to be connected:
+            geom: Vec<(OpenMesh, Vec<usize>)>,
         }
         
         let mut geom = prim::empty_mesh();
@@ -146,6 +149,7 @@ impl<A> Rule<A> {
                     rules: eval.children,
                     next: 0,
                     xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
+                    geom: vec![],
                 };
                 stack.push(s);
                 geom = eval.geom;
@@ -162,24 +166,18 @@ impl<A> Rule<A> {
 
             // TODO: This, more elegantly?
             count += 1;
-            if count > max_depth {
-                break;
-            }
             
             let n = stack.len(); // TODO: Just keep a running total.
             println!("DEBUG: stack has len {}", n);
             // We can increment/decrement as we push/pop.
             let s = &mut stack[n-1];
 
-            if s.next >= s.rules.len() {
+            if s.next >= s.rules.len() || count > max_depth {
+                // Connect the geometry we accumulated:
+                println!("DEBUG: Connecting {} parts", s.geom.len());
+                geom = geom.connect(&s.geom);
                 // If we've run out of child rules, backtrack:
                 stack.pop();
-                // and have the *parent* node (if one) move on:
-                if n >= 2 {
-                    stack[n-2].next += 1;
-                }
-                // (if there isn't one, it makes no difference,
-                // because the loop will end)
                 continue;
             }
 
@@ -190,19 +188,22 @@ impl<A> Rule<A> {
                     let eval = f(arg);
 
                     // Compose child transform to new world transform:
-                    let xf = s.xf * child.xf; // TODO: Check order on this
+                    let xf = child.xf * s.xf; // TODO: Check order on this
 
                     let new_geom = eval.geom.transform(&xf);
-                    geom = geom.connect(&vec![(new_geom, &child.vmap)]);
+
+                    s.next += 1;
+                    s.geom.push((new_geom, child.vmap.clone()));
+                    // TODO: this clone() shouldn't be necessary
                     
                     // Recurse further (i.e. put more onto stack):                    
                     let s2 = State {
                         rules: eval.children,
                         next: 0,
                         xf: xf,
+                        geom: vec![],
                     };
                     stack.push(s2);
-                    
                 },
                 Rule::EmptyRule => {
                     s.next += 1;
@@ -211,6 +212,8 @@ impl<A> Rule<A> {
         }
         // TODO: Recursion depth? What does that even mean here?
         // Maybe something more like 'branch depth'?
+
+        // TODO: Handle final_geom
 
         // TODO: Return right number
         return (geom, 0); 
