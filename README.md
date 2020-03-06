@@ -2,12 +2,18 @@
 
 ## Highest priority:
 
+- Continue fixing `to_mesh_iter`, which still doesn't yet handle
+  branching because (for one thing) it never tracks depth properly in
+  order to backtrack.
 - Clean up `twist` - maybe make a struct or trait.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.
 
 ## Important but less critical:
 
+- Do I actually need `EmptyRule` or can I get rid of a bunch of
+  extraneous nesting?  `RuleEval` with empty meshes and no children is
+  equivalent.  I have used `EmptyRule` exactly zero times.
 - Why must I repeat myself so much in these definitions?
 - The notation for transforms is really cumbersome.  Some syntactic
   sugar might go far.
@@ -15,10 +21,6 @@
   the clockwise boundaries, the zigzag connections, the iterating over
   a `Vec<Vertex>` to transform each element and make another vector.
 - Docs on modules
-- Consider making `to_mesh` iterative.  My call stack seems needlessly
-  deep in spots - especially in rules which do not branch.  Sections
-  like this should be manageable with just iteration that does not
-  grow anything in size.
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
 - Implement some of the tougher examples from the above too, e.g. the

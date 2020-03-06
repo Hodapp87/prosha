@@ -98,7 +98,13 @@ impl OpenMesh {
 
     /// Treat this mesh as a 'parent' mesh to connect with any number
     /// of 'child' meshes, all of them paired with their respective
-    /// parent vertex mappings.  This returns a new mesh.
+    /// parent vertex mappings.  This returns a tuple of (new mesh,
+    /// offsets), where 'offsets' gives the offset of where child
+    /// meshes were shifted in the new mesh.
+    ///
+    /// That is, the vertices of 'children[i]' begin at vertex
+    /// 'offset[i]' of the new mesh. This is needed in some cases for
+    /// adjusting a parent vertex mapping, like 'vmap' of Rule::Child.
     pub fn connect(&self, children: &Vec<(OpenMesh, &Vec<usize>)>) -> (OpenMesh, Vec<usize>) {
         // TODO: Clean up this description a bit
         // TODO: Clean up Vec<usize> stuff
