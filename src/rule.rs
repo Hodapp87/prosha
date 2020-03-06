@@ -114,7 +114,7 @@ impl<A> Rule<A> {
                 }).collect();
                 
                 // Connect geometry from this rule (not child rules):
-                return (rs.geom.connect(&subgeom), evals);
+                return (rs.geom.connect(&subgeom).0, evals);
             }
             Rule::EmptyRule => {
                 return (prim::empty_mesh(), evals);
@@ -193,15 +193,22 @@ impl<A> Rule<A> {
             match child.rule {
                 Rule::Recurse(f) => {
                     // Evaluate the rule:
-                    let eval = f(arg);
+                    let mut eval = f(arg);
 
                     // Compose child transform to new world transform:
                     let xf = s.xf * child.xf; // TODO: Check order on this
 
                     let new_geom = eval.geom.transform(&xf);
-                    println!("DEBUG: Connecting {} faces, faces={:?}",
-                             new_geom.verts.len(), new_geom.faces);
-                    geom = geom.connect(&vec![(new_geom, &child.vmap)]);
+                    println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
+                             new_geom.verts.len(), child.vmap, new_geom.faces);
+                    let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
+                    geom = g;
+
+                    // Adjust vmap in all of eval.children:
+                    for (i,offset) in offsets.iter().enumerate() {
+                        eval.children[i].vmap = eval.children[i].vmap.iter().map(|n| n + offset).collect();
+                    }
+                    // TODO: Explain this better
                     
                     // Recurse further (i.e. put more onto stack):                    
                     let s2 = State {

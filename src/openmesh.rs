@@ -99,7 +99,7 @@ impl OpenMesh {
     /// Treat this mesh as a 'parent' mesh to connect with any number
     /// of 'child' meshes, all of them paired with their respective
     /// parent vertex mappings.  This returns a new mesh.
-    pub fn connect(&self, children: &Vec<(OpenMesh, &Vec<usize>)>) -> OpenMesh {
+    pub fn connect(&self, children: &Vec<(OpenMesh, &Vec<usize>)>) -> (OpenMesh, Vec<usize>) {
         // TODO: Clean up this description a bit
         // TODO: Clean up Vec<usize> stuff
 
@@ -107,6 +107,8 @@ impl OpenMesh {
         let mut verts: Vec<Vertex> = self.verts.clone();
         let mut faces = self.faces.clone();
 
+        let mut offsets: Vec<usize> = vec![];
+        
         for (child,mapping) in children {
 
             // body_offset corresponds to the position in 'verts' at
@@ -127,11 +129,14 @@ impl OpenMesh {
                     Tag::Parent(n) => Tag::Body(mapping[*n]),
                 }
             }));
+
+            offsets.push(body_offset);
         }
 
-        OpenMesh {
+        let m = OpenMesh {
             verts: verts,
             faces: faces,
-        }
+        };
+        (m, offsets)
     }
 }
