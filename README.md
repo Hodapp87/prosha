@@ -2,9 +2,6 @@
 
 ## Highest priority:
 
-- Continue fixing `to_mesh_iter`, which still doesn't yet handle
-  branching because (for one thing) it never tracks depth properly in
-  order to backtrack.
 - Clean up `twist` - maybe make a struct or trait.
 - Do transforms compose in the *reverse* of automata_scratch? This
   appears to be the case.

@@ -1,4 +1,4 @@
-use crate::openmesh::{OpenMesh, Mat4};
+use crate::openmesh::{OpenMesh, Tag, Mat4};
 use crate::prim;
 
 /// Definition of a rule.  In general, a `Rule`:
@@ -84,6 +84,9 @@ impl<A> Rule<A> {
         let rs: RuleEval<A> = (self.eval)(arg);
         if iters_left <= 0 {
             return (rs.final_geom, 1);
+            // TODO: This is probably wrong because of the way that
+            // sub.vmap is used below.  final_geom is not supposed to
+            // have any vertex mapping applied.
         }
 
         // TODO: This logic is more or less right, but it
@@ -114,10 +117,11 @@ impl<A> Rule<A> {
             rules: Vec<Child<A>>,
             // The next element of 'children' to handle:
             next: usize,
-            // The world transform of the *parent* of 'rules', that
-            // is, not including any transform of any element of
-            // 'rules'.
+            // World transform of the *parent* of 'rules', that is,
+            // not including any transform of any element of 'rules'.
             xf: Mat4,
+            // How many levels 'deeper' can we recurse?
+            depth: usize,
         }
 
         // 'stack' stores at its last element our "current" State in
@@ -125,17 +129,16 @@ impl<A> Rule<A> {
         // be processed next.  Every element prior to this is previous
         // states which must be kept around for further backtracking
         // (usually because they involve multiple rules).
-        let mut stack: Vec<State<A>> = vec![];
-        let mut geom = prim::empty_mesh();
-
-        // Set up the stack's initial state - evaluate our own rule
+        //
+        // We evaluate our own rule to initialize the stack:
         let eval = (self.eval)(arg);
-        stack.push(State {
+        let mut stack: Vec<State<A>> = vec![State {
             rules: eval.children,
             next: 0,
             xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
-        });
-        geom = eval.geom;
+            depth: max_depth,
+        }];
+        let mut geom = eval.geom;
 
         // Number of times we've evaluated a Rule:
         let mut eval_count = 1;
@@ -145,28 +148,14 @@ impl<A> Rule<A> {
 
         while !stack.is_empty() {
 
-            // TODO: This, more elegantly?
-            if eval_count > max_depth {
-                break;
-            }
-            
-            println!("DEBUG: stack has len {}", n);
+            // s = the 'current' state:
             let s = &mut stack[n-1];
-
-            if s.next >= s.rules.len() {
-                // If we've run out of child rules, have the *parent* node (if one) move on:
-                if n >= 2 {
-                    stack[n-2].next += 1;
-                }
-                // and backtrack:
-                stack.pop();
-                n -= 1;
-                // (if there isn't one, it makes no difference,
-                // because the loop will end)
-                continue;
-            }
+            let depth = s.depth;
+            // TODO: remove
+            //println!("DEBUG: stack has len {}; depth={}", n, depth);
 
             let child = &s.rules[s.next];
+            
             // Evaluate the rule:
             let mut eval = (child.rule.eval)(arg);
             eval_count += 1;
@@ -177,8 +166,48 @@ impl<A> Rule<A> {
             // This rule produced some geometry which we'll
             // combine with the 'global' geometry:
             let new_geom = eval.geom.transform(&xf);
-            println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
-                     new_geom.verts.len(), child.vmap, new_geom.faces);
+            
+            // See if we can still recurse further:
+            if depth <= 0 {
+                // TODO: remove
+                //println!("DEBUG: backtracing, depth={}, s.next = {}, s.rules.len() = {}",
+                //         depth, s.next, s.rules.len());
+
+                // As we're stopping recursion, we need to connect
+                // final_geom with all else in order to actually close
+                // geometry properly:
+                let final_geom = eval.final_geom.transform(&xf);
+                // TODO: Fix the awful hack below.  I do this only to
+                // generate an identity mapping for vmap when I don't
+                // actually need vmap.
+                let m = {
+                    let mut m_ = 0;
+                    for f in &final_geom.faces {
+                        match f {
+                            Tag::Parent(i) => {
+                                if *i > m_ {
+                                    m_ = *i;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    m_ + 1
+                };
+                let vmap: Vec<usize> = (0..m).collect();
+                let (geom2, _) = new_geom.connect(&vec![(final_geom, &vmap)]);
+                
+                geom = geom.connect(&vec![(geom2, &child.vmap)]).0;
+                
+                // and backtrack:
+                stack.pop();
+                n -= 1;
+                continue;
+            }
+
+            // TODO: remove
+            //println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
+            //         new_geom.verts.len(), child.vmap, new_geom.faces);
             let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
             geom = g;
 
@@ -197,29 +226,27 @@ impl<A> Rule<A> {
                 }).collect();
             }
 
-            // TODO: Why does below work?
-            if (s.next + 1) >= s.rules.len() {
+            // We're done evaluating this rule, so increment 'next'.
+            // If that was the last rule at this level (i.e. ignoring
+            // eval.children), remove it - we're done with it.
+            s.next += 1;
+            if s.next >= s.rules.len() {
                 let m = stack.len();
-                if m >= 2 {
-                    stack[m-2].next += 1;
-                }
                 stack.pop();
                 n -= 1;
             }
-            // I guess we are "done" with the rule after we've
-            // evaluated it, and it is then safe to increment
-            // s.next.
-            
-            // Recurse further (i.e. put more onto stack):                    
-            stack.push(State {
-                rules: eval.children,
-                next: 0,
-                xf: xf,
-            });
-            n += 1;
+
+            if !eval.children.is_empty() {
+                // Recurse further (i.e. put more onto stack):                    
+                stack.push(State {
+                    rules: eval.children,
+                    next: 0,
+                    xf: xf,
+                    depth: depth - 1,
+                });
+                n += 1;
+            }
         }
-        // TODO: Recursion depth? What does that even mean here?
-        // Maybe something more like 'branch depth'?
 
         // TODO: Handle final_geom
 
