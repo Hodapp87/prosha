@@ -43,12 +43,12 @@ impl CurveHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule::Recurse(Self::recur),
+                    rule: Rule { eval: Self::recur },
                     xf: self.id_xform,
                     vmap: vec![0,1,2,3],
                 },
                 Child {
-                    rule: Rule::Recurse(Self::recur),
+                    rule: Rule { eval: Self::recur },
                     xf: self.flip180,
                     vmap: vec![3,2,1,0],
                 },
@@ -94,7 +94,7 @@ impl CurveHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: Rule::Recurse(Self::recur),
+                    rule: Rule { eval: Self::recur },
                     xf: self.incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -137,7 +137,7 @@ impl CubeThing {
                 Matrix4::new_scaling(0.5) *
                 geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
             Child {
-                rule: Rule::Recurse(Self::rec),
+                rule: Rule { eval: Self::rec },
                 xf: m,
                 vmap: vec![],
             }
@@ -217,22 +217,22 @@ impl RamHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule::Recurse(Self::ram_horn),
+                    rule: Rule { eval: Self::ram_horn },
                     xf: opening_xform(0.0),
                     vmap: vec![5,2,6,8],
                 },
                 Child {
-                    rule: Rule::Recurse(Self::ram_horn),
+                    rule: Rule { eval: Self::ram_horn },
                     xf: opening_xform(1.0),
                     vmap: vec![4,1,5,8],
                 },
                 Child {
-                    rule: Rule::Recurse(Self::ram_horn),
+                    rule: Rule { eval: Self::ram_horn },
                     xf: opening_xform(2.0),
                     vmap: vec![7,0,4,8],
                 },
                 Child {
-                    rule: Rule::Recurse(Self::ram_horn),
+                    rule: Rule { eval: Self::ram_horn },
                     xf: opening_xform(3.0),
                     vmap: vec![6,3,7,8],
                 },
@@ -279,7 +279,7 @@ impl RamHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: Rule::Recurse(Self::ram_horn),
+                    rule: Rule { eval: Self::ram_horn },
                     xf: incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -338,7 +338,7 @@ impl Twist {
         let children: Vec<Child<Twist>> = (0..self.count).map(|i| {
             let xf = xform(i);
             Child {
-                rule: Rule::Recurse(Self::recur),
+                rule: Rule { eval: Self::recur },
                 xf: xf,
                 vmap: (n*i..n*(i+self.count)).collect(), // N.B.
             }
@@ -380,7 +380,7 @@ impl Twist {
             final_geom: prim::empty_mesh(), // TODO: Close properly
             children: vec![
                 Child {
-                    rule: Rule::Recurse(Self::recur),
+                    rule: Rule { eval: Self::recur },
                     xf: incr,
                     vmap: (0..n).collect(),
                 },
@@ -406,7 +406,7 @@ pub fn main() {
     fn run_test<A>(a: A, r: Rule<A>, iters: u32, name: &str) {
         println!("Running {}...", name);
         let (mesh, nodes) = r.to_mesh(&a, iters);
-        println!("Merged {} nodes", nodes);
+        println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
@@ -415,19 +415,19 @@ pub fn main() {
     fn run_test_iter<A>(a: A, r: Rule<A>, iters: usize, name: &str) {
         println!("Running {}...", name);
         let (mesh, nodes) = r.to_mesh_iter(&a, iters);
-        println!("Merged {} nodes", nodes);
+        println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
     }
-    
-    run_test(CubeThing::init(), Rule::Recurse(CubeThing::rec), 3, "cube_thing");
+
+    run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
     // this can't work on its own because the resultant OpenMesh still
     // has parent references:
-    //run_test(Rule::Recurse(recur), 100, "curve_horn_thing");
-    run_test(CurveHorn::init(), Rule::Recurse(CurveHorn::start), 100, "curve_horn2");
-    run_test(RamHorn::init(), Rule::Recurse(RamHorn::start), 200, "ram_horn");
-    run_test(Twist::init(), Rule::Recurse(Twist::start), 200, "twist");
+    //run_test(Rule { eval: recur }, 100, "curve_horn_thing");
+    run_test(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2");
+    run_test(RamHorn::init(), Rule { eval: RamHorn::start }, 200, "ram_horn");
+    run_test(Twist::init(), Rule { eval: Twist::start }, 200, "twist");
 
-    run_test_iter(CurveHorn::init(), Rule::Recurse(CurveHorn::start), 100, "curve_horn2_iter");
+    run_test_iter(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2_iter");
 }

@@ -11,9 +11,6 @@
 
 ## Important but less critical:
 
-- Do I actually need `EmptyRule` or can I get rid of a bunch of
-  extraneous nesting?  `RuleEval` with empty meshes and no children is
-  equivalent.  I have used `EmptyRule` exactly zero times.
 - Why must I repeat myself so much in these definitions?
 - The notation for transforms is really cumbersome.  Some syntactic
   sugar might go far.

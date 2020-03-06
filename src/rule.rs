@@ -6,11 +6,8 @@ use crate::prim;
 /// - produces geometry when it is evaluated
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
-pub enum Rule<A> {
-    /// Produce some geometry, and possibly recurse further.
-    Recurse(fn (&A) -> RuleEval<A>),
-    /// Produce nothing and recurse no further.
-    EmptyRule,
+pub struct Rule<A> {
+    pub eval: fn (&A) -> RuleEval<A>,
 }
 // TODO: Rename rules?
 // TODO: It may be possible to have just a 'static' rule that requires
@@ -84,42 +81,27 @@ impl<A> Rule<A> {
 
         let mut evals = 1;
 
+        let rs: RuleEval<A> = (self.eval)(arg);
         if iters_left <= 0 {
-            match self {
-                Rule::Recurse(f) => {
-                    let rs: RuleEval<A> = f(arg);
-                    return (rs.final_geom, 1);
-                }
-                Rule::EmptyRule => {
-                    return (prim::empty_mesh(), evals);
-                }
-            }
+            return (rs.final_geom, 1);
         }
 
-        match self {
-            Rule::Recurse(f) => {
-                let rs: RuleEval<A> = f(arg);
-                // TODO: This logic is more or less right, but it
-                // could perhaps use some un-tupling or something.
+        // TODO: This logic is more or less right, but it
+        // could perhaps use some un-tupling or something.
 
-                let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
-                    // Get sub-geometry (still un-transformed):
-                    let (submesh, eval) = sub.rule.to_mesh(arg, iters_left - 1);
-                    // Tally up eval count:
-                    evals += eval;
-                    
-                    let m2 = submesh.transform(&sub.xf);
-                    
-                    (m2, &sub.vmap)
-                }).collect();
-                
-                // Connect geometry from this rule (not child rules):
-                return (rs.geom.connect(&subgeom).0, evals);
-            }
-            Rule::EmptyRule => {
-                return (prim::empty_mesh(), evals);
-            }
-        }
+        let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
+            // Get sub-geometry (still un-transformed):
+            let (submesh, eval) = sub.rule.to_mesh(arg, iters_left - 1);
+            // Tally up eval count:
+            evals += eval;
+            
+            let m2 = submesh.transform(&sub.xf);
+            
+            (m2, &sub.vmap)
+        }).collect();
+        
+        // Connect geometry from this rule (not child rules):
+        return (rs.geom.connect(&subgeom).0, evals);
     }
 
     /// This should be identical to to_mesh, but implemented
@@ -146,22 +128,14 @@ impl<A> Rule<A> {
         let mut stack: Vec<State<A>> = vec![];
         let mut geom = prim::empty_mesh();
 
-        match self {
-            Rule::Recurse(f) => {
-                // Set up the stack's initial state - evaluate our own rule
-                let eval = f(arg);
-                stack.push(State {
-                    rules: eval.children,
-                    next: 0,
-                    xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
-                });
-                geom = eval.geom;
-            },
-            Rule::EmptyRule => {
-                // Empty rule and no geometry: quit now.
-                return (geom, 0);
-            },
-        }
+        // Set up the stack's initial state - evaluate our own rule
+        let eval = (self.eval)(arg);
+        stack.push(State {
+            rules: eval.children,
+            next: 0,
+            xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
+        });
+        geom = eval.geom;
 
         // Number of times we've evaluated a Rule:
         let mut eval_count = 1;
@@ -193,63 +167,56 @@ impl<A> Rule<A> {
             }
 
             let child = &s.rules[s.next];
-            match child.rule {
-                Rule::Recurse(f) => {
-                    // Evaluate the rule:
-                    let mut eval = f(arg);
-                    eval_count += 1;
+            // Evaluate the rule:
+            let mut eval = (child.rule.eval)(arg);
+            eval_count += 1;
 
-                    // Make an updated world transform:
-                    let xf = s.xf * child.xf; // TODO: Check order on this
+            // Make an updated world transform:
+            let xf = s.xf * child.xf; // TODO: Check order on this
 
-                    // This rule produced some geometry which we'll
-                    // combine with the 'global' geometry:
-                    let new_geom = eval.geom.transform(&xf);
-                    println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
-                             new_geom.verts.len(), child.vmap, new_geom.faces);
-                    let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
-                    geom = g;
+            // This rule produced some geometry which we'll
+            // combine with the 'global' geometry:
+            let new_geom = eval.geom.transform(&xf);
+            println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
+                     new_geom.verts.len(), child.vmap, new_geom.faces);
+            let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
+            geom = g;
 
-                    // 'new_geom' may itself be parent geometry for
-                    // something in 'eval.children' (via Tag::Parent),
-                    // and vmap is there to resolve those Tag::Parent
-                    // references to the right vertices in 'new_geom'.
-                    //
-                    // However, we connect() on the global geometry
-                    // which we merged 'new_geom' into, not 'new_geom'
-                    // directly.  To account for this, we must shift
-                    // vmap by the offset that 'geom.connect' gave us:
-                    for (offset, child) in offsets.iter().zip(eval.children.iter_mut()) {
-                        child.vmap = child.vmap.iter().map(|n| {
-                            n + offset
-                        }).collect();
-                    }
-
-                    // TODO: Why does below work?
-                    if (s.next + 1) >= s.rules.len() {
-                        let m = stack.len();
-                        if m >= 2 {
-                            stack[m-2].next += 1;
-                        }
-                        stack.pop();
-                        n -= 1;
-                    }
-                    // I guess we are "done" with the rule after we've
-                    // evaluated it, and it is then safe to increment
-                    // s.next.
-                    
-                    // Recurse further (i.e. put more onto stack):                    
-                    stack.push(State {
-                        rules: eval.children,
-                        next: 0,
-                        xf: xf,
-                    });
-                    n += 1;
-                },
-                Rule::EmptyRule => {
-                    s.next += 1;
-                },
+            // 'new_geom' may itself be parent geometry for
+            // something in 'eval.children' (via Tag::Parent),
+            // and vmap is there to resolve those Tag::Parent
+            // references to the right vertices in 'new_geom'.
+            //
+            // However, we connect() on the global geometry
+            // which we merged 'new_geom' into, not 'new_geom'
+            // directly.  To account for this, we must shift
+            // vmap by the offset that 'geom.connect' gave us:
+            for (offset, child) in offsets.iter().zip(eval.children.iter_mut()) {
+                child.vmap = child.vmap.iter().map(|n| {
+                    n + offset
+                }).collect();
             }
+
+            // TODO: Why does below work?
+            if (s.next + 1) >= s.rules.len() {
+                let m = stack.len();
+                if m >= 2 {
+                    stack[m-2].next += 1;
+                }
+                stack.pop();
+                n -= 1;
+            }
+            // I guess we are "done" with the rule after we've
+            // evaluated it, and it is then safe to increment
+            // s.next.
+            
+            // Recurse further (i.e. put more onto stack):                    
+            stack.push(State {
+                rules: eval.children,
+                next: 0,
+                xf: xf,
+            });
+            n += 1;
         }
         // TODO: Recursion depth? What does that even mean here?
         // Maybe something more like 'branch depth'?
