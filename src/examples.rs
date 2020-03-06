@@ -421,6 +421,7 @@ pub fn main() {
         mesh.write_stl_file(&fname).unwrap();
     }
 
+    /*
     run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
     // this can't work on its own because the resultant OpenMesh still
     // has parent references:
@@ -428,6 +429,13 @@ pub fn main() {
     run_test(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2");
     run_test(RamHorn::init(), Rule { eval: RamHorn::start }, 200, "ram_horn");
     run_test(Twist::init(), Rule { eval: Twist::start }, 200, "twist");
+    */
 
+    run_test_iter(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing2");
     run_test_iter(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2_iter");
+    run_test_iter(RamHorn::init(), Rule { eval: RamHorn::start }, 100, "ram_horn2");
+    // TODO: If I increase the above from 100 to ~150, Blender reports
+    // that the very tips are non-manifold.  I am wondering if this is
+    // some sort of numerical precision issue.
+    run_test_iter(Twist::init(), Rule { eval: Twist::start }, 200, "twist2");
 }

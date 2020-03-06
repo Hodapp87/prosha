@@ -151,12 +151,9 @@ impl<A> Rule<A> {
             // s = the 'current' state:
             let s = &mut stack[n-1];
             let depth = s.depth;
-            // TODO: remove
-            //println!("DEBUG: stack has len {}; depth={}", n, depth);
-
-            let child = &s.rules[s.next];
             
             // Evaluate the rule:
+            let child = &s.rules[s.next];
             let mut eval = (child.rule.eval)(arg);
             eval_count += 1;
 
@@ -169,10 +166,6 @@ impl<A> Rule<A> {
             
             // See if we can still recurse further:
             if depth <= 0 {
-                // TODO: remove
-                //println!("DEBUG: backtracing, depth={}, s.next = {}, s.rules.len() = {}",
-                //         depth, s.next, s.rules.len());
-
                 // As we're stopping recursion, we need to connect
                 // final_geom with all else in order to actually close
                 // geometry properly:
@@ -205,21 +198,18 @@ impl<A> Rule<A> {
                 continue;
             }
 
-            // TODO: remove
-            //println!("DEBUG: Connecting {} faces, vmap={:?}, faces={:?}",
-            //         new_geom.verts.len(), child.vmap, new_geom.faces);
             let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
             geom = g;
 
             // 'new_geom' may itself be parent geometry for
-            // something in 'eval.children' (via Tag::Parent),
-            // and vmap is there to resolve those Tag::Parent
-            // references to the right vertices in 'new_geom'.
+            // 'eval.children' (via Tag::Parent), and vmap is there to
+            // resolve Tag::Parent references to the right vertices in
+            // 'new_geom'.
             //
-            // However, we connect() on the global geometry
-            // which we merged 'new_geom' into, not 'new_geom'
-            // directly.  To account for this, we must shift
-            // vmap by the offset that 'geom.connect' gave us:
+            // However, we connect() on the global geometry which we
+            // merged 'new_geom' into, not 'new_geom' directly.  To
+            // account for this, we must shift vmap by the offset that
+            // 'geom.connect' gave us:
             for (offset, child) in offsets.iter().zip(eval.children.iter_mut()) {
                 child.vmap = child.vmap.iter().map(|n| {
                     n + offset
@@ -247,8 +237,6 @@ impl<A> Rule<A> {
                 n += 1;
             }
         }
-
-        // TODO: Handle final_geom
 
         return (geom, eval_count); 
     }
