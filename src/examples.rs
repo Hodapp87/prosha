@@ -323,7 +323,7 @@ impl Twist {
     // Meant to be a copy of twist_from_gen from Python & automata_scratch
     pub fn start(&self) -> RuleEval<Twist> {
 
-        let n = self.seed.len();
+        let n = self.seed_sub.len();
         
         // Quarter-turn in radians:
         let qtr = std::f32::consts::FRAC_PI_2;
