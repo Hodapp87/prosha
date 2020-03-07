@@ -2,8 +2,8 @@
 
 ## Highest priority:
 
-- Do transforms compose in the *reverse* of automata_scratch? This
-  appears to be the case.
+- Implement some of the tougher examples from the above too, e.g. the
+  triple nested spiral.  See `examples.py`.
 
 ## Important but less critical:
 
@@ -16,8 +16,6 @@
 - Docs on modules
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
-- Implement some of the tougher examples from the above too, e.g. the
-  triple nested spiral.  See `examples.py`.
 
 ## If I'm bored:
 

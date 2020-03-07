@@ -1,5 +1,5 @@
 use crate::openmesh::{OpenMesh, Tag, Mat4};
-use crate::prim;
+//use crate::prim;
 
 /// Definition of a rule.  In general, a `Rule`:
 ///
@@ -9,7 +9,6 @@ use crate::prim;
 pub struct Rule<A> {
     pub eval: fn (&A) -> RuleEval<A>,
 }
-// TODO: Rename rules?
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
@@ -158,7 +157,7 @@ impl<A> Rule<A> {
             eval_count += 1;
 
             // Make an updated world transform:
-            let xf = s.xf * child.xf; // TODO: Check order on this
+            let xf = s.xf * child.xf;
 
             // This rule produced some geometry which we'll
             // combine with the 'global' geometry:
@@ -221,7 +220,6 @@ impl<A> Rule<A> {
             // eval.children), remove it - we're done with it.
             s.next += 1;
             if s.next >= s.rules.len() {
-                let m = stack.len();
                 stack.pop();
                 n -= 1;
             }

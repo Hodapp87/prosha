@@ -15,9 +15,9 @@ struct CurveHorn {
 
 impl CurveHorn {
 
-    fn init() -> CurveHorn {
+    fn init() -> (CurveHorn, Rule<CurveHorn>) {
         let y = &Vector3::y_axis();
-        CurveHorn {
+        let c = CurveHorn {
             seed: vec![
                 vertex(-0.5, -0.5, 0.0),
                 vertex(-0.5,  0.5, 0.0),
@@ -31,7 +31,8 @@ impl CurveHorn {
             incr: geometry::Rotation3::from_axis_angle(y, 0.1).to_homogeneous() *
                 Matrix4::new_scaling(0.95) *
                 geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous(),
-        }
+        };
+        (c, Rule { eval: Self::start })
     }
     
     fn start(&self) -> RuleEval<Self> {
@@ -108,8 +109,8 @@ struct CubeThing {
 
 impl CubeThing {
 
-    fn init() -> CubeThing {
-        CubeThing {}
+    fn init() -> (CubeThing, Rule<CubeThing>) {
+        (CubeThing {}, Rule { eval: Self::rec })
     }
     
     fn rec(&self) -> RuleEval<Self> {
@@ -156,8 +157,8 @@ struct RamHorn {
 
 impl RamHorn {
 
-    fn init() -> RamHorn {
-        RamHorn{}
+    fn init() -> (RamHorn, Rule<RamHorn>) {
+        (RamHorn{}, Rule { eval: Self::start })
     }
     
     // Conversion from Python & automata_scratch
@@ -300,7 +301,7 @@ struct Twist {
 
 impl Twist {
 
-    pub fn init() -> Twist {
+    pub fn init() -> (Twist, Rule<Twist>) {
         let subdiv = 2;
         let seed = vec![
             vertex(-0.5,  0.0, -0.5),
@@ -309,7 +310,7 @@ impl Twist {
             vertex(-0.5,  0.0,  0.5),
         ];
         let seed_sub = util::subdivide_cycle(&seed, subdiv);
-        Twist {
+        let t = Twist {
             dx0: 2.0,
             dy: 0.1,
             ang: 0.1,
@@ -317,7 +318,8 @@ impl Twist {
             seed: seed,
             seed_sub: seed_sub,
             subdiv: subdiv,
-        }
+        };
+        (t, Rule { eval: Self::start })
     }
     
     // Meant to be a copy of twist_from_gen from Python & automata_scratch
@@ -403,7 +405,7 @@ pub fn main() {
         println!("vs2={:?}", vs2);
     }
 
-    fn run_test<A>(a: A, r: Rule<A>, iters: u32, name: &str) {
+    fn run_test<A>((a, r): (A, Rule<A>), iters: u32, name: &str) {
         println!("Running {}...", name);
         let (mesh, nodes) = r.to_mesh(&a, iters);
         println!("Evaluated {} rules", nodes);
@@ -412,7 +414,7 @@ pub fn main() {
         mesh.write_stl_file(&fname).unwrap();
     }
 
-    fn run_test_iter<A>(a: A, r: Rule<A>, iters: usize, name: &str) {
+    fn run_test_iter<A>((a, r): (A, Rule<A>), iters: usize, name: &str) {
         println!("Running {}...", name);
         let (mesh, nodes) = r.to_mesh_iter(&a, iters);
         println!("Evaluated {} rules", nodes);
@@ -420,7 +422,7 @@ pub fn main() {
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
     }
-
+    
     /*
     run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
     // this can't work on its own because the resultant OpenMesh still
@@ -431,11 +433,11 @@ pub fn main() {
     run_test(Twist::init(), Rule { eval: Twist::start }, 200, "twist");
     */
 
-    run_test_iter(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing2");
-    run_test_iter(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2_iter");
-    run_test_iter(RamHorn::init(), Rule { eval: RamHorn::start }, 100, "ram_horn2");
+    run_test_iter(CubeThing::init(), 3, "cube_thing2");
+    run_test_iter(CurveHorn::init(), 100, "curve_horn2_iter");
+    run_test_iter(RamHorn::init(), 100, "ram_horn2");
     // TODO: If I increase the above from 100 to ~150, Blender reports
     // that the very tips are non-manifold.  I am wondering if this is
     // some sort of numerical precision issue.
-    run_test_iter(Twist::init(), Rule { eval: Twist::start }, 200, "twist2");
+    run_test_iter(Twist::init(), 200, "twist2");
 }
