@@ -303,12 +303,13 @@ impl Twist {
 
     pub fn init() -> (Twist, Rule<Twist>) {
         let subdiv = 2;
+        let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
         let seed = vec![
             vertex(-0.5,  0.0, -0.5),
             vertex( 0.5,  0.0, -0.5),
             vertex( 0.5,  0.0,  0.5),
             vertex(-0.5,  0.0,  0.5),
-        ];
+        ].iter().map(|v| xf * v).collect();
         let seed_sub = util::subdivide_cycle(&seed, subdiv);
         let t = Twist {
             dx0: 2.0,
@@ -342,23 +343,23 @@ impl Twist {
             Child {
                 rule: Rule { eval: Self::recur },
                 xf: xf,
-                vmap: (n*i..n*(i+self.count)).collect(), // N.B.
+                vmap: ((n+1)*i..(n+1)*(i+self.count)).collect(), // N.B.
+                // note n+1, not n. the +1 is for the centroid below
             }
         }).collect();
 
         // Use byproducts of this to make 'count' copies of 'seed' with
         // this same transform:
-        let mut verts = vec![];
-        for child in &children {
-            verts.extend(self.seed_sub.iter().map(|v| child.xf * v));
-        }
+        let meshes = children.iter().map(|child| {
+            let mut vs = self.seed_sub.iter().map(|v| child.xf * v).collect();
+            // and in the process, generate faces for these seeds:
+            let (centroid, f) = util::connect_convex(&vs, false);
+            vs.push(centroid);
+            OpenMesh { verts: vs, faces: f }
+        });
         
         RuleEval {
-            geom: OpenMesh {
-                verts: verts,
-                faces: vec![],
-                // TODO: Close these initial faces off
-            },
+            geom: OpenMesh::append(meshes),
             final_geom: prim::empty_mesh(),
             children: children,
         }
@@ -373,13 +374,15 @@ impl Twist {
         let seed_orig = self.seed.iter().map(|v| incr * v).collect();
         let seed_sub = util::subdivide_cycle(&seed_orig, self.subdiv);
         let n = seed_sub.len();
+
+        let (vc, faces) = util::connect_convex(&seed_sub, true);
         
         RuleEval {
             geom: OpenMesh {
                 verts: seed_sub,
                 faces: util::parallel_zigzag_faces(n),
             },
-            final_geom: prim::empty_mesh(), // TODO: Close properly
+            final_geom: OpenMesh { verts: vec![vc], faces },
             children: vec![
                 Child {
                     rule: Rule { eval: Self::recur },
@@ -439,5 +442,5 @@ pub fn main() {
     // TODO: If I increase the above from 100 to ~150, Blender reports
     // that the very tips are non-manifold.  I am wondering if this is
     // some sort of numerical precision issue.
-    run_test_iter(Twist::init(), 200, "twist2");
+    run_test_iter(Twist::init(), 100, "twist2");
 }

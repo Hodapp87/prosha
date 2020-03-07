@@ -29,3 +29,29 @@ pub fn parallel_zigzag_faces(count: usize) -> Vec<Tag> {
         ]
     }).flatten().collect()
 }
+
+pub fn connect_convex(verts: &Vec<Vertex>, as_parent: bool) -> (Vertex, Vec<Tag>) {
+    let n = verts.len();
+    let mut centroid = Vertex::new(0.0, 0.0, 0.0, 0.0);
+    for v in verts {
+        centroid += v;
+    }
+    centroid /= n as f32;
+
+    let faces: Vec<Tag> = {
+        if as_parent {
+            (0..n).map(|f1| {
+                let f2 = (f1 + 1) % n;
+                vec![Tag::Parent(f2), Tag::Parent(f1), Tag::Body(0)]
+            }).flatten().collect()
+        } else {
+            (0..n).map(|f1| {
+                let f2 = (f1 + 1) % n;
+                // n is used for new center vertex
+                vec![Tag::Body(f1), Tag::Body(f2), Tag::Body(n)]
+            }).flatten().collect()
+        }
+    };
+
+    (centroid, faces)
+}

@@ -39,6 +39,31 @@ pub struct OpenMesh {
 
 impl OpenMesh {
 
+    pub fn append<T>(meshes: T) -> OpenMesh
+    where T: IntoIterator<Item = OpenMesh>
+    {
+        let mut v: Vec<Vertex> = vec![];
+        let mut f: Vec<Tag> = vec![];
+        for mesh in meshes {
+            // Position in 'verts' at which we're appending
+            // mesh.verts, which we need to know to shift indices:
+            let offset = v.len();
+            
+            // Copy all vertices:
+            v.append(&mut mesh.verts.clone());
+            // Append its faces, applying offset:
+            f.extend(mesh.faces.iter().map(|t| {
+                match t {
+                    Tag::Body(n) => Tag::Body(n + offset),
+                    Tag::Parent(_) => panic!("Cannot append() if mesh has parent references!"),
+                    // TODO: Handle the above
+                }
+            }));
+        }
+           
+        OpenMesh { verts: v, faces: f }
+    }
+    
     /// Returns a new `OpenMesh` whose vertices have been transformed.
     pub fn transform(&self, xfm: &Mat4) -> OpenMesh {
         OpenMesh {

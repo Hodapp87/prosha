@@ -150,6 +150,12 @@ impl<A> Rule<A> {
             // s = the 'current' state:
             let s = &mut stack[n-1];
             let depth = s.depth;
+
+            if s.rules.is_empty() {
+                stack.pop();
+                n -= 1;
+                continue;
+            }
             
             // Evaluate the rule:
             let child = &s.rules[s.next];
