@@ -14,6 +14,11 @@ pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
     Vertex::new(x, y, z, 1.0)
 }
 
+/// Transforms a vector of vertices:
+pub fn transform(verts: &Vec<Vertex>, xf: &Mat4) -> Vec<Vertex> {
+    verts.iter().map(|v| xf * v).collect()
+}
+
 /// A type for a 'tagged' vertex index referring either to an index of
 /// a mesh, or of its parent.
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 use nalgebra::*;
 //pub mod examples;
 
-use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex};
+use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex, transform};
 use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::util;
@@ -60,7 +60,7 @@ impl CurveHorn {
     fn recur(&self) -> RuleEval<Self> {
 
         let verts = self.seed.clone();
-        let next_verts: Vec<Vertex> = verts.iter().map(|v| self.incr * v).collect();
+        let next_verts: Vec<Vertex> = transform(&verts, &self.incr);
         
         let geom = OpenMesh {
             verts: next_verts.clone(),
@@ -254,7 +254,7 @@ impl RamHorn {
             vertex( 0.5,  0.5, 1.0),
             vertex( 0.5, -0.5, 1.0),
         ];
-        let next = seed.iter().map(|v| incr * v).collect();
+        let next = transform(&seed, &incr);
         let geom = OpenMesh {
             verts: next,
             faces: vec![
@@ -303,12 +303,12 @@ impl Twist {
 
     pub fn init(f: f32, subdiv: usize) -> (Twist, Rule<Twist>) {
         let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
-        let seed = vec![
+        let seed = transform(&vec![
             vertex(-0.5,  0.0, -0.5),
             vertex( 0.5,  0.0, -0.5),
             vertex( 0.5,  0.0,  0.5),
             vertex(-0.5,  0.0,  0.5),
-        ].iter().map(|v| xf * v).collect();
+        ], &xf);
         let seed_sub = util::subdivide_cycle(&seed, subdiv);
         let t = Twist {
             dx0: 2.0,
@@ -350,7 +350,7 @@ impl Twist {
         // Use byproducts of this to make 'count' copies of 'seed' with
         // this same transform:
         let meshes = children.iter().map(|child| {
-            let mut vs = self.seed_sub.iter().map(|v| child.xf * v).collect();
+            let mut vs = transform(&self.seed_sub, &child.xf);
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);
@@ -370,7 +370,7 @@ impl Twist {
             geometry::Rotation3::from_axis_angle(y, self.ang).to_homogeneous() *
             geometry::Translation3::new(self.dx0, self.dy, 0.0).to_homogeneous();
         
-        let seed_orig = self.seed.iter().map(|v| incr * v).collect();
+        let seed_orig = transform(&self.seed, &incr);
         let seed_sub = util::subdivide_cycle(&seed_orig, self.subdiv);
         let n = seed_sub.len();
 

@@ -20,8 +20,6 @@
     a `Vec<Vertex>` to transform each element and make another vector.
   - I have seen many of my bugs come from: all this arithmetic on
     indices.  I generate vertex maps more or less manually.
-  - Helper method to transform `Vec<Vertex>` and such.  I do this
-    often.
 - Docs on modules
 - Grep for all TODOs in code, really.
 - Look at everything in README.md in automata_scratch.
