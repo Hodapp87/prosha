@@ -442,7 +442,8 @@ pub fn main() {
     // that the very tips are non-manifold.  I am wondering if this is
     // some sort of numerical precision issue.
     
-    run_test_iter(Twist::init(1.0, 2), 100, "twist2");
+    run_test_iter(Twist::init(1.0, 2), 100, "twist");
     // This is a stress test:
-    //run_test_iter(Twist::init(10.0, 16), 800, "twist2");
+    // let f = 20;
+    // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
 }
