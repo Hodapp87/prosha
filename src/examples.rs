@@ -301,8 +301,7 @@ struct Twist {
 
 impl Twist {
 
-    pub fn init() -> (Twist, Rule<Twist>) {
-        let subdiv = 2;
+    pub fn init(f: f32, subdiv: usize) -> (Twist, Rule<Twist>) {
         let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
         let seed = vec![
             vertex(-0.5,  0.0, -0.5),
@@ -313,8 +312,8 @@ impl Twist {
         let seed_sub = util::subdivide_cycle(&seed, subdiv);
         let t = Twist {
             dx0: 2.0,
-            dy: 0.1,
-            ang: 0.1,
+            dy: 0.1/f,
+            ang: 0.1/f,
             count: 4,
             seed: seed,
             seed_sub: seed_sub,
@@ -442,5 +441,8 @@ pub fn main() {
     // TODO: If I increase the above from 100 to ~150, Blender reports
     // that the very tips are non-manifold.  I am wondering if this is
     // some sort of numerical precision issue.
-    run_test_iter(Twist::init(), 100, "twist2");
+    
+    run_test_iter(Twist::init(1.0, 2), 100, "twist2");
+    // This is a stress test:
+    //run_test_iter(Twist::init(10.0, 16), 800, "twist2");
 }
