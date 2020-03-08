@@ -39,8 +39,7 @@ pub struct OpenMesh {
 
 impl OpenMesh {
 
-    pub fn append<T>(meshes: T) -> OpenMesh
-    where T: IntoIterator<Item = OpenMesh>
+    pub fn append<T: IntoIterator<Item = OpenMesh>>(meshes: T) -> OpenMesh
     {
         let mut v: Vec<Vertex> = vec![];
         let mut f: Vec<Tag> = vec![];
