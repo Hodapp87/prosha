@@ -6,6 +6,12 @@ use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::util;
 
+fn recurRule<A: Fn () -> RuleEval>(f: A) -> Rule {
+    Rule {
+        eval: Box::new(f),
+    }
+}
+
 struct CurveHorn {
     seed: Vec<Vertex>,
     id_xform: Mat4,
@@ -15,7 +21,7 @@ struct CurveHorn {
 
 impl CurveHorn {
 
-    fn init() -> (CurveHorn, Rule<CurveHorn>) {
+    fn init() -> Rule {
         let y = &Vector3::y_axis();
         let c = CurveHorn {
             seed: vec![
@@ -32,10 +38,10 @@ impl CurveHorn {
                 Matrix4::new_scaling(0.95) *
                 geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous(),
         };
-        (c, Rule { eval: Self::start })
+        recurRule(|| c.start())
     }
     
-    fn start(&self) -> RuleEval<Self> {
+    fn start(&self) -> RuleEval {
         RuleEval {
             geom: OpenMesh {
                 verts: self.seed.clone(),
@@ -44,12 +50,12 @@ impl CurveHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule { eval: Self::recur },
+                    rule: recurRule(|| self.recur()),
                     xf: self.id_xform,
                     vmap: vec![0,1,2,3],
                 },
                 Child {
-                    rule: Rule { eval: Self::recur },
+                    rule: recurRule(|| self.recur()),
                     xf: self.flip180,
                     vmap: vec![3,2,1,0],
                 },
@@ -57,7 +63,7 @@ impl CurveHorn {
         }
     }
 
-    fn recur(&self) -> RuleEval<Self> {
+    fn recur(&self) -> RuleEval {
 
         let verts = self.seed.clone();
         let next_verts: Vec<Vertex> = transform(&verts, &self.incr);
@@ -95,7 +101,7 @@ impl CurveHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: Rule { eval: Self::recur },
+                    rule: recurRule(|| self.recur()),
                     xf: self.incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -109,11 +115,12 @@ struct CubeThing {
 
 impl CubeThing {
 
-    fn init() -> (CubeThing, Rule<CubeThing>) {
-        (CubeThing {}, Rule { eval: Self::rec })
+    fn init() -> Rule {
+        let c = CubeThing {};
+        recurRule(|| c.rec())
     }
     
-    fn rec(&self) -> RuleEval<Self> {
+    fn rec(&self) -> RuleEval {
 
         let mesh = prim::cube();
 
@@ -133,12 +140,12 @@ impl CubeThing {
             geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
         ];
 
-        let gen_rulestep = |rot: &Mat4| -> Child<Self> {
+        let gen_rulestep = |rot: &Mat4| -> Child {
             let m: Mat4 = rot *
                 Matrix4::new_scaling(0.5) *
                 geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
             Child {
-                rule: Rule { eval: Self::rec },
+                rule: recurRule(|| self.rec()),
                 xf: m,
                 vmap: vec![],
             }
@@ -157,12 +164,13 @@ struct RamHorn {
 
 impl RamHorn {
 
-    fn init() -> (RamHorn, Rule<RamHorn>) {
-        (RamHorn{}, Rule { eval: Self::start })
+    fn init() -> Rule {
+        let r = RamHorn{};
+        recurRule(|| r.start())
     }
     
     // Conversion from Python & automata_scratch
-    fn start(&self) -> RuleEval<Self> {
+    fn start(&self) -> RuleEval {
         let opening_xform = |i| {
             let r = std::f32::consts::FRAC_PI_2 * i;
             ((geometry::Rotation3::from_axis_angle(
@@ -218,22 +226,22 @@ impl RamHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule { eval: Self::ram_horn },
+                    rule: recurRule(|| self.ram_horn()),
                     xf: opening_xform(0.0),
                     vmap: vec![5,2,6,8],
                 },
                 Child {
-                    rule: Rule { eval: Self::ram_horn },
+                    rule: recurRule(|| self.ram_horn()),
                     xf: opening_xform(1.0),
                     vmap: vec![4,1,5,8],
                 },
                 Child {
-                    rule: Rule { eval: Self::ram_horn },
+                    rule: recurRule(|| self.ram_horn()),
                     xf: opening_xform(2.0),
                     vmap: vec![7,0,4,8],
                 },
                 Child {
-                    rule: Rule { eval: Self::ram_horn },
+                    rule: recurRule(|| self.ram_horn()),
                     xf: opening_xform(3.0),
                     vmap: vec![6,3,7,8],
                 },
@@ -243,7 +251,7 @@ impl RamHorn {
         }
     }
 
-    fn ram_horn(&self) -> RuleEval<Self> {
+    fn ram_horn(&self) -> RuleEval {
         let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
         let incr: Mat4 = geometry::Translation3::new(0.0, 0.0, 0.8).to_homogeneous() *
             geometry::Rotation3::from_axis_angle(&v, 0.3).to_homogeneous() *
@@ -280,7 +288,7 @@ impl RamHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: Rule { eval: Self::ram_horn },
+                    rule: recurRule(|| self.ram_horn()),
                     xf: incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -301,7 +309,7 @@ struct Twist {
 
 impl Twist {
 
-    pub fn init(f: f32, subdiv: usize) -> (Twist, Rule<Twist>) {
+    pub fn init(f: f32, subdiv: usize) -> Rule {
         let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
         let seed = transform(&vec![
             vertex(-0.5,  0.0, -0.5),
@@ -319,11 +327,11 @@ impl Twist {
             seed_sub: seed_sub,
             subdiv: subdiv,
         };
-        (t, Rule { eval: Self::start })
+        recurRule(|| t.start())
     }
     
     // Meant to be a copy of twist_from_gen from Python & automata_scratch
-    pub fn start(&self) -> RuleEval<Twist> {
+    pub fn start(&self) -> RuleEval {
 
         let n = self.seed_sub.len();
         
@@ -337,10 +345,10 @@ impl Twist {
         
         // First generate 'count' children, each one shifted/rotated
         // differently:
-        let children: Vec<Child<Twist>> = (0..self.count).map(|i| {
+        let children: Vec<Child> = (0..self.count).map(|i| {
             let xf = xform(i);
             Child {
-                rule: Rule { eval: Self::recur },
+                rule: recurRule(|| self.recur()),
                 xf: xf,
                 vmap: ((n+1)*i..(n+1)*(i+self.count)).collect(), // N.B.
                 // note n+1, not n. the +1 is for the centroid below
@@ -364,7 +372,7 @@ impl Twist {
         }
     }
 
-    pub fn recur(&self) -> RuleEval<Twist> {
+    pub fn recur(&self) -> RuleEval {
         let y = &Vector3::y_axis();
         let incr = geometry::Translation3::new(-self.dx0, 0.0, 0.0).to_homogeneous() *
             geometry::Rotation3::from_axis_angle(y, self.ang).to_homogeneous() *
@@ -384,7 +392,7 @@ impl Twist {
             final_geom: OpenMesh { verts: vec![vc], faces },
             children: vec![
                 Child {
-                    rule: Rule { eval: Self::recur },
+                    rule: recurRule(|| self.recur()),
                     xf: incr,
                     vmap: (0..n).collect(),
                 },
@@ -407,18 +415,18 @@ pub fn main() {
         println!("vs2={:?}", vs2);
     }
 
-    fn run_test<A>((a, r): (A, Rule<A>), iters: u32, name: &str) {
+    fn run_test(r: Rule, iters: u32, name: &str) {
         println!("Running {}...", name);
-        let (mesh, nodes) = r.to_mesh(&a, iters);
+        let (mesh, nodes) = r.to_mesh(iters);
         println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
     }
 
-    fn run_test_iter<A>((a, r): (A, Rule<A>), iters: usize, name: &str) {
+    fn run_test_iter(r: Rule, iters: usize, name: &str) {
         println!("Running {}...", name);
-        let (mesh, nodes) = r.to_mesh_iter(&a, iters);
+        let (mesh, nodes) = r.to_mesh_iter(iters);
         println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);

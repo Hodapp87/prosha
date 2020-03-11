@@ -6,8 +6,8 @@ use crate::openmesh::{OpenMesh, Tag, Mat4};
 /// - produces geometry when it is evaluated
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
-pub struct Rule<A> {
-    pub eval: fn (&A) -> RuleEval<A>,
+pub struct Rule {
+    pub eval: Box<dyn Fn () -> RuleEval>,
 }
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
@@ -24,7 +24,7 @@ pub struct Rule<A> {
 /// - if recursion continues, the rules of `children` are evaluated,
 /// and the resultant geometry is transformed and then connected with
 /// `geom`.
-pub struct RuleEval<A> {
+pub struct RuleEval {
     /// The geometry generated at just this iteration
     pub geom: OpenMesh,
 
@@ -39,16 +39,16 @@ pub struct RuleEval<A> {
     /// The child invocations (used if recursion continues).  The
     /// 'parent' mesh, from the perspective of all geometry produced
     /// by `children`, is `geom`.
-    pub children: Vec<Child<A>>,
+    pub children: Vec<Child>,
 }
 
 /// `Child` evaluations, pairing another `Rule` with the
 /// transformations and parent vertex mappings that should be applied
 /// to it.
-pub struct Child<A> {
+pub struct Child {
 
     /// Rule to evaluate to produce geometry
-    pub rule: Rule<A>,
+    pub rule: Rule,
 
     /// The transform to apply to all geometry produced by `rule`
     /// (including its own `geom` and `final_geom` if needed, as well
@@ -63,7 +63,7 @@ pub struct Child<A> {
     pub vmap: Vec<usize>,
 }
 
-impl<A> Rule<A> {
+impl Rule {
 
     // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
     // could end up having a lot of identical geometry that need not be
@@ -76,11 +76,11 @@ impl<A> Rule<A> {
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
-    pub fn to_mesh(&self, arg: &A, iters_left: u32) -> (OpenMesh, usize) {
+    pub fn to_mesh(&self, iters_left: u32) -> (OpenMesh, usize) {
 
         let mut evals = 1;
 
-        let rs: RuleEval<A> = (self.eval)(arg);
+        let rs: RuleEval = (self.eval)();
         if iters_left <= 0 {
             return (rs.final_geom, 1);
             // TODO: This is probably wrong because of the way that
@@ -93,7 +93,7 @@ impl<A> Rule<A> {
 
         let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
             // Get sub-geometry (still un-transformed):
-            let (submesh, eval) = sub.rule.to_mesh(arg, iters_left - 1);
+            let (submesh, eval) = sub.rule.to_mesh(iters_left - 1);
             // Tally up eval count:
             evals += eval;
             
@@ -109,11 +109,11 @@ impl<A> Rule<A> {
     /// This should be identical to to_mesh, but implemented
     /// iteratively with an explicit stack rather than with recursive
     /// function calls.
-    pub fn to_mesh_iter(&self, arg: &A, max_depth: usize) -> (OpenMesh, usize) {
+    pub fn to_mesh_iter(&self, max_depth: usize) -> (OpenMesh, usize) {
 
-        struct State<A> {
+        struct State {
             // The set of rules we're currently handling:
-            rules: Vec<Child<A>>,
+            rules: Vec<Child>,
             // The next element of 'children' to handle:
             next: usize,
             // World transform of the *parent* of 'rules', that is,
@@ -130,8 +130,8 @@ impl<A> Rule<A> {
         // (usually because they involve multiple rules).
         //
         // We evaluate our own rule to initialize the stack:
-        let eval = (self.eval)(arg);
-        let mut stack: Vec<State<A>> = vec![State {
+        let eval = (self.eval)();
+        let mut stack: Vec<State> = vec![State {
             rules: eval.children,
             next: 0,
             xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
@@ -159,7 +159,7 @@ impl<A> Rule<A> {
             
             // Evaluate the rule:
             let child = &s.rules[s.next];
-            let mut eval = (child.rule.eval)(arg);
+            let mut eval = (child.rule.eval)();
             eval_count += 1;
 
             // Make an updated world transform:
