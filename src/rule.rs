@@ -7,11 +7,14 @@ use crate::openmesh::{OpenMesh, Tag, Mat4};
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
 pub struct Rule {
-    pub eval: Box<dyn Fn () -> RuleEval>,
+    pub eval: Box<dyn Fn() -> RuleEval>,
 }
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
+
+// The above looks like it is going to require a lifetime parameter
+// regardless, in which case I don't really need Box.
 
 /// `RuleEval` supplies the results of evaluating some `Rule` for one
 /// iteration: it contains the geometry produced at this step

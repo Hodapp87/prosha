@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use nalgebra::*;
 //pub mod examples;
 
@@ -5,15 +6,12 @@ use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex, transform};
 use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::util;
+use crate::scratch;
 
-fn recurRule<A: Fn () -> RuleEval>(f: A) -> Rule {
-    Rule {
-        eval: Box::new(f),
-    }
-}
-
+/*
+#[derive(Copy, Clone)]
 struct CurveHorn {
-    seed: Vec<Vertex>,
+    seed: [Vertex; 4],
     id_xform: Mat4,
     flip180: Mat4,
     incr: Mat4,
@@ -21,10 +19,29 @@ struct CurveHorn {
 
 impl CurveHorn {
 
+    fn test_thing(&self) {
+        let f: Box<dyn Fn() -> RuleEval> = Box::new(move || self.do_nothing());
+        println!("{:p}", f);
+    }
+
+    fn do_nothing(&self) -> RuleEval {
+        RuleEval {
+            geom: prim::empty_mesh(),
+            final_geom: prim::empty_mesh(),
+            children: vec![
+                Child {
+                    rule: Rule { eval: Box::new(move || self.do_nothing()) },
+                    xf: self.id_xform,
+                    vmap: vec![0,1,2,3],
+                },
+            ],
+        }
+    }
+    
     fn init() -> Rule {
         let y = &Vector3::y_axis();
         let c = CurveHorn {
-            seed: vec![
+            seed: [
                 vertex(-0.5, -0.5, 0.0),
                 vertex(-0.5,  0.5, 0.0),
                 vertex( 0.5,  0.5, 0.0),
@@ -38,24 +55,24 @@ impl CurveHorn {
                 Matrix4::new_scaling(0.95) *
                 geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous(),
         };
-        recurRule(|| c.start())
+        Rule { eval: Box::new(move || c.do_nothing()) }
     }
-    
+}
     fn start(&self) -> RuleEval {
         RuleEval {
             geom: OpenMesh {
-                verts: self.seed.clone(),
+                verts: self.seed.to_vec(),
                 faces: vec![],
             },
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: recurRule(|| self.recur()),
+                    rule: Rule { eval: Box::new(move || self.recur()) },
                     xf: self.id_xform,
                     vmap: vec![0,1,2,3],
                 },
                 Child {
-                    rule: recurRule(|| self.recur()),
+                    rule: Rule { eval: Box::new(move || self.recur()) },
                     xf: self.flip180,
                     vmap: vec![3,2,1,0],
                 },
@@ -101,7 +118,7 @@ impl CurveHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: recurRule(|| self.recur()),
+                    rule: Rule { eval: Box::new(move || self.recur()) },
                     xf: self.incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -117,7 +134,7 @@ impl CubeThing {
 
     fn init() -> Rule {
         let c = CubeThing {};
-        recurRule(|| c.rec())
+        Rule { eval: Box::new(|| c.rec()) }
     }
     
     fn rec(&self) -> RuleEval {
@@ -145,7 +162,7 @@ impl CubeThing {
                 Matrix4::new_scaling(0.5) *
                 geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
             Child {
-                rule: recurRule(|| self.rec()),
+                rule: Rule { eval: Box::new(|| self.rec()) },
                 xf: m,
                 vmap: vec![],
             }
@@ -166,7 +183,7 @@ impl RamHorn {
 
     fn init() -> Rule {
         let r = RamHorn{};
-        recurRule(|| r.start())
+        Rule { eval: Box::new(|| r.start()) }
     }
     
     // Conversion from Python & automata_scratch
@@ -226,22 +243,22 @@ impl RamHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: recurRule(|| self.ram_horn()),
+                    rule: Rule { eval: Box::new(|| self.ram_horn()) },
                     xf: opening_xform(0.0),
                     vmap: vec![5,2,6,8],
                 },
                 Child {
-                    rule: recurRule(|| self.ram_horn()),
+                    rule: Rule { eval: Box::new(|| self.ram_horn()) },
                     xf: opening_xform(1.0),
                     vmap: vec![4,1,5,8],
                 },
                 Child {
-                    rule: recurRule(|| self.ram_horn()),
+                    rule: Rule { eval: Box::new(|| self.ram_horn()) },
                     xf: opening_xform(2.0),
                     vmap: vec![7,0,4,8],
                 },
                 Child {
-                    rule: recurRule(|| self.ram_horn()),
+                    rule: Rule { eval: Box::new(|| self.ram_horn()) },
                     xf: opening_xform(3.0),
                     vmap: vec![6,3,7,8],
                 },
@@ -288,7 +305,7 @@ impl RamHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: recurRule(|| self.ram_horn()),
+                    rule: Rule { eval: Box::new(|| self.ram_horn()) },
                     xf: incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -327,7 +344,7 @@ impl Twist {
             seed_sub: seed_sub,
             subdiv: subdiv,
         };
-        recurRule(|| t.start())
+        Rule { eval: Box::new(|| t.start()) }
     }
     
     // Meant to be a copy of twist_from_gen from Python & automata_scratch
@@ -348,7 +365,7 @@ impl Twist {
         let children: Vec<Child> = (0..self.count).map(|i| {
             let xf = xform(i);
             Child {
-                rule: recurRule(|| self.recur()),
+                rule: Rule { eval: Box::new(|| self.recur()) },
                 xf: xf,
                 vmap: ((n+1)*i..(n+1)*(i+self.count)).collect(), // N.B.
                 // note n+1, not n. the +1 is for the centroid below
@@ -392,7 +409,7 @@ impl Twist {
             final_geom: OpenMesh { verts: vec![vc], faces },
             children: vec![
                 Child {
-                    rule: recurRule(|| self.recur()),
+                    rule: Rule { eval: Box::new(move || self.recur()) },
                     xf: incr,
                     vmap: (0..n).collect(),
                 },
@@ -400,9 +417,11 @@ impl Twist {
         }
     }
 }
+*/
 
 pub fn main() {
 
+    /*
     {
         let vs = vec![
             vertex(-0.5,  0.0, -0.5),
@@ -432,6 +451,7 @@ pub fn main() {
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
     }
+    */
     
     /*
     run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
@@ -443,15 +463,41 @@ pub fn main() {
     run_test(Twist::init(), Rule { eval: Twist::start }, 200, "twist");
     */
 
-    run_test_iter(CubeThing::init(), 3, "cube_thing2");
-    run_test_iter(CurveHorn::init(), 100, "curve_horn2_iter");
-    run_test_iter(RamHorn::init(), 100, "ram_horn2");
+    //run_test_iter(CubeThing::init(), 3, "cube_thing2");
+    //run_test_iter(CurveHorn::init(), 100, "curve_horn2_iter");
+    //run_test_iter(RamHorn::init(), 100, "ram_horn2");
     // TODO: If I increase the above from 100 to ~150, Blender reports
     // that the very tips are non-manifold.  I am wondering if this is
     // some sort of numerical precision issue.
     
-    run_test_iter(Twist::init(1.0, 2), 100, "twist");
+    //run_test_iter(Twist::init(1.0, 2), 100, "twist");
     // This is a stress test:
     // let f = 20;
     // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
+
+    {
+        let a = vec![1,2,3];
+        
+        let c = move || {
+            println!("c: a={:?}", a);
+        };
+
+        let r: Rc<dyn Fn()> = Rc::new(c);
+        // But this will fail at the function calls below:
+        //let r: Rc<dyn FnOnce()> = Rc::new(c);
+        let r2 = r.clone();
+
+        println!("strong_count={}", Rc::strong_count(&r2));
+        println!("weak_count={}", Rc::weak_count(&r2));
+
+        r2();
+        r();
+
+        let a2 = vec![1,2,3];
+        let c2 = move || {
+            println!("c2: a2={:?}", a2);
+        };
+        let b: Box<dyn FnOnce()> = Box::new(c2);
+        b();
+    }
 }

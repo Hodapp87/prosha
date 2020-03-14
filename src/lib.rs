@@ -1,3 +1,4 @@
+pub mod scratch;
 pub mod examples;
 pub mod openmesh;
 pub mod rule;
