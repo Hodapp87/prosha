@@ -8,6 +8,47 @@ use crate::prim;
 use crate::util;
 use crate::scratch;
 
+fn cube_thing() -> Rule {
+
+    let mesh = prim::cube();
+
+    // Quarter-turn in radians:
+    let qtr = std::f32::consts::FRAC_PI_2;
+
+    let y = &Vector3::y_axis();
+    let z = &Vector3::z_axis();
+    
+    // Each element of this turns to a branch for the recursion:
+    let turns: Vec<Mat4> = vec![
+        geometry::Transform3::identity().to_homogeneous(),
+        geometry::Rotation3::from_axis_angle(y, qtr).to_homogeneous(),
+        geometry::Rotation3::from_axis_angle(y, qtr * 2.0).to_homogeneous(),
+        geometry::Rotation3::from_axis_angle(y, qtr * 3.0).to_homogeneous(),
+        geometry::Rotation3::from_axis_angle(z, qtr).to_homogeneous(),
+        geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
+    ];
+
+    let rec = || -> RuleEval {
+        let gen_rulestep = |rot: &Mat4| -> Child {
+            let m: Mat4 = rot *
+                Matrix4::new_scaling(0.5) *
+                geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
+            Child {
+                rule: Rule { eval: Box::new(rec) },
+                xf: m,
+                vmap: vec![],
+            }
+        };
+
+        RuleEval {
+            geom: mesh.clone(),
+            final_geom: prim::empty_mesh(),
+            children: turns.iter().map(gen_rulestep).collect(),
+        }
+    };
+    Rule { eval: Box::new(rec) }
+}
+
 /*
 #[derive(Copy, Clone)]
 struct CurveHorn {
