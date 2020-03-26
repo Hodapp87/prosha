@@ -1,5 +1,6 @@
 use crate::openmesh::{OpenMesh, Tag, Mat4};
 //use crate::prim;
+use std::rc::Rc;
 
 /// Definition of a rule.  In general, a `Rule`:
 ///
@@ -7,7 +8,7 @@ use crate::openmesh::{OpenMesh, Tag, Mat4};
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
 pub struct Rule {
-    pub eval: Box<dyn Fn() -> RuleEval>,
+    pub eval: Box<dyn Fn(Rc<Rule>) -> RuleEval>,
 }
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
@@ -51,7 +52,7 @@ pub struct RuleEval {
 pub struct Child {
 
     /// Rule to evaluate to produce geometry
-    pub rule: Rule,
+    pub rule: Rc<Rule>,
 
     /// The transform to apply to all geometry produced by `rule`
     /// (including its own `geom` and `final_geom` if needed, as well
@@ -79,11 +80,11 @@ impl Rule {
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
-    pub fn to_mesh(&self, iters_left: u32) -> (OpenMesh, usize) {
+    pub fn to_mesh(s: Rc<Self>, iters_left: u32) -> (OpenMesh, usize) {
 
         let mut evals = 1;
 
-        let rs: RuleEval = (self.eval)();
+        let rs: RuleEval = (s.eval)(s.clone());
         if iters_left <= 0 {
             return (rs.final_geom, 1);
             // TODO: This is probably wrong because of the way that
@@ -96,7 +97,7 @@ impl Rule {
 
         let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
             // Get sub-geometry (still un-transformed):
-            let (submesh, eval) = sub.rule.to_mesh(iters_left - 1);
+            let (submesh, eval) = Rule::to_mesh(sub.rule.clone(), iters_left - 1);
             // Tally up eval count:
             evals += eval;
             
@@ -112,7 +113,7 @@ impl Rule {
     /// This should be identical to to_mesh, but implemented
     /// iteratively with an explicit stack rather than with recursive
     /// function calls.
-    pub fn to_mesh_iter(&self, max_depth: usize) -> (OpenMesh, usize) {
+    pub fn to_mesh_iter(s: Rc<Self>, max_depth: usize) -> (OpenMesh, usize) {
 
         struct State {
             // The set of rules we're currently handling:
@@ -133,7 +134,7 @@ impl Rule {
         // (usually because they involve multiple rules).
         //
         // We evaluate our own rule to initialize the stack:
-        let eval = (self.eval)();
+        let eval = (s.eval)(s.clone());
         let mut stack: Vec<State> = vec![State {
             rules: eval.children,
             next: 0,
@@ -162,7 +163,7 @@ impl Rule {
             
             // Evaluate the rule:
             let child = &s.rules[s.next];
-            let mut eval = (child.rule.eval)();
+            let mut eval = (child.rule.eval)(child.rule.clone());
             eval_count += 1;
 
             // Make an updated world transform:

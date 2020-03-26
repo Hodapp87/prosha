@@ -10,8 +10,6 @@ use crate::scratch;
 
 fn cube_thing() -> Rule {
 
-    let mesh = prim::cube();
-
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
 
@@ -28,24 +26,42 @@ fn cube_thing() -> Rule {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
-    let rec = || -> RuleEval {
+    let rec = move |self_: Rc<Rule>| -> RuleEval {
         let gen_rulestep = |rot: &Mat4| -> Child {
             let m: Mat4 = rot *
                 Matrix4::new_scaling(0.5) *
                 geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
             Child {
-                rule: Rule { eval: Box::new(rec) },
+                rule: self_.clone(),
                 xf: m,
                 vmap: vec![],
             }
         };
 
         RuleEval {
-            geom: mesh.clone(),
+            geom: prim::cube(),
             final_geom: prim::empty_mesh(),
             children: turns.iter().map(gen_rulestep).collect(),
         }
     };
+    // I can't really do *mutual* recursion with the above, can I? I'd
+    // need actual functions for that.
+
+    // Also: 'turns' above is a problem.  I can't clone it *inside* the
+    // closure because it doesn't live long enough (it is out of scope
+    // when the closure runs).  I can't move it, or Fn becomes
+    // FnOnce. It doesn't implement Copy, and really can't, because it
+    // has vectors inside.
+    //
+    // (I guess I could use Rc<OpenMesh> instead if I want cheap
+    // support for Copy.  Or... just put prim::cube() right inside.)
+    //
+    // what did I learn from this? That "constants" outside the
+    // closure only work the way I think they should work if:
+    // - they're actually static
+    // - they implement Copy
+    // - the closure can move them
+    
     Rule { eval: Box::new(rec) }
 }
 
@@ -492,7 +508,16 @@ pub fn main() {
         println!("Writing {}...", fname);
         mesh.write_stl_file(&fname).unwrap();
     }
-    */
+     */
+    
+    fn run_test_iter(r: &Rc<Rule>, iters: usize, name: &str) {
+        println!("Running {}...", name);
+        let (mesh, nodes) = Rule::to_mesh_iter(r.clone(), iters);
+        println!("Evaluated {} rules", nodes);
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        mesh.write_stl_file(&fname).unwrap();
+    }
     
     /*
     run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
@@ -516,6 +541,11 @@ pub fn main() {
     // let f = 20;
     // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
 
+    let rule = Rc::new(cube_thing());
+
+    run_test_iter(&rule, 3, "cube_thing3");
+
+    if false
     {
         let a = vec![1,2,3];
         
