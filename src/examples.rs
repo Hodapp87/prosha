@@ -26,38 +26,30 @@ fn cube_thing() -> Rule {
         geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
     ];
 
+    let gen_xform = |rot: &Mat4| -> Mat4 {
+        (rot *
+         Matrix4::new_scaling(0.5) *
+         geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous())
+    };
+    
     let rec = move |self_: Rc<Rule>| -> RuleEval {
-        let gen_rulestep = |rot: &Mat4| -> Child {
-            let m: Mat4 = rot *
-                Matrix4::new_scaling(0.5) *
-                geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous();
-            Child {
-                rule: self_.clone(),
-                xf: m,
-                vmap: vec![],
-            }
-        };
 
+        let xforms = turns.iter().map(gen_xform);
         RuleEval {
             geom: prim::cube(),
             final_geom: prim::empty_mesh(),
-            children: turns.iter().map(gen_rulestep).collect(),
+            children: xforms.map(move |xf| Child {
+                rule: self_.clone(),
+                xf: xf,
+                vmap: vec![],
+            }).collect(),
         }
     };
     // I can't really do *mutual* recursion with the above, can I? I'd
     // need actual functions for that.
 
-    // Also: 'turns' above is a problem.  I can't clone it *inside* the
-    // closure because it doesn't live long enough (it is out of scope
-    // when the closure runs).  I can't move it, or Fn becomes
-    // FnOnce. It doesn't implement Copy, and really can't, because it
-    // has vectors inside.
-    //
-    // (I guess I could use Rc<OpenMesh> instead if I want cheap
-    // support for Copy.  Or... just put prim::cube() right inside.)
-    //
-    // what did I learn from this? That "constants" outside the
-    // closure only work the way I think they should work if:
+    // "Constants" outside the closure only work the way I think they
+    // should work if:
     // - they're actually static
     // - they implement Copy
     // - the closure can move them
