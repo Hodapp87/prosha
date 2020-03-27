@@ -362,90 +362,38 @@ impl RamHorn {
         }
     }
 }
+*/
 
-struct Twist {
-    seed: Vec<Vertex>,
-    seed_sub: Vec<Vertex>,
-    dx0: f32,
-    dy: f32,
-    ang: f32,
-    count: usize,
-    subdiv: usize,
-}
+// Meant to be a copy of twist_from_gen from Python & automata_scratch
+fn twist(f: f32, subdiv: usize) -> Rule {
+    // TODO: Clean this code up.  It was a very naive conversion from
+    // the non-closure version.
+    let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
+    let seed = transform(&vec![
+        vertex(-0.5,  0.0, -0.5),
+        vertex( 0.5,  0.0, -0.5),
+        vertex( 0.5,  0.0,  0.5),
+        vertex(-0.5,  0.0,  0.5),
+    ], &xf);
+    let seed_sub = util::subdivide_cycle(&seed, subdiv);
+    let dx0: f32 = 2.0;
+    let dy: f32 = 0.1/f;
+    let ang: f32 = 0.1/f;
+    let count: usize = 4;
 
-impl Twist {
-
-    pub fn init(f: f32, subdiv: usize) -> Rule {
-        let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
-        let seed = transform(&vec![
-            vertex(-0.5,  0.0, -0.5),
-            vertex( 0.5,  0.0, -0.5),
-            vertex( 0.5,  0.0,  0.5),
-            vertex(-0.5,  0.0,  0.5),
-        ], &xf);
-        let seed_sub = util::subdivide_cycle(&seed, subdiv);
-        let t = Twist {
-            dx0: 2.0,
-            dy: 0.1/f,
-            ang: 0.1/f,
-            count: 4,
-            seed: seed,
-            seed_sub: seed_sub,
-            subdiv: subdiv,
-        };
-        Rule { eval: Box::new(|| t.start()) }
-    }
+    let n = seed_sub.len();
     
-    // Meant to be a copy of twist_from_gen from Python & automata_scratch
-    pub fn start(&self) -> RuleEval {
+    // Quarter-turn in radians:
+    let qtr = std::f32::consts::FRAC_PI_2;
+    let y = Vector3::y_axis();
 
-        let n = self.seed_sub.len();
+    let recur = move |self_: Rc<Rule>| -> RuleEval {
+        let incr = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
+            geometry::Rotation3::from_axis_angle(&y, ang).to_homogeneous() *
+            geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
         
-        // Quarter-turn in radians:
-        let qtr = std::f32::consts::FRAC_PI_2;
-        let y = &Vector3::y_axis();
-        let xform = |i| {
-            (geometry::Rotation3::from_axis_angle(y, qtr * (i as f32)).to_homogeneous() *
-             geometry::Translation3::new(self.dx0, 0.0, 0.0).to_homogeneous())
-        };
-        
-        // First generate 'count' children, each one shifted/rotated
-        // differently:
-        let children: Vec<Child> = (0..self.count).map(|i| {
-            let xf = xform(i);
-            Child {
-                rule: Rule { eval: Box::new(|| self.recur()) },
-                xf: xf,
-                vmap: ((n+1)*i..(n+1)*(i+self.count)).collect(), // N.B.
-                // note n+1, not n. the +1 is for the centroid below
-            }
-        }).collect();
-
-        // Use byproducts of this to make 'count' copies of 'seed' with
-        // this same transform:
-        let meshes = children.iter().map(|child| {
-            let mut vs = transform(&self.seed_sub, &child.xf);
-            // and in the process, generate faces for these seeds:
-            let (centroid, f) = util::connect_convex(&vs, false);
-            vs.push(centroid);
-            OpenMesh { verts: vs, faces: f }
-        });
-        
-        RuleEval {
-            geom: OpenMesh::append(meshes),
-            final_geom: prim::empty_mesh(),
-            children: children,
-        }
-    }
-
-    pub fn recur(&self) -> RuleEval {
-        let y = &Vector3::y_axis();
-        let incr = geometry::Translation3::new(-self.dx0, 0.0, 0.0).to_homogeneous() *
-            geometry::Rotation3::from_axis_angle(y, self.ang).to_homogeneous() *
-            geometry::Translation3::new(self.dx0, self.dy, 0.0).to_homogeneous();
-        
-        let seed_orig = transform(&self.seed, &incr);
-        let seed_sub = util::subdivide_cycle(&seed_orig, self.subdiv);
+        let seed_orig = transform(&seed, &incr);
+        let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
         let n = seed_sub.len();
 
         let (vc, faces) = util::connect_convex(&seed_sub, true);
@@ -458,15 +406,52 @@ impl Twist {
             final_geom: OpenMesh { verts: vec![vc], faces },
             children: vec![
                 Child {
-                    rule: Rule { eval: Box::new(move || self.recur()) },
+                    rule: self_.clone(),
                     xf: incr,
                     vmap: (0..n).collect(),
                 },
             ],
         }
-    }
+    };
+
+    let start = move |self_: Rc<Rule>| -> RuleEval {
+        
+        let xform = |i| {
+            (geometry::Rotation3::from_axis_angle(&y, qtr * (i as f32)).to_homogeneous() *
+             geometry::Translation3::new(dx0, 0.0, 0.0).to_homogeneous())
+        };
+        
+        // First generate 'count' children, each one shifted/rotated
+        // differently:
+        let children: Vec<Child> = (0..count).map(|i| {
+            let xf = xform(i);
+            Child {
+                rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
+                xf: xf,
+                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
+                // note n+1, not n. the +1 is for the centroid below
+            }
+        }).collect();
+
+        // Use byproducts of this to make 'count' copies of 'seed' with
+        // this same transform:
+        let meshes = children.iter().map(|child| {
+            let mut vs = transform(&seed_sub, &child.xf);
+            // and in the process, generate faces for these seeds:
+            let (centroid, f) = util::connect_convex(&vs, false);
+            vs.push(centroid);
+            OpenMesh { verts: vs, faces: f }
+        });
+        
+        RuleEval {
+            geom: OpenMesh::append(meshes),
+            final_geom: prim::empty_mesh(),
+            children: children,
+        }
+    };
+    
+    Rule { eval: Box::new(start) }
 }
-*/
 
 pub fn main() {
 
@@ -533,9 +518,8 @@ pub fn main() {
     // let f = 20;
     // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
 
-    let rule = Rc::new(cube_thing());
-
-    run_test_iter(&rule, 3, "cube_thing3");
+    run_test_iter(&Rc::new(cube_thing()), 3, "cube_thing3");
+    run_test_iter(&Rc::new(twist(1.0, 2)), 100, "twist");
 
     if false
     {

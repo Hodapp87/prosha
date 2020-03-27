@@ -14,6 +14,8 @@ pub struct Rule {
 // no function call.
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
 
+// TODO: Why *can't* I make this FnOnce?
+
 // The above looks like it is going to require a lifetime parameter
 // regardless, in which case I don't really need Box.
 

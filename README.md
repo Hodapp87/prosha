@@ -2,6 +2,9 @@
 
 ## Highest priority:
 
+- If my `closure_try2` branch seems to be working: start converting
+  other things and cleaning them up.  Modify `twist` to have the
+  things I wrote this for in the first place!
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose
@@ -11,7 +14,7 @@
 
 ## Important but less critical:
 
-- Elegance & succinctness:
+- Elegance & succinctness (my recent closure work may help with this):
   - Why must I repeat myself so much in these definitions?
   - The notation for transforms is really cumbersome.  Some syntactic
     sugar might go far.
