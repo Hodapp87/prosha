@@ -387,23 +387,30 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     let qtr = std::f32::consts::FRAC_PI_2;
     let y = Vector3::y_axis();
 
-    let recur = move |self_: Rc<Rule>| -> RuleEval {
-        let incr = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
-            geometry::Rotation3::from_axis_angle(&y, ang).to_homogeneous() *
-            geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
-        
-        let seed_orig = transform(&seed, &incr);
-        let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
-        let n = seed_sub.len();
+    let incr = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
+        geometry::Rotation3::from_axis_angle(&y, ang).to_homogeneous() *
+        geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
+    
+    let seed_orig = transform(&seed, &incr);
+    let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
 
-        let (vc, faces) = util::connect_convex(&seed_sub, true);
-        
+    let geom = OpenMesh {
+        verts: seed_sub.clone(),
+        faces: util::parallel_zigzag_faces(n),
+    };
+    let (vc, faces) = util::connect_convex(&seed_sub, true);
+    let final_geom = OpenMesh {
+        verts: vec![vc],
+        faces: faces.clone(),
+    };
+    
+    let recur = move |self_: Rc<Rule>| -> RuleEval {
+        // TODO: Why clone geometry here if I just have to clone it
+        // later on?  Seems like Rc may be much easier (if I can't
+        // borrow directly - which is probably the case).
         RuleEval {
-            geom: OpenMesh {
-                verts: seed_sub,
-                faces: util::parallel_zigzag_faces(n),
-            },
-            final_geom: OpenMesh { verts: vec![vc], faces },
+            geom: geom.clone(),
+            final_geom: final_geom.clone(),
             children: vec![
                 Child {
                     rule: self_.clone(),
