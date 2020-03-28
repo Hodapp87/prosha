@@ -376,9 +376,9 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         vertex(-0.5,  0.0,  0.5),
     ], &xf);
     //let seed_sub = util::subdivide_cycle(&seed, subdiv);
-    let dx0: f32 = 2.0;
+    let dx0: f32 = 1.5;
     let dy: f32 = 0.1/f;
-    let ang: f32 = 0.1/f;
+    let ang: f32 = 0.05/f;
     let count: usize = 4;
     
     // Quarter-turn in radians:
@@ -391,22 +391,25 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     let incr_outer = geometry::Translation3::new(-dx0*2.0, 0.0, 0.0).to_homogeneous() *
         geometry::Rotation3::from_axis_angle(&y, ang/2.0).to_homogeneous() *
         geometry::Translation3::new(dx0*2.0, dy, 0.0).to_homogeneous();
-    
-    let seed_orig = transform(&seed, &incr_inner);
-    let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
-    let n = seed_sub.len();
 
-    let geom = OpenMesh {
-        verts: seed_sub.clone(),
-        faces: util::parallel_zigzag_faces(n),
-    };
-    let (vc, faces) = util::connect_convex(&seed_sub, true);
-    let final_geom = OpenMesh {
-        verts: vec![vc],
-        faces: faces.clone(),
-    };
-
+    let seed2 = seed.clone();
+    // TODO: Why do I need the above?
     let recur = move |incr: Mat4| -> RuleFn {
+
+        let seed_orig = transform(&seed2, &incr);
+        let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
+        let n = seed_sub.len();
+
+        let geom = OpenMesh {
+            verts: seed_sub.clone(),
+            faces: util::parallel_zigzag_faces(n),
+        };
+        let (vc, faces) = util::connect_convex(&seed_sub, true);
+        let final_geom = OpenMesh {
+            verts: vec![vc],
+            faces: faces.clone(),
+        };
+        
         let c = move |self_: Rc<Rule>| -> RuleEval {
             // TODO: Why clone geometry here if I just have to clone it
             // later on?  Seems like Rc may be much easier (if I can't
@@ -431,41 +434,40 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     
     let start = move |self_: Rc<Rule>| -> RuleEval {
         
-        let xform = |dx, i| {
-            (geometry::Rotation3::from_axis_angle(&y, qtr * (i as f32)).to_homogeneous() *
+        let xform = |dx, i, ang0| -> Mat4 {
+            (geometry::Rotation3::from_axis_angle(&y, ang0 + (qtr * (i as f32))).to_homogeneous() *
              geometry::Translation3::new(dx, 0.0, 0.0).to_homogeneous())
+        };
+
+        let make_child = |i, dx, incr, ang0| -> (Child, OpenMesh) {
+            
+            let seed_orig = transform(&seed, &incr);
+            let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
+            let n = seed_sub.len();
+            
+            let c = Child {
+                rule: Rc::new(Rule { eval: (recur.clone())(incr) }),
+                xf: xform(dx, i, ang0),
+                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
+                // note n+1, not n. the +1 is for the centroid below
+                // TODO: The above vmap is wrong when I call
+                // 'make_child' twice and then append.
+            };
+            let mut vs = transform(&seed_sub, &c.xf);
+            // and in the process, generate faces for these seeds:
+            let (centroid, f) = util::connect_convex(&vs, false);
+            vs.push(centroid);
+            (c, OpenMesh { verts: vs, faces: f })
         };
         
         // First generate 'count' children, each one shifted/rotated
         // differently:
-        let children_inner = (0..count).map(|i| {
-            Child {
-                rule: Rc::new(Rule { eval: (recur.clone())(incr_inner) }),
-                xf: xform(dx0, i),
-                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
-                // note n+1, not n. the +1 is for the centroid below
-            }
-        });
-        let children_outer = (0..count).map(|i| {
-            Child {
-                rule: Rc::new(Rule { eval: (recur.clone())(incr_outer) }),
-                xf: xform(dx0*2.0, i),
-                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
-                // note n+1, not n. the +1 is for the centroid below
-            }
-        });
-        let children: Vec<Child> = children_inner.chain(children_outer).collect();
-
-        // Use byproducts of this to make 'count' copies of 'seed' with
-        // this same transform:
-        let meshes = children.iter().map(|child| {
-            let mut vs = transform(&seed_sub, &child.xf);
-            // and in the process, generate faces for these seeds:
-            let (centroid, f) = util::connect_convex(&vs, false);
-            vs.push(centroid);
-            OpenMesh { verts: vs, faces: f }
-        });
+        let children_inner = (0..count).map(|i| make_child(i, dx0, incr_inner, 0.0));
+        let children_outer = (0..count).map(|i| make_child(i + count, dx0*2.0, incr_outer, qtr/2.0));
+        // TODO: the +count is only to work around vmap kludges
         
+        let (children, meshes): (Vec<_>, Vec<_>) = children_inner.chain(children_outer).unzip();
+
         RuleEval {
             geom: OpenMesh::append(meshes),
             final_geom: prim::empty_mesh(),
@@ -542,7 +544,7 @@ pub fn main() {
     // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
 
     run_test_iter(&Rc::new(cube_thing()), 3, "cube_thing3");
-    run_test_iter(&Rc::new(twist(1.0, 2)), 100, "twist");
+    run_test_iter(&Rc::new(twist(1.0, 2)), 200, "twist");
 
     if false
     {
