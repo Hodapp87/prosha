@@ -3,7 +3,7 @@ use nalgebra::*;
 //pub mod examples;
 
 use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex, transform};
-use crate::rule::{Rule, RuleEval, Child};
+use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
 use crate::scratch;
@@ -375,24 +375,26 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         vertex( 0.5,  0.0,  0.5),
         vertex(-0.5,  0.0,  0.5),
     ], &xf);
-    let seed_sub = util::subdivide_cycle(&seed, subdiv);
+    //let seed_sub = util::subdivide_cycle(&seed, subdiv);
     let dx0: f32 = 2.0;
     let dy: f32 = 0.1/f;
     let ang: f32 = 0.1/f;
     let count: usize = 4;
-
-    let n = seed_sub.len();
     
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
     let y = Vector3::y_axis();
 
-    let incr = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
+    let incr_inner = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
         geometry::Rotation3::from_axis_angle(&y, ang).to_homogeneous() *
         geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
+    let incr_outer = geometry::Translation3::new(-dx0*2.0, 0.0, 0.0).to_homogeneous() *
+        geometry::Rotation3::from_axis_angle(&y, ang/2.0).to_homogeneous() *
+        geometry::Translation3::new(dx0*2.0, dy, 0.0).to_homogeneous();
     
-    let seed_orig = transform(&seed, &incr);
+    let seed_orig = transform(&seed, &incr_inner);
     let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
+    let n = seed_sub.len();
 
     let geom = OpenMesh {
         verts: seed_sub.clone(),
@@ -403,42 +405,56 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         verts: vec![vc],
         faces: faces.clone(),
     };
-    
-    let recur = move |self_: Rc<Rule>| -> RuleEval {
-        // TODO: Why clone geometry here if I just have to clone it
-        // later on?  Seems like Rc may be much easier (if I can't
-        // borrow directly - which is probably the case).
-        RuleEval {
-            geom: geom.clone(),
-            final_geom: final_geom.clone(),
-            children: vec![
-                Child {
-                    rule: self_.clone(),
-                    xf: incr,
-                    vmap: (0..n).collect(),
-                },
-            ],
-        }
+
+    let recur = move |incr: Mat4| -> RuleFn {
+        let c = move |self_: Rc<Rule>| -> RuleEval {
+            // TODO: Why clone geometry here if I just have to clone it
+            // later on?  Seems like Rc may be much easier (if I can't
+            // borrow directly - which is probably the case).
+            RuleEval {
+                geom: geom.clone(),
+                final_geom: final_geom.clone(),
+                children: vec![
+                    Child {
+                        rule: self_.clone(),
+                        xf: incr,
+                        vmap: (0..n).collect(),
+                    },
+                ],
+            }
+        };
+        Box::new(c)
     };
 
+    // TODO: so there's incr_inner & incr_outer that I wanted to
+    // parametrize over. why is it so ugly to do so?
+    
     let start = move |self_: Rc<Rule>| -> RuleEval {
         
-        let xform = |i| {
+        let xform = |dx, i| {
             (geometry::Rotation3::from_axis_angle(&y, qtr * (i as f32)).to_homogeneous() *
-             geometry::Translation3::new(dx0, 0.0, 0.0).to_homogeneous())
+             geometry::Translation3::new(dx, 0.0, 0.0).to_homogeneous())
         };
         
         // First generate 'count' children, each one shifted/rotated
         // differently:
-        let children: Vec<Child> = (0..count).map(|i| {
-            let xf = xform(i);
+        let children_inner = (0..count).map(|i| {
             Child {
-                rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
-                xf: xf,
+                rule: Rc::new(Rule { eval: (recur.clone())(incr_inner) }),
+                xf: xform(dx0, i),
                 vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
                 // note n+1, not n. the +1 is for the centroid below
             }
-        }).collect();
+        });
+        let children_outer = (0..count).map(|i| {
+            Child {
+                rule: Rc::new(Rule { eval: (recur.clone())(incr_outer) }),
+                xf: xform(dx0*2.0, i),
+                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
+                // note n+1, not n. the +1 is for the centroid below
+            }
+        });
+        let children: Vec<Child> = children_inner.chain(children_outer).collect();
 
         // Use byproducts of this to make 'count' copies of 'seed' with
         // this same transform:

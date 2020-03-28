@@ -3,6 +3,7 @@
 use nalgebra::*;
 use std::fs::OpenOptions;
 use std::io;
+use std::borrow::Borrow;
 
 /// A type for mesh vertices. Initialize with [vertex][self::vertex].
 pub type Vertex = Vector4<f32>;
@@ -44,11 +45,15 @@ pub struct OpenMesh {
 
 impl OpenMesh {
 
-    pub fn append<T: IntoIterator<Item = OpenMesh>>(meshes: T) -> OpenMesh
+    pub fn append<T, U>(meshes: T) -> OpenMesh
+    where U: Borrow<OpenMesh>,
+          T: IntoIterator<Item = U>
     {
         let mut v: Vec<Vertex> = vec![];
         let mut f: Vec<Tag> = vec![];
-        for mesh in meshes {
+        for mesh_ in meshes {
+            let mesh = mesh_.borrow();
+            
             // Position in 'verts' at which we're appending
             // mesh.verts, which we need to know to shift indices:
             let offset = v.len();

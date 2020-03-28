@@ -2,13 +2,15 @@ use crate::openmesh::{OpenMesh, Tag, Mat4};
 //use crate::prim;
 use std::rc::Rc;
 
+pub type RuleFn = Box<dyn Fn(Rc<Rule>) -> RuleEval>;
+
 /// Definition of a rule.  In general, a `Rule`:
 ///
 /// - produces geometry when it is evaluated
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
 pub struct Rule {
-    pub eval: Box<dyn Fn(Rc<Rule>) -> RuleEval>,
+    pub eval: RuleFn,
 }
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
