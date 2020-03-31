@@ -2,11 +2,10 @@ use std::rc::Rc;
 use nalgebra::*;
 //pub mod examples;
 
-use crate::openmesh::{OpenMesh, Tag, Mat4, Vertex, vertex, transform};
+use crate::openmesh::{OpenMesh, Mat4, vertex, transform};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
-use crate::scratch;
 
 fn cube_thing() -> Rule {
 
@@ -369,12 +368,14 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     // TODO: Clean this code up.  It was a very naive conversion from
     // the non-closure version.
     let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
-    let seed = transform(&vec![
-        vertex(-0.5,  0.0, -0.5),
-        vertex( 0.5,  0.0, -0.5),
-        vertex( 0.5,  0.0,  0.5),
-        vertex(-0.5,  0.0,  0.5),
-    ], &xf);
+    let seed = {
+        let s = vec![vertex(-0.5,  0.0, -0.5),
+                     vertex( 0.5,  0.0, -0.5),
+                     vertex( 0.5,  0.0,  0.5),
+                     vertex(-0.5,  0.0,  0.5)];
+        util::subdivide_cycle(&transform(&s, &xf), subdiv)
+    };
+    let n = seed.len();
     let dx0: f32 = 1.5;
     let dy: f32 = 0.1/f;
     let ang: f32 = 0.05/f;
@@ -390,23 +391,24 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     let incr_outer = geometry::Translation3::new(-dx0*2.0, 0.0, 0.0).to_homogeneous() *
         geometry::Rotation3::from_axis_angle(&y, ang/2.0).to_homogeneous() *
         geometry::Translation3::new(dx0*2.0, dy, 0.0).to_homogeneous();
+    // TODO: Cleanliness fix - transforms?
 
     let seed2 = seed.clone();
     // TODO: Why do I need the above?
     let recur = move |incr: Mat4| -> RuleFn {
 
-        let seed_orig = transform(&seed2, &incr);
-        let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
-        let n = seed_sub.len();
+        let seed_next = transform(&seed2, &incr);
 
+        // TODO: Cleanliness fix - utility function to make a zigzag mesh?
         let geom = OpenMesh {
-            verts: seed_sub.clone(),
+            verts: seed_next.clone(),
             faces: util::parallel_zigzag_faces(n),
         };
-        let (vc, faces) = util::connect_convex(&seed_sub, true);
+        // TODO: Cleanliness fix - why not just make these return meshes?
+        let (vc, faces) = util::connect_convex(&seed_next, true);
         let final_geom = OpenMesh {
             verts: vec![vc],
-            faces: faces.clone(),
+            faces: faces,
         };
         
         let c = move |self_: Rc<Rule>| -> RuleEval {
@@ -427,30 +429,30 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         };
         Box::new(c)
     };
+    // TODO: Can a macro do anything to clean up some of the
+    // repetition with HOFs & closures?
 
     // TODO: so there's incr_inner & incr_outer that I wanted to
     // parametrize over. why is it so ugly to do so?
     
-    let start = move |self_: Rc<Rule>| -> RuleEval {
+    let start = move |_| -> RuleEval {
         
         let xform = |dx, i, ang0, div| -> Mat4 {
             (geometry::Rotation3::from_axis_angle(&y, ang0 + (qtr / div * (i as f32))).to_homogeneous() *
              geometry::Translation3::new(dx, 0.0, 0.0).to_homogeneous())
         };
+        // TODO: Cleanliness fix - transforms?
 
-        let make_child = |i, incr, xform| -> (OpenMesh, Child) {
-            
-            let seed_orig = transform(&seed, &incr);
-            let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
-            let n = seed_sub.len();
+        let make_child = |incr, xform| -> (OpenMesh, Child) {
             
             let c = Child {
                 rule: Rc::new(Rule { eval: (recur.clone())(incr) }),
+                // TODO: Cleanliness fix - can macros clean up above?
                 xf: xform,
                 vmap: (0..(n+1)).collect(),
-                // N.B. n+1, not n. the +1 is for the centroid below
+                // N.B. n+1, not n. the +1 is for the centroid below.
             };
-            let mut vs = transform(&seed_sub, &xform);
+            let mut vs = transform(&seed, &xform);
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);
@@ -458,8 +460,8 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         };
         
         // Generate 'count' children, shifted/rotated differently:
-        let children_inner = (0..count).map(|i| make_child(i, incr_inner, xform(dx0, i, 0.0, 1.0)));
-        let children_outer = (0..count).map(|i| make_child(i, incr_outer, xform(dx0*2.0, i, qtr/2.0, 2.0)));
+        let children_inner = (0..count).map(|i| make_child(incr_inner, xform(dx0, i, 0.0, 1.0)));
+        let children_outer = (0..count).map(|i| make_child(incr_outer, xform(dx0*2.0, i, qtr/2.0, 2.0)));
 
         RuleEval::from_pairs(
             children_inner.chain(children_outer), prim::empty_mesh())

@@ -3,13 +3,14 @@
 ## Highest priority:
 
 - If my `closure_try2` branch seems to be working: start converting
-  other things and cleaning everything up.  (`twist` is still ugly.)
+  other things and cleaning everything up.  (`twist` is still ugly.
+  Look at all my TODOs in it.)
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose
     efficiently?)
   - `twisty_torus`
-  - `ram_horn_branch` - how do I pass depth in order to do this right?
+  - `ram_horn_branch` - Can I pass depth via a closure?
 
 ## Important but less critical:
 
