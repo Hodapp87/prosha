@@ -375,7 +375,6 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         vertex( 0.5,  0.0,  0.5),
         vertex(-0.5,  0.0,  0.5),
     ], &xf);
-    //let seed_sub = util::subdivide_cycle(&seed, subdiv);
     let dx0: f32 = 1.5;
     let dy: f32 = 0.1/f;
     let ang: f32 = 0.05/f;
@@ -434,12 +433,12 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     
     let start = move |self_: Rc<Rule>| -> RuleEval {
         
-        let xform = |dx, i, ang0| -> Mat4 {
-            (geometry::Rotation3::from_axis_angle(&y, ang0 + (qtr * (i as f32))).to_homogeneous() *
+        let xform = |dx, i, ang0, div| -> Mat4 {
+            (geometry::Rotation3::from_axis_angle(&y, ang0 + (qtr / div * (i as f32))).to_homogeneous() *
              geometry::Translation3::new(dx, 0.0, 0.0).to_homogeneous())
         };
 
-        let make_child = |i, dx, incr, ang0| -> (Child, OpenMesh) {
+        let make_child = |i, incr, xform| -> (OpenMesh, Child) {
             
             let seed_orig = transform(&seed, &incr);
             let seed_sub = util::subdivide_cycle(&seed_orig, subdiv);
@@ -447,32 +446,23 @@ fn twist(f: f32, subdiv: usize) -> Rule {
             
             let c = Child {
                 rule: Rc::new(Rule { eval: (recur.clone())(incr) }),
-                xf: xform(dx, i, ang0),
-                vmap: ((n+1)*i..(n+1)*(i+count)).collect(), // N.B.
-                // note n+1, not n. the +1 is for the centroid below
-                // TODO: The above vmap is wrong when I call
-                // 'make_child' twice and then append.
+                xf: xform,
+                vmap: (0..(n+1)).collect(),
+                // N.B. n+1, not n. the +1 is for the centroid below
             };
-            let mut vs = transform(&seed_sub, &c.xf);
+            let mut vs = transform(&seed_sub, &xform);
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);
-            (c, OpenMesh { verts: vs, faces: f })
+            (OpenMesh { verts: vs, faces: f }, c)
         };
         
-        // First generate 'count' children, each one shifted/rotated
-        // differently:
-        let children_inner = (0..count).map(|i| make_child(i, dx0, incr_inner, 0.0));
-        let children_outer = (0..count).map(|i| make_child(i + count, dx0*2.0, incr_outer, qtr/2.0));
-        // TODO: the +count is only to work around vmap kludges
-        
-        let (children, meshes): (Vec<_>, Vec<_>) = children_inner.chain(children_outer).unzip();
+        // Generate 'count' children, shifted/rotated differently:
+        let children_inner = (0..count).map(|i| make_child(i, incr_inner, xform(dx0, i, 0.0, 1.0)));
+        let children_outer = (0..count).map(|i| make_child(i, incr_outer, xform(dx0*2.0, i, qtr/2.0, 2.0)));
 
-        RuleEval {
-            geom: OpenMesh::append(meshes),
-            final_geom: prim::empty_mesh(),
-            children: children,
-        }
+        RuleEval::from_pairs(
+            children_inner.chain(children_outer), prim::empty_mesh())
     };
     
     Rule { eval: Box::new(start) }

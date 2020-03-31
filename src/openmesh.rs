@@ -45,10 +45,16 @@ pub struct OpenMesh {
 
 impl OpenMesh {
 
-    pub fn append<T, U>(meshes: T) -> OpenMesh
+    /// Appends any number of meshes together.  Returns both a single
+    /// mesh, and a vector which gives the offset by which each
+    /// corresponding input mesh was shifted.  That is, for the i'th
+    /// index in `meshes`, all of its triangle indices were shifted by
+    /// the i'th offset in the resultant mesh.
+    pub fn append<T, U>(meshes: T) -> (OpenMesh, Vec<usize>)
     where U: Borrow<OpenMesh>,
           T: IntoIterator<Item = U>
     {
+        let mut offsets: Vec<usize> = vec![];
         let mut v: Vec<Vertex> = vec![];
         let mut f: Vec<Tag> = vec![];
         for mesh_ in meshes {
@@ -57,6 +63,7 @@ impl OpenMesh {
             // Position in 'verts' at which we're appending
             // mesh.verts, which we need to know to shift indices:
             let offset = v.len();
+            offsets.push(offset);
             
             // Copy all vertices:
             v.append(&mut mesh.verts.clone());
@@ -70,7 +77,7 @@ impl OpenMesh {
             }));
         }
            
-        OpenMesh { verts: v, faces: f }
+        (OpenMesh { verts: v, faces: f }, offsets)
     }
     
     /// Returns a new `OpenMesh` whose vertices have been transformed.

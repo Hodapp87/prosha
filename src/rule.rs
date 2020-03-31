@@ -1,5 +1,6 @@
 use crate::openmesh::{OpenMesh, Tag, Mat4};
 //use crate::prim;
+use std::borrow::Borrow;
 use std::rc::Rc;
 
 pub type RuleFn = Box<dyn Fn(Rc<Rule>) -> RuleEval>;
@@ -253,4 +254,36 @@ impl Rule {
         return (geom, eval_count); 
     }
     
+}
+
+impl RuleEval {
+    /// Turn an iterator of (OpenMesh, Child) into a single RuleEval.
+    /// All meshes are merged, and the `vmap` in each child has the
+    /// correct offsets applied to account for this merge.
+    ///
+    /// (`final_geom` is passed through to the RuleEval unmodified.)
+    pub fn from_pairs<T, U>(m: T, final_geom: OpenMesh) -> RuleEval
+        where U: Borrow<OpenMesh>,
+              T: IntoIterator<Item = (U, Child)>
+    {
+        let (meshes, children): (Vec<_>, Vec<_>) = m.into_iter().unzip();
+        let (mesh, offsets) = OpenMesh::append(meshes);
+
+        // Patch up vmap in each child, and copy everything else:
+        let children2: Vec<Child> = children.iter().zip(offsets.iter()).map(|(c,off)| {
+            Child {
+                rule: c.rule.clone(),
+                xf: c.xf.clone(),
+                // simply add offset:
+                vmap: c.vmap.iter().map(|i| i + off).collect(),
+            }
+        }).collect();
+
+        RuleEval {
+            geom: mesh,
+            final_geom: final_geom,
+            children: children2,
+        }
+    }
+
 }

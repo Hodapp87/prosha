@@ -3,8 +3,7 @@
 ## Highest priority:
 
 - If my `closure_try2` branch seems to be working: start converting
-  other things and cleaning them up.  Modify `twist` to have the
-  things I wrote this for in the first place!
+  other things and cleaning everything up.  (`twist` is still ugly.)
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose
@@ -21,10 +20,12 @@
   - What patterns can I factor out?  I do some things regularly, like:
     the clockwise boundaries, the zigzag connections, the iterating over
     a `Vec<Vertex>` to transform each element and make another vector.
-  - I have seen many of my bugs come from: all this arithmetic on
-    indices.  I generate vertex maps more or less manually.
 - Docs on modules
 - Grep for all TODOs in code, really.
+- Look at performance.  Can I save on copies of geometry by using
+  `Rc<OpenMesh>` or the like?  In many cases I have nothing but copied
+  geometry.  Can I pre-allocate vectors instead of
+  extending/appending?
 - Look at everything in README.md in automata_scratch.
 
 ## If I'm bored:
