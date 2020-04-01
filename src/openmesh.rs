@@ -1,24 +1,8 @@
-//pub mod openmesh;
-
-use nalgebra::*;
 use std::fs::OpenOptions;
 use std::io;
 use std::borrow::Borrow;
 
-/// A type for mesh vertices. Initialize with [vertex][self::vertex].
-pub type Vertex = Vector4<f32>;
-/// A type for homogeneous transforms
-pub type Mat4 = Matrix4<f32>;
-
-/// Initializes a vertex:
-pub fn vertex(x: f32, y: f32, z: f32) -> Vertex {
-    Vertex::new(x, y, z, 1.0)
-}
-
-/// Transforms a vector of vertices:
-pub fn transform(verts: &Vec<Vertex>, xf: &Mat4) -> Vec<Vertex> {
-    verts.iter().map(|v| xf * v).collect()
-}
+use crate::xform::{Vertex, Transform};
 
 /// A type for a 'tagged' vertex index referring either to an index of
 /// a mesh, or of its parent.
@@ -81,9 +65,9 @@ impl OpenMesh {
     }
     
     /// Returns a new `OpenMesh` whose vertices have been transformed.
-    pub fn transform(&self, xfm: &Mat4) -> OpenMesh {
+    pub fn transform(&self, xfm: &Transform) -> OpenMesh {
         OpenMesh {
-            verts: self.verts.iter().map(|v| xfm * v).collect(),
+            verts: xfm.transform(&self.verts),
             // TODO: Is the above faster if I pack vectors into a
             // bigger matrix, and transform that?
             faces: self.faces.clone(), // TODO: Use Rc?

@@ -1,4 +1,5 @@
-use crate::openmesh::{OpenMesh, Tag, Mat4};
+use crate::openmesh::{OpenMesh, Tag};
+use crate::xform::{Transform};
 //use crate::prim;
 use std::borrow::Borrow;
 use std::rc::Rc;
@@ -62,7 +63,7 @@ pub struct Child {
     /// The transform to apply to all geometry produced by `rule`
     /// (including its own `geom` and `final_geom` if needed, as well
     /// as all sub-geometry produced recursively).
-    pub xf: Mat4,
+    pub xf: Transform,
 
     /// The parent vertex mapping: a mapping to apply to turn a
     /// Tag::Parent vertex reference into a vertex index of the parent
@@ -127,7 +128,7 @@ impl Rule {
             next: usize,
             // World transform of the *parent* of 'rules', that is,
             // not including any transform of any element of 'rules'.
-            xf: Mat4,
+            xf: Transform,
             // How many levels 'deeper' can we recurse?
             depth: usize,
         }
@@ -143,7 +144,7 @@ impl Rule {
         let mut stack: Vec<State> = vec![State {
             rules: eval.children,
             next: 0,
-            xf: nalgebra::geometry::Transform3::identity().to_homogeneous(),
+            xf: Transform::new(),
             depth: max_depth,
         }];
         let mut geom = eval.geom;

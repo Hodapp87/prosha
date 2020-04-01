@@ -2,7 +2,8 @@ use std::rc::Rc;
 use nalgebra::*;
 //pub mod examples;
 
-use crate::openmesh::{OpenMesh, Mat4, vertex, transform};
+use crate::openmesh::{OpenMesh};
+use crate::xform::{Transform, vertex};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
@@ -16,19 +17,18 @@ fn cube_thing() -> Rule {
     let z = &Vector3::z_axis();
     
     // Each element of this turns to a branch for the recursion:
-    let turns: Vec<Mat4> = vec![
-        geometry::Transform3::identity().to_homogeneous(),
-        geometry::Rotation3::from_axis_angle(y, qtr).to_homogeneous(),
-        geometry::Rotation3::from_axis_angle(y, qtr * 2.0).to_homogeneous(),
-        geometry::Rotation3::from_axis_angle(y, qtr * 3.0).to_homogeneous(),
-        geometry::Rotation3::from_axis_angle(z, qtr).to_homogeneous(),
-        geometry::Rotation3::from_axis_angle(z, -qtr).to_homogeneous(),
+    let id = Transform::new();
+    let turns: Vec<Transform> = vec![
+        id.clone(),
+        id.rotate(y, qtr),
+        id.rotate(y, qtr * 2.0),
+        id.rotate(y, qtr * 3.0),
+        id.rotate(z, qtr),
+        id.rotate(z, -qtr),
     ];
 
-    let gen_xform = |rot: &Mat4| -> Mat4 {
-        (rot *
-         Matrix4::new_scaling(0.5) *
-         geometry::Translation3::new(6.0, 0.0, 0.0).to_homogeneous())
+    let gen_xform = |rot: &Transform| -> Transform {
+        rot.scale(0.5).translate(6.0, 0.0, 0.0)
     };
     
     let rec = move |self_: Rc<Rule>| -> RuleEval {
@@ -367,13 +367,13 @@ impl RamHorn {
 fn twist(f: f32, subdiv: usize) -> Rule {
     // TODO: Clean this code up.  It was a very naive conversion from
     // the non-closure version.
-    let xf = geometry::Rotation3::from_axis_angle(&Vector3::x_axis(), -0.7).to_homogeneous();
+    let xf = Transform::new().rotate(&Vector3::x_axis(), -0.7);
     let seed = {
         let s = vec![vertex(-0.5,  0.0, -0.5),
                      vertex( 0.5,  0.0, -0.5),
                      vertex( 0.5,  0.0,  0.5),
                      vertex(-0.5,  0.0,  0.5)];
-        util::subdivide_cycle(&transform(&s, &xf), subdiv)
+        util::subdivide_cycle(&xf.transform(&s), subdiv)
     };
     let n = seed.len();
     let dx0: f32 = 1.5;
@@ -385,19 +385,14 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     let qtr = std::f32::consts::FRAC_PI_2;
     let y = Vector3::y_axis();
 
-    let incr_inner = geometry::Translation3::new(-dx0, 0.0, 0.0).to_homogeneous() *
-        geometry::Rotation3::from_axis_angle(&y, ang).to_homogeneous() *
-        geometry::Translation3::new(dx0, dy, 0.0).to_homogeneous();
-    let incr_outer = geometry::Translation3::new(-dx0*2.0, 0.0, 0.0).to_homogeneous() *
-        geometry::Rotation3::from_axis_angle(&y, ang/2.0).to_homogeneous() *
-        geometry::Translation3::new(dx0*2.0, dy, 0.0).to_homogeneous();
-    // TODO: Cleanliness fix - transforms?
+    let incr_inner = Transform::new().translate(-dx0, 0.0, 0.0).rotate(&y, ang).translate(dx0, dy, 0.0);
+    let incr_outer = Transform::new().translate(-dx0*2.0, 0.0, 0.0).rotate(&y, ang/2.0).translate(dx0*2.0, dy, 0.0);
 
     let seed2 = seed.clone();
     // TODO: Why do I need the above?
-    let recur = move |incr: Mat4| -> RuleFn {
+    let recur = move |incr: Transform| -> RuleFn {
 
-        let seed_next = transform(&seed2, &incr);
+        let seed_next = incr.transform(&seed2);
 
         // TODO: Cleanliness fix - utility function to make a zigzag mesh?
         let geom = OpenMesh {
@@ -437,11 +432,9 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     
     let start = move |_| -> RuleEval {
         
-        let xform = |dx, i, ang0, div| -> Mat4 {
-            (geometry::Rotation3::from_axis_angle(&y, ang0 + (qtr / div * (i as f32))).to_homogeneous() *
-             geometry::Translation3::new(dx, 0.0, 0.0).to_homogeneous())
+        let xform = |dx, i, ang0, div| -> Transform {
+            Transform::new().rotate(&y, ang0 + (qtr / div * (i as f32))).translate(dx, 0.0, 0.0)
         };
-        // TODO: Cleanliness fix - transforms?
 
         let make_child = |incr, xform| -> (OpenMesh, Child) {
             
@@ -452,7 +445,7 @@ fn twist(f: f32, subdiv: usize) -> Rule {
                 vmap: (0..(n+1)).collect(),
                 // N.B. n+1, not n. the +1 is for the centroid below.
             };
-            let mut vs = transform(&seed, &xform);
+            let mut vs = xform.transform(&seed);
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);

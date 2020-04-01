@@ -1,5 +1,5 @@
-use nalgebra::*;
-use crate::openmesh::{OpenMesh, Tag, vertex};
+use crate::openmesh::{OpenMesh, Tag};
+use crate::xform::{vertex, Transform};
 
 /// Returns an empty mesh (no vertices, no faces).
 pub fn empty_mesh() -> OpenMesh {
@@ -36,5 +36,5 @@ pub fn cube() -> OpenMesh {
             Tag::Body(0), Tag::Body(1), Tag::Body(5),
             Tag::Body(0), Tag::Body(5), Tag::Body(4),
         ],
-    }.transform(&geometry::Translation3::new(-0.5, -0.5, -0.5).to_homogeneous())
+    }.transform(&Transform::new().translate(-0.5, -0.5, -0.5))
 }

@@ -16,8 +16,6 @@
 
 - Elegance & succinctness (my recent closure work may help with this):
   - Why must I repeat myself so much in these definitions?
-  - The notation for transforms is really cumbersome.  Some syntactic
-    sugar might go far.
   - What patterns can I factor out?  I do some things regularly, like:
     the clockwise boundaries, the zigzag connections, the iterating over
     a `Vec<Vertex>` to transform each element and make another vector.

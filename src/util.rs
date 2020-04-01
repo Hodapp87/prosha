@@ -1,4 +1,5 @@
-use crate::openmesh::{Tag, Vertex};
+use crate::openmesh::{Tag};
+use crate::xform::{Vertex};
 //use crate::rule::{Rule, Child};
 
 /// Linearly subdivides a list of points that are to be treated as a
