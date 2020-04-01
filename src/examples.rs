@@ -394,11 +394,7 @@ fn twist(f: f32, subdiv: usize) -> Rule {
 
         let seed_next = incr.transform(&seed2);
 
-        // TODO: Cleanliness fix - utility function to make a zigzag mesh?
-        let geom = OpenMesh {
-            verts: seed_next.clone(),
-            faces: util::parallel_zigzag_faces(n),
-        };
+        let geom: OpenMesh = util::zigzag_to_parent(seed_next.clone(), n);
         // TODO: Cleanliness fix - why not just make these return meshes?
         let (vc, faces) = util::connect_convex(&seed_next, true);
         let final_geom = OpenMesh {
@@ -426,17 +422,13 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     };
     // TODO: Can a macro do anything to clean up some of the
     // repetition with HOFs & closures?
-
-    // TODO: so there's incr_inner & incr_outer that I wanted to
-    // parametrize over. why is it so ugly to do so?
     
     let start = move |_| -> RuleEval {
         
-        let xform = |dx, i, ang0, div| -> Transform {
-            Transform::new().rotate(&y, ang0 + (qtr / div * (i as f32))).translate(dx, 0.0, 0.0)
-        };
-
-        let make_child = |incr, xform| -> (OpenMesh, Child) {
+        let child = |incr, dx, i, ang0, div| -> (OpenMesh, Child) {
+            let xform = Transform::new().
+                rotate(&y, ang0 + (qtr / div * (i as f32))).
+                translate(dx, 0.0, 0.0);
             
             let c = Child {
                 rule: Rc::new(Rule { eval: (recur.clone())(incr) }),
@@ -453,11 +445,10 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         };
         
         // Generate 'count' children, shifted/rotated differently:
-        let children_inner = (0..count).map(|i| make_child(incr_inner, xform(dx0, i, 0.0, 1.0)));
-        let children_outer = (0..count).map(|i| make_child(incr_outer, xform(dx0*2.0, i, qtr/2.0, 2.0)));
+        let inner = (0..count).map(|i| child(incr_inner, dx0, i, 0.0, 1.0));
+        let outer = (0..count).map(|i| child(incr_outer, dx0*2.0, i, qtr/2.0, 2.0));
 
-        RuleEval::from_pairs(
-            children_inner.chain(children_outer), prim::empty_mesh())
+        RuleEval::from_pairs(inner.chain(outer), prim::empty_mesh())
     };
     
     Rule { eval: Box::new(start) }

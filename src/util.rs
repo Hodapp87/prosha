@@ -1,4 +1,4 @@
-use crate::openmesh::{Tag};
+use crate::openmesh::{Tag, OpenMesh};
 use crate::xform::{Vertex};
 //use crate::rule::{Rule, Child};
 
@@ -29,6 +29,13 @@ pub fn parallel_zigzag_faces(count: usize) -> Vec<Tag> {
             Tag::Parent(i1), Tag::Parent(i0), Tag::Body(i1),
         ]
     }).flatten().collect()
+}
+
+pub fn zigzag_to_parent(verts: Vec<Vertex>, count: usize) -> OpenMesh {
+    OpenMesh {
+        verts: verts,
+        faces: parallel_zigzag_faces(count),
+    }
 }
 
 pub fn connect_convex(verts: &Vec<Vertex>, as_parent: bool) -> (Vertex, Vec<Tag>) {
