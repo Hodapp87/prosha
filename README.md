@@ -25,7 +25,19 @@
   `Rc<OpenMesh>` or the like?  In many cases I have nothing but copied
   geometry.  Can I pre-allocate vectors instead of
   extending/appending?
-- Look at everything in README.md in automata_scratch.
+  - `connect()` is a big performance hot-spot: 85% of total time in
+    one test, around 51% in `extend()`, 33% in `clone()`. It seems
+    like I should be able to share geometry with the `Rc` (like noted
+    above), defer copying until actually needed, and pre-allocate the
+    vector to its size (which should be easy to compute).
+- Look at everything in `README.md` in `automata_scratch`.
+- I can't really do *mutual* recursion with the closure method, can I?
+  I'd need actual functions for that.
+- N.B. "Constants" outside the closure only work the way I think they
+  should work if:
+  - they're actually static
+  - they implement Copy
+  - the closure can move them
 
 ## If I'm bored:
 
