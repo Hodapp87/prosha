@@ -86,9 +86,6 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         });
         
         let c = move |self_: Rc<Rule>| -> RuleEval {
-            // TODO: Why clone geometry here if I just have to clone it
-            // later on?  Seems like Rc may be much easier (if I can't
-            // borrow directly - which is probably the case).
             RuleEval {
                 geom: geom.clone(),
                 final_geom: final_geom.clone(),
@@ -435,7 +432,7 @@ pub fn main() {
     fn run_test_iter(r: &Rc<Rule>, iters: usize, name: &str) {
         println!("Running {}...", name);
         let start = Instant::now();
-        let n = 100;
+        let n = 5;
         for i in 0..n {
             Rule::to_mesh_iter(r.clone(), iters);
         }
