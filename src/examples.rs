@@ -8,6 +8,8 @@ use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
 
+use std::time::Instant;
+
 fn cube_thing() -> Rule {
 
     // Quarter-turn in radians:
@@ -432,6 +434,13 @@ pub fn main() {
     
     fn run_test_iter(r: &Rc<Rule>, iters: usize, name: &str) {
         println!("Running {}...", name);
+        let start = Instant::now();
+        let n = 100;
+        for i in 0..n {
+            Rule::to_mesh_iter(r.clone(), iters);
+        }
+        let elapsed = start.elapsed();
+        println!("DEBUG: {} ms per run", elapsed.as_millis() / n);
         let (mesh, nodes) = Rule::to_mesh_iter(r.clone(), iters);
         println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
