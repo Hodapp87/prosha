@@ -36,7 +36,7 @@ pub struct Rule {
 /// `geom`.
 pub struct RuleEval {
     /// The geometry generated at just this iteration
-    pub geom: OpenMesh,
+    pub geom: Rc<OpenMesh>,
 
     /// The "final" geometry that is merged with `geom` via
     /// `connect()` in the event that recursion stops.  This must be
@@ -44,7 +44,7 @@ pub struct RuleEval {
     ///
     /// Parent vertex references will be resolved directly to `geom`
     /// with no mapping.
-    pub final_geom: OpenMesh,
+    pub final_geom: Rc<OpenMesh>,
 
     /// The child invocations (used if recursion continues).  The
     /// 'parent' mesh, from the perspective of all geometry produced
@@ -92,7 +92,7 @@ impl Rule {
 
         let rs: RuleEval = (s.eval)(s.clone());
         if iters_left <= 0 {
-            return (rs.final_geom, 1);
+            return ((*rs.final_geom).clone(), 1);
             // TODO: This is probably wrong because of the way that
             // sub.vmap is used below.  final_geom is not supposed to
             // have any vertex mapping applied.
@@ -101,7 +101,7 @@ impl Rule {
         // TODO: This logic is more or less right, but it
         // could perhaps use some un-tupling or something.
 
-        let subgeom: Vec<(OpenMesh, &Vec<usize>)> = rs.children.iter().map(|sub| {
+        let subgeom: Vec<(OpenMesh, Vec<usize>)> = rs.children.iter().map(|sub| {
             // Get sub-geometry (still un-transformed):
             let (submesh, eval) = Rule::to_mesh(sub.rule.clone(), iters_left - 1);
             // Tally up eval count:
@@ -109,11 +109,12 @@ impl Rule {
             
             let m2 = submesh.transform(&sub.xf);
             
-            (m2, &sub.vmap)
+            (m2, sub.vmap.clone())
+                // TODO: Fix clone?
         }).collect();
         
         // Connect geometry from this rule (not child rules):
-        return (rs.geom.connect(&subgeom).0, evals);
+        return (rs.geom.connect(subgeom).0, evals);
     }
 
     /// This should be identical to to_mesh, but implemented
@@ -147,7 +148,7 @@ impl Rule {
             xf: Transform::new(),
             depth: max_depth,
         }];
-        let mut geom = eval.geom;
+        let mut geom = (*eval.geom).clone();
 
         // Number of times we've evaluated a Rule:
         let mut eval_count = 1;
@@ -203,9 +204,10 @@ impl Rule {
                     m_ + 1
                 };
                 let vmap: Vec<usize> = (0..m).collect();
-                let (geom2, _) = new_geom.connect(&vec![(final_geom, &vmap)]);
+                let (geom2, _) = new_geom.connect(vec![(final_geom, vmap)]);
                 
-                geom = geom.connect(&vec![(geom2, &child.vmap)]).0;
+                geom = geom.connect(vec![(geom2, child.vmap.clone())]).0;
+                // TODO: Fix clone?
                 
                 // and backtrack:
                 stack.pop();
@@ -213,7 +215,7 @@ impl Rule {
                 continue;
             }
 
-            let (g, offsets) = geom.connect(&vec![(new_geom, &child.vmap)]);
+            let (g, offsets) = geom.connect(vec![(new_geom, child.vmap.clone())]);
             geom = g;
 
             // 'new_geom' may itself be parent geometry for
@@ -281,8 +283,8 @@ impl RuleEval {
         }).collect();
 
         RuleEval {
-            geom: mesh,
-            final_geom: final_geom,
+            geom: Rc::new(mesh),
+            final_geom: Rc::new(final_geom),
             children: children2,
         }
     }

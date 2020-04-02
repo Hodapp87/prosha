@@ -130,7 +130,11 @@ impl OpenMesh {
     /// That is, the vertices of 'children[i]' begin at vertex
     /// 'offset[i]' of the new mesh. This is needed in some cases for
     /// adjusting a parent vertex mapping, like 'vmap' of Rule::Child.
-    pub fn connect(&self, children: &Vec<(OpenMesh, &Vec<usize>)>) -> (OpenMesh, Vec<usize>) {
+    pub fn connect<T, U>(&self, children: T) -> (OpenMesh, Vec<usize>)
+    where U: Borrow<OpenMesh>,
+          T: IntoIterator<Item = (U, Vec<usize>)>
+    //pub fn connect(&self, children: &Vec<(OpenMesh, Vec<usize>)>) -> (OpenMesh, Vec<usize>)
+    {
         // TODO: Clean up this description a bit
         // TODO: Clean up Vec<usize> stuff
 
@@ -140,8 +144,10 @@ impl OpenMesh {
 
         let mut offsets: Vec<usize> = vec![];
         
-        for (child,mapping) in children {
+        for (child_,mapping) in children {
 
+            let child = child_.borrow();
+            
             // body_offset corresponds to the position in 'verts' at
             // which we're appending everything in 'child.verts' -
             // thus, the offset we shift all indices in 'children' by.

@@ -31,8 +31,8 @@ fn cube_thing() -> Rule {
 
         let xforms = turns.iter().map(|xf| xf.scale(0.5).translate(6.0, 0.0, 0.0));
         RuleEval {
-            geom: prim::cube(),
-            final_geom: prim::empty_mesh(),
+            geom: Rc::new(prim::cube()),
+            final_geom: Rc::new(prim::empty_mesh()),
             children: xforms.map(move |xf| Child {
                 rule: self_.clone(),
                 xf: xf,
@@ -75,13 +75,13 @@ fn twist(f: f32, subdiv: usize) -> Rule {
 
         let seed_next = incr.transform(&seed2);
 
-        let geom: OpenMesh = util::zigzag_to_parent(seed_next.clone(), n);
+        let geom = Rc::new(util::zigzag_to_parent(seed_next.clone(), n));
         // TODO: Cleanliness fix - why not just make these return meshes?
         let (vc, faces) = util::connect_convex(&seed_next, true);
-        let final_geom = OpenMesh {
+        let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
             faces: faces,
-        };
+        });
         
         let c = move |self_: Rc<Rule>| -> RuleEval {
             // TODO: Why clone geometry here if I just have to clone it
@@ -142,38 +142,39 @@ fn ramhorn() -> Rule {
         translate(0.0, 0.0, 0.8).
         rotate(&v, 0.3).
         scale(0.9);
+
+    let seed = vec![
+        vertex(-0.5, -0.5, 1.0),
+        vertex(-0.5,  0.5, 1.0),
+        vertex( 0.5,  0.5, 1.0),
+        vertex( 0.5, -0.5, 1.0),
+    ];
+    let next = incr.transform(&seed);
+    let geom = Rc::new(OpenMesh {
+        verts: next,
+        faces: vec![
+            Tag::Body(1), Tag::Parent(0), Tag::Body(0),
+            Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
+            Tag::Body(2), Tag::Parent(1), Tag::Body(1),
+            Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
+            Tag::Body(3), Tag::Parent(2), Tag::Body(2),
+            Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
+            Tag::Body(0), Tag::Parent(3), Tag::Body(3),
+            Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
+        ],
+    });
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![],
+        faces: vec![
+            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
+            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+        ],
+    });
     
     let recur = move |self_: Rc<Rule>| -> RuleEval {
-        let seed = vec![
-            vertex(-0.5, -0.5, 1.0),
-            vertex(-0.5,  0.5, 1.0),
-            vertex( 0.5,  0.5, 1.0),
-            vertex( 0.5, -0.5, 1.0),
-        ];
-        let next = incr.transform(&seed);
-        let geom = OpenMesh {
-            verts: next,
-            faces: vec![
-                Tag::Body(1), Tag::Parent(0), Tag::Body(0),
-                Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
-                Tag::Body(2), Tag::Parent(1), Tag::Body(1),
-                Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
-                Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-                Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
-                Tag::Body(0), Tag::Parent(3), Tag::Body(3),
-                Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
-            ],
-        };
-        let final_geom = OpenMesh {
-            verts: vec![],
-            faces: vec![
-                Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
-                Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
-            ],
-        };
         RuleEval {
-            geom: geom,
-            final_geom: final_geom,
+            geom: geom.clone(),
+            final_geom: final_geom.clone(),
             children: vec![
                 Child {
                     rule: self_.clone(),
@@ -198,7 +199,7 @@ fn ramhorn() -> Rule {
         //let ofn = opening_xform.clone();
         
         RuleEval {
-            geom: OpenMesh {
+            geom: Rc::new(OpenMesh {
                 verts: vec![
                     // 'Top' vertices:
                     vertex(-0.5, -0.5, 1.0),  //  0 (above 9)
@@ -240,8 +241,8 @@ fn ramhorn() -> Rule {
                     Tag::Body(11), Tag::Body(6), Tag::Body(12),
                     Tag::Body(12), Tag::Body(7), Tag::Body(9),
                 ],
-            },
-            final_geom: prim::empty_mesh(),
+            }),
+            final_geom: Rc::new(prim::empty_mesh()),
             children: vec![
                 Child {
                     rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
