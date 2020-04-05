@@ -2,6 +2,8 @@
 
 ## Highest priority:
 
+- `to_mesh_iter` has a bug which `ram_horn_twist` exhibits.  The bug
+  is not present in `to_mesh`.  Fix this!
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose

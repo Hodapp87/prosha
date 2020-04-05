@@ -43,7 +43,7 @@ fn cube_thing() -> Rule<()> {
         }
     };
     
-    Rule { eval: Box::new(rec), ctxt: () }
+    Rule { eval: Rc::new(rec), ctxt: () }
 }
 
 // Meant to be a copy of twist_from_gen from Python & automata_scratch
@@ -98,7 +98,7 @@ fn twist(f: f32, subdiv: usize) -> Rule<()> {
                 ],
             }
         };
-        Box::new(c)
+        Rc::new(c)
     };
     // TODO: Can a macro do anything to clean up some of the
     // repetition with HOFs & closures?
@@ -131,7 +131,7 @@ fn twist(f: f32, subdiv: usize) -> Rule<()> {
         RuleEval::from_pairs(inner.chain(outer), prim::empty_mesh())
     };
     
-    Rule { eval: Box::new(start), ctxt: () }
+    Rule { eval: Rc::new(start), ctxt: () }
 }
 
 fn ramhorn() -> Rule<()> {
@@ -244,35 +244,205 @@ fn ramhorn() -> Rule<()> {
             final_geom: Rc::new(prim::empty_mesh()),
             children: vec![
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(0.0),
                     vmap: vec![5,2,6,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(1.0),
                     vmap: vec![4,1,5,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(2.0),
                     vmap: vec![7,0,4,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(3.0),
                     vmap: vec![6,3,7,8],
                 },
                 // TODO: These vertex mappings appear to be right.
                 // Explain *why* they are right.
                 // TODO: Factor out the repetition here.
-                // TODO: 4 Box::new calls in a row with identical
+            ],
+        }
+    };
+
+    Rule { eval: Rc::new(start), ctxt: () }
+}
+
+#[derive(Copy, Clone)]
+struct RamHornCtxt {
+    depth: usize,
+}
+
+fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
+
+    // Quarter-turn in radians:
+    let qtr = std::f32::consts::FRAC_PI_2;
+    let x = Vector3::x_axis();
+
+    let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
+    let incr: Transform = Transform::new().
+        translate(0.0, 0.0, 0.8).
+        rotate(&v, 0.3).
+        scale(0.9);
+
+    let seed = vec![
+        vertex(-0.5, -0.5, 1.0),
+        vertex(-0.5,  0.5, 1.0),
+        vertex( 0.5,  0.5, 1.0),
+        vertex( 0.5, -0.5, 1.0),
+    ];
+    let next = incr.transform(&seed);
+    let geom = Rc::new(OpenMesh {
+        verts: next,
+        faces: vec![
+            Tag::Body(1), Tag::Parent(0), Tag::Body(0),
+            Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
+            Tag::Body(2), Tag::Parent(1), Tag::Body(1),
+            Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
+            Tag::Body(3), Tag::Parent(2), Tag::Body(2),
+            Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
+            Tag::Body(0), Tag::Parent(3), Tag::Body(3),
+            Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
+        ],
+    });
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![],
+        faces: vec![
+            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
+            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+        ],
+    });
+    
+    let recur = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+        let children = if self_.ctxt.depth <= 0 {
+            let next_rule = Rc::new(Rule {
+                eval: self_.eval.clone(),
+                ctxt: RamHornCtxt { depth },
+            });
+            vec![
+                Child {
+                    rule: next_rule.clone(),
+                    xf: incr.translate(0.0, 0.0, 0.5).rotate(&x, -qtr/3.0),
+                    vmap: vec![0,1,2,3],
+                },
+                Child {
+                    rule: next_rule,
+                    xf: incr.translate(0.0, 0.0, 0.5).rotate(&x, qtr/3.0),
+                    vmap: vec![0,1,2,3],
+                },
+            ]
+        } else {
+            let next_rule = Rule {
+                eval: self_.eval.clone(),
+                ctxt: RamHornCtxt { depth: self_.ctxt.depth - 1 },
+            };
+            vec![
+                Child {
+                    rule: Rc::new(next_rule),
+                    xf: incr,
+                    vmap: vec![0,1,2,3],
+                },
+            ]
+        };
+        RuleEval {
+            geom: geom.clone(),
+            final_geom: final_geom.clone(),
+            children: children,
+        }
+    };
+    
+    let opening_xform = |i| {
+        let r = std::f32::consts::FRAC_PI_2 * i;
+        Transform::new().
+            rotate(&nalgebra::Vector3::z_axis(), r).
+            translate(0.25, 0.25, 1.0).
+            scale(0.5).
+            translate(0.0, 0.0, -1.0)
+    };
+
+    let start = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+
+        RuleEval {
+            geom: Rc::new(OpenMesh {
+                verts: vec![
+                    // 'Top' vertices:
+                    vertex(-0.5, -0.5, 1.0),  //  0 (above 9)
+                    vertex(-0.5,  0.5, 1.0),  //  1 (above 10)
+                    vertex( 0.5,  0.5, 1.0),  //  2 (above 11)
+                    vertex( 0.5, -0.5, 1.0),  //  3 (above 12)
+                    // Top edge midpoints:
+                    vertex(-0.5,  0.0, 1.0),  //  4 (connects 0-1)
+                    vertex( 0.0,  0.5, 1.0),  //  5 (connects 1-2)
+                    vertex( 0.5,  0.0, 1.0),  //  6 (connects 2-3)
+                    vertex( 0.0, -0.5, 1.0),  //  7 (connects 3-0)
+                    // Top middle:
+                    vertex( 0.0,  0.0, 1.0),  //  8
+                    // 'Bottom' vertices:
+                    vertex(-0.5, -0.5, 0.0),  //  9
+                    vertex(-0.5,  0.5, 0.0),  // 10
+                    vertex( 0.5,  0.5, 0.0),  // 11
+                    vertex( 0.5, -0.5, 0.0),  // 12
+                ],
+                faces: vec![
+                    // bottom face:
+                    Tag::Body(9), Tag::Body(10), Tag::Body(11),
+                    Tag::Body(9), Tag::Body(11), Tag::Body(12),
+                    // two faces straddling edge from vertex 0:
+                    Tag::Body(9), Tag::Body(0), Tag::Body(4),
+                    Tag::Body(9), Tag::Body(7), Tag::Body(0),
+                    // two faces straddling edge from vertex 1:
+                    Tag::Body(10), Tag::Body(1), Tag::Body(5),
+                    Tag::Body(10), Tag::Body(4), Tag::Body(1),
+                    // two faces straddling edge from vertex 2:
+                    Tag::Body(11), Tag::Body(2), Tag::Body(6),
+                    Tag::Body(11), Tag::Body(5), Tag::Body(2),
+                    // two faces straddling edge from vertex 3:
+                    Tag::Body(12), Tag::Body(3), Tag::Body(7),
+                    Tag::Body(12), Tag::Body(6), Tag::Body(3),
+                    // four faces from edge (0,1), (1,2), (2,3), (3,0):
+                    Tag::Body(9), Tag::Body(4), Tag::Body(10),
+                    Tag::Body(10), Tag::Body(5), Tag::Body(11),
+                    Tag::Body(11), Tag::Body(6), Tag::Body(12),
+                    Tag::Body(12), Tag::Body(7), Tag::Body(9),
+                ],
+            }),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: self_.ctxt }),
+                    xf: opening_xform(0.0),
+                    vmap: vec![5,2,6,8],
+                },
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: self_.ctxt }),
+                    xf: opening_xform(1.0),
+                    vmap: vec![4,1,5,8],
+                },
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: self_.ctxt }),
+                    xf: opening_xform(2.0),
+                    vmap: vec![7,0,4,8],
+                },
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: self_.ctxt }),
+                    xf: opening_xform(3.0),
+                    vmap: vec![6,3,7,8],
+                },
+                // TODO: These vertex mappings appear to be right.
+                // Explain *why* they are right.
+                // TODO: Factor out the repetition here.
+                // TODO: 4 Rc::new calls in a row with identical
                 // params... why not just Rc?
             ],
         }
     };
 
-    Rule { eval: Box::new(start), ctxt: () }
+    Rule { eval: Rc::new(start), ctxt: RamHornCtxt { depth } }
 }
 
 /*
@@ -287,7 +457,7 @@ struct CurveHorn {
 impl CurveHorn {
 
     fn test_thing(&self) {
-        let f: Box<dyn Fn() -> RuleEval> = Box::new(move || self.do_nothing());
+        let f: Box<dyn Fn() -> RuleEval> = Rc::new(move || self.do_nothing());
         println!("{:p}", f);
     }
 
@@ -297,7 +467,7 @@ impl CurveHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule { eval: Box::new(move || self.do_nothing()) },
+                    rule: Rule { eval: Rc::new(move || self.do_nothing()) },
                     xf: self.id_xform,
                     vmap: vec![0,1,2,3],
                 },
@@ -322,7 +492,7 @@ impl CurveHorn {
                 Matrix4::new_scaling(0.95) *
                 geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous(),
         };
-        Rule { eval: Box::new(move || c.do_nothing()) }
+        Rule { eval: Rc::new(move || c.do_nothing()) }
     }
 }
     fn start(&self) -> RuleEval {
@@ -334,12 +504,12 @@ impl CurveHorn {
             final_geom: prim::empty_mesh(),
             children: vec![
                 Child {
-                    rule: Rule { eval: Box::new(move || self.recur()) },
+                    rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.id_xform,
                     vmap: vec![0,1,2,3],
                 },
                 Child {
-                    rule: Rule { eval: Box::new(move || self.recur()) },
+                    rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.flip180,
                     vmap: vec![3,2,1,0],
                 },
@@ -385,7 +555,7 @@ impl CurveHorn {
             final_geom: final_geom,
             children: vec![
                 Child {
-                    rule: Rule { eval: Box::new(move || self.recur()) },
+                    rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.incr,
                     vmap: vec![0,1,2,3],
                 },
@@ -396,39 +566,16 @@ impl CurveHorn {
 */
 
 pub fn main() {
-
-    /*
-    {
-        let vs = vec![
-            vertex(-0.5,  0.0, -0.5),
-            vertex( 0.5,  0.0, -0.5),
-            vertex( 0.5,  0.0,  0.5),
-            vertex(-0.5,  0.0,  0.5),
-        ];
-        let vs2 = util::subdivide_cycle(&vs, 2);
-        println!("vs={:?}", vs);
-        println!("vs2={:?}", vs2);
-    }
-
-    fn run_test(r: Rule, iters: u32, name: &str) {
-        println!("Running {}...", name);
-        let (mesh, nodes) = r.to_mesh(iters);
-        println!("Evaluated {} rules", nodes);
-        let fname = format!("{}.stl", name);
-        println!("Writing {}...", fname);
-        mesh.write_stl_file(&fname).unwrap();
-    }
-
-    fn run_test_iter(r: Rule, iters: usize, name: &str) {
-        println!("Running {}...", name);
-        let (mesh, nodes) = r.to_mesh_iter(iters);
-        println!("Evaluated {} rules", nodes);
-        let fname = format!("{}.stl", name);
-        println!("Writing {}...", fname);
-        mesh.write_stl_file(&fname).unwrap();
-    }
-     */
     
+    fn run_test<S>(r: &Rc<Rule<S>>, iters: usize, name: &str) {
+        println!("Running {}...", name);
+        let (mesh, nodes) = Rule::to_mesh(r.clone(), iters);
+        println!("Evaluated {} rules", nodes);
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        mesh.write_stl_file(&fname).unwrap();
+    }
+
     fn run_test_iter<S>(r: &Rc<Rule<S>>, iters: usize, name: &str) {
         println!("Running {}...", name);
         let start = Instant::now();
@@ -470,4 +617,5 @@ pub fn main() {
     run_test_iter(&Rc::new(cube_thing()), 3, "cube_thing3");
     run_test_iter(&Rc::new(twist(1.0, 2)), 200, "twist");
     run_test_iter(&Rc::new(ramhorn()), 100, "ram_horn3");
+    run_test(&Rc::new(ramhorn_twist(10)), 19, "ram_horn3b");
 }

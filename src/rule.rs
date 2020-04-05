@@ -4,7 +4,7 @@ use crate::xform::{Transform};
 use std::borrow::Borrow;
 use std::rc::Rc;
 
-pub type RuleFn<S> = Box<dyn Fn(Rc<Rule<S>>) -> RuleEval<S>>;
+pub type RuleFn<S> = Rc<dyn Fn(Rc<Rule<S>>) -> RuleEval<S>>;
 
 /// Definition of a rule.  In general, a `Rule`:
 ///
@@ -88,7 +88,7 @@ impl<S> Rule<S> {
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
-    pub fn to_mesh(s: Rc<Rule<S>>, iters_left: u32) -> (OpenMesh, usize) {
+    pub fn to_mesh(s: Rc<Rule<S>>, iters_left: usize) -> (OpenMesh, usize) {
 
         let mut evals = 1;
 
