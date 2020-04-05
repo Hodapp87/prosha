@@ -578,13 +578,15 @@ pub fn main() {
 
     fn run_test_iter<S>(r: &Rc<Rule<S>>, iters: usize, name: &str) {
         println!("Running {}...", name);
-        let start = Instant::now();
-        let n = 5;
-        for i in 0..n {
-            Rule::to_mesh_iter(r.clone(), iters);
+        if false {
+            let start = Instant::now();
+            let n = 5;
+            for i in 0..n {
+                Rule::to_mesh_iter(r.clone(), iters);
+            }
+            let elapsed = start.elapsed();
+            println!("DEBUG: {} ms per run", elapsed.as_millis() / n);
         }
-        let elapsed = start.elapsed();
-        println!("DEBUG: {} ms per run", elapsed.as_millis() / n);
         let (mesh, nodes) = Rule::to_mesh_iter(r.clone(), iters);
         println!("Evaluated {} rules", nodes);
         let fname = format!("{}.stl", name);
@@ -617,5 +619,5 @@ pub fn main() {
     run_test_iter(&Rc::new(cube_thing()), 3, "cube_thing3");
     run_test_iter(&Rc::new(twist(1.0, 2)), 200, "twist");
     run_test_iter(&Rc::new(ramhorn()), 100, "ram_horn3");
-    run_test(&Rc::new(ramhorn_twist(10)), 19, "ram_horn3b");
+    run_test_iter(&Rc::new(ramhorn_twist(6)), 40, "ram_horn3b_bug");
 }
