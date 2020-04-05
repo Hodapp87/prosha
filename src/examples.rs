@@ -282,7 +282,7 @@ fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
 
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
-    let x = Vector3::x_axis();
+    let z = Vector3::z_axis();
 
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
@@ -327,14 +327,26 @@ fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
             vec![
                 Child {
                     rule: next_rule.clone(),
-                    xf: incr.translate(0.0, 0.0, 0.5).rotate(&x, -qtr/3.0),
+                    xf: incr.scale(0.5).translate(1.0, 1.0, 2.0).rotate(&z, qtr*0.0),
                     vmap: vec![0,1,2,3],
                 },
                 Child {
-                    rule: next_rule,
-                    xf: incr.translate(0.0, 0.0, 0.5).rotate(&x, qtr/3.0),
+                    rule: next_rule.clone(),
+                    xf: incr.scale(0.5).translate(-1.0, 1.0, 2.0).rotate(&z, qtr*1.0),
                     vmap: vec![0,1,2,3],
                 },
+                Child {
+                    rule: next_rule.clone(),
+                    xf: incr.scale(0.5).translate(-1.0, -1.0, 2.0).rotate(&z, qtr*2.0),
+                    vmap: vec![0,1,2,3],
+                },
+                Child {
+                    rule: next_rule.clone(),
+                    xf: incr.scale(0.5).translate(1.0, -1.0, 2.0).rotate(&z, qtr*3.0),
+                    vmap: vec![0,1,2,3],
+                },
+                // TODO: Factor out repetition
+                // TODO: Produce midpoint/centroid vertices like 'start' does below
             ]
         } else {
             let next_rule = Rule {
@@ -365,7 +377,7 @@ fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
             translate(0.0, 0.0, -1.0)
     };
 
-    let start = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+    let trans = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
 
         RuleEval {
             geom: Rc::new(OpenMesh {
@@ -382,33 +394,25 @@ fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
                     vertex( 0.0, -0.5, 1.0),  //  7 (connects 3-0)
                     // Top middle:
                     vertex( 0.0,  0.0, 1.0),  //  8
-                    // 'Bottom' vertices:
-                    vertex(-0.5, -0.5, 0.0),  //  9
-                    vertex(-0.5,  0.5, 0.0),  // 10
-                    vertex( 0.5,  0.5, 0.0),  // 11
-                    vertex( 0.5, -0.5, 0.0),  // 12
                 ],
                 faces: vec![
-                    // bottom face:
-                    Tag::Body(9), Tag::Body(10), Tag::Body(11),
-                    Tag::Body(9), Tag::Body(11), Tag::Body(12),
                     // two faces straddling edge from vertex 0:
-                    Tag::Body(9), Tag::Body(0), Tag::Body(4),
-                    Tag::Body(9), Tag::Body(7), Tag::Body(0),
+                    Tag::Parent(0), Tag::Body(0), Tag::Body(4),
+                    Tag::Parent(0), Tag::Body(7), Tag::Body(0),
                     // two faces straddling edge from vertex 1:
-                    Tag::Body(10), Tag::Body(1), Tag::Body(5),
-                    Tag::Body(10), Tag::Body(4), Tag::Body(1),
+                    Tag::Parent(1), Tag::Body(1), Tag::Body(5),
+                    Tag::Parent(1), Tag::Body(4), Tag::Body(1),
                     // two faces straddling edge from vertex 2:
-                    Tag::Body(11), Tag::Body(2), Tag::Body(6),
-                    Tag::Body(11), Tag::Body(5), Tag::Body(2),
+                    Tag::Parent(2), Tag::Body(2), Tag::Body(6),
+                    Tag::Parent(2), Tag::Body(5), Tag::Body(2),
                     // two faces straddling edge from vertex 3:
-                    Tag::Body(12), Tag::Body(3), Tag::Body(7),
-                    Tag::Body(12), Tag::Body(6), Tag::Body(3),
+                    Tag::Parent(3), Tag::Body(3), Tag::Body(7),
+                    Tag::Parent(3), Tag::Body(6), Tag::Body(3),
                     // four faces from edge (0,1), (1,2), (2,3), (3,0):
-                    Tag::Body(9), Tag::Body(4), Tag::Body(10),
-                    Tag::Body(10), Tag::Body(5), Tag::Body(11),
-                    Tag::Body(11), Tag::Body(6), Tag::Body(12),
-                    Tag::Body(12), Tag::Body(7), Tag::Body(9),
+                    Tag::Parent(0), Tag::Body(4), Tag::Parent(1),
+                    Tag::Parent(1), Tag::Body(5), Tag::Parent(2),
+                    Tag::Parent(2), Tag::Body(6), Tag::Parent(3),
+                    Tag::Parent(3), Tag::Body(7), Tag::Parent(0),
                 ],
             }),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -436,12 +440,35 @@ fn ramhorn_twist(depth: usize) -> Rule<RamHornCtxt> {
                 // TODO: These vertex mappings appear to be right.
                 // Explain *why* they are right.
                 // TODO: Factor out the repetition here.
-                // TODO: 4 Rc::new calls in a row with identical
-                // params... why not just Rc?
             ],
         }
     };
 
+    let start = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+        RuleEval {
+            geom: Rc::new(OpenMesh {
+                verts: vec![
+                    vertex(-0.5, -0.5, 0.0),
+                    vertex(-0.5,  0.5, 0.0),
+                    vertex( 0.5,  0.5, 0.0),
+                    vertex( 0.5, -0.5, 0.0),
+                ],
+                faces: vec![
+                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
+                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                ],
+            }),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(trans.clone()), ctxt: self_.ctxt }),
+                    xf: Transform::new(),
+                    vmap: vec![0,1,2,3],
+                },
+            ],
+        }
+    };
+    
     Rule { eval: Rc::new(start), ctxt: RamHornCtxt { depth } }
 }
 
@@ -619,5 +646,5 @@ pub fn main() {
     run_test_iter(&Rc::new(cube_thing()), 3, "cube_thing3");
     run_test_iter(&Rc::new(twist(1.0, 2)), 200, "twist");
     run_test_iter(&Rc::new(ramhorn()), 100, "ram_horn3");
-    run_test_iter(&Rc::new(ramhorn_twist(6)), 40, "ram_horn3b_bug");
+    run_test_iter(&Rc::new(ramhorn_twist(5)), 30, "ram_horn3b_bug");
 }

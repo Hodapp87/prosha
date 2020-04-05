@@ -46,3 +46,5 @@
   obtain".  Can I fix this somehow?  Looks like a French-ism that made
   its way in.
 - Multithread!  This looks very task-parallel anywhere that I branch.
+- Would being able to name a rule node (perhaps conditionally under
+  some compile-time flag) help for debugging?

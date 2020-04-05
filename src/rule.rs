@@ -222,6 +222,8 @@ impl<S> Rule<S> {
             // account for this, we must shift vmap by the offset that
             // 'geom.connect' gave us:
             let off = offsets[0];
+            // (We pass a one-element vector to geom.connect() above
+            // so offsets always has just one element.)
             for child in eval.children.iter_mut() {
                 child.vmap = child.vmap.iter().map(|n| n + off).collect();
             }
@@ -236,7 +238,7 @@ impl<S> Rule<S> {
             }
 
             if !eval.children.is_empty() {
-                // Recurse further (i.e. put more onto stack):                    
+                // Recurse further (i.e. put more onto stack):
                 stack.push(State {
                     rules: eval.children,
                     next: 0,
