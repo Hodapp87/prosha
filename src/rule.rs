@@ -4,16 +4,18 @@ use crate::xform::{Transform};
 use std::borrow::Borrow;
 use std::rc::Rc;
 
-pub type RuleFn = Box<dyn Fn(Rc<Rule>) -> RuleEval>;
+pub type RuleFn<S> = Box<dyn Fn(Rc<Rule<S>>) -> RuleEval<S>>;
 
 /// Definition of a rule.  In general, a `Rule`:
 ///
 /// - produces geometry when it is evaluated
 /// - tells what other rules to invoke, and what to do with their
 /// geometry
-pub struct Rule {
-    pub eval: RuleFn,
+pub struct Rule<S> {
+    pub eval: RuleFn<S>,
+    pub ctxt: S,
 }
+
 // TODO: It may be possible to have just a 'static' rule that requires
 // no function call.
 // TODO: Do I benefit with Rc<Rule> below so Rule can be shared?
@@ -34,7 +36,7 @@ pub struct Rule {
 /// - if recursion continues, the rules of `children` are evaluated,
 /// and the resultant geometry is transformed and then connected with
 /// `geom`.
-pub struct RuleEval {
+pub struct RuleEval<S> {
     /// The geometry generated at just this iteration
     pub geom: Rc<OpenMesh>,
 
@@ -49,16 +51,16 @@ pub struct RuleEval {
     /// The child invocations (used if recursion continues).  The
     /// 'parent' mesh, from the perspective of all geometry produced
     /// by `children`, is `geom`.
-    pub children: Vec<Child>,
+    pub children: Vec<Child<S>>,
 }
 
 /// `Child` evaluations, pairing another `Rule` with the
 /// transformations and parent vertex mappings that should be applied
 /// to it.
-pub struct Child {
+pub struct Child<S> {
 
     /// Rule to evaluate to produce geometry
-    pub rule: Rc<Rule>,
+    pub rule: Rc<Rule<S>>,
 
     /// The transform to apply to all geometry produced by `rule`
     /// (including its own `geom` and `final_geom` if needed, as well
@@ -73,7 +75,7 @@ pub struct Child {
     pub vmap: Vec<usize>,
 }
 
-impl Rule {
+impl<S> Rule<S> {
 
     // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
     // could end up having a lot of identical geometry that need not be
@@ -86,11 +88,11 @@ impl Rule {
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
-    pub fn to_mesh(s: Rc<Self>, iters_left: u32) -> (OpenMesh, usize) {
+    pub fn to_mesh(s: Rc<Rule<S>>, iters_left: u32) -> (OpenMesh, usize) {
 
         let mut evals = 1;
 
-        let rs: RuleEval = (s.eval)(s.clone());
+        let rs: RuleEval<S> = (s.eval)(s.clone());
         if iters_left <= 0 {
             return ((*rs.final_geom).clone(), 1);
             // TODO: This is probably wrong because of the way that
@@ -120,11 +122,11 @@ impl Rule {
     /// This should be identical to to_mesh, but implemented
     /// iteratively with an explicit stack rather than with recursive
     /// function calls.
-    pub fn to_mesh_iter(s: Rc<Self>, max_depth: usize) -> (OpenMesh, usize) {
+    pub fn to_mesh_iter(s: Rc<Rule<S>>, max_depth: usize) -> (OpenMesh, usize) {
 
-        struct State {
+        struct State<S> {
             // The set of rules we're currently handling:
-            rules: Vec<Child>,
+            rules: Vec<Child<S>>,
             // The next element of 'children' to handle:
             next: usize,
             // World transform of the *parent* of 'rules', that is,
@@ -142,7 +144,7 @@ impl Rule {
         //
         // We evaluate our own rule to initialize the stack:
         let eval = (s.eval)(s.clone());
-        let mut stack: Vec<State> = vec![State {
+        let mut stack: Vec<State<S>> = vec![State {
             rules: eval.children,
             next: 0,
             xf: Transform::new(),
@@ -259,21 +261,21 @@ impl Rule {
     
 }
 
-impl RuleEval {
+impl<S> RuleEval<S> {
     /// Turn an iterator of (OpenMesh, Child) into a single RuleEval.
     /// All meshes are merged, and the `vmap` in each child has the
     /// correct offsets applied to account for this merge.
     ///
     /// (`final_geom` is passed through to the RuleEval unmodified.)
-    pub fn from_pairs<T, U>(m: T, final_geom: OpenMesh) -> RuleEval
+    pub fn from_pairs<T, U>(m: T, final_geom: OpenMesh) -> RuleEval<S>
         where U: Borrow<OpenMesh>,
-              T: IntoIterator<Item = (U, Child)>
+              T: IntoIterator<Item = (U, Child<S>)>
     {
         let (meshes, children): (Vec<_>, Vec<_>) = m.into_iter().unzip();
         let (mesh, offsets) = OpenMesh::append(meshes);
 
         // Patch up vmap in each child, and copy everything else:
-        let children2: Vec<Child> = children.iter().zip(offsets.iter()).map(|(c,off)| {
+        let children2: Vec<Child<S>> = children.iter().zip(offsets.iter()).map(|(c,off)| {
             Child {
                 rule: c.rule.clone(),
                 xf: c.xf.clone(),

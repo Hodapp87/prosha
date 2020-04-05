@@ -10,7 +10,7 @@ use crate::util;
 
 use std::time::Instant;
 
-fn cube_thing() -> Rule {
+fn cube_thing() -> Rule<()> {
 
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
@@ -29,7 +29,7 @@ fn cube_thing() -> Rule {
         id.rotate(z, -qtr),
     ];
 
-    let rec = move |self_: Rc<Rule>| -> RuleEval {
+    let rec = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
 
         let xforms = turns.iter().map(|xf| xf.scale(0.5).translate(6.0, 0.0, 0.0));
         RuleEval {
@@ -43,11 +43,11 @@ fn cube_thing() -> Rule {
         }
     };
     
-    Rule { eval: Box::new(rec) }
+    Rule { eval: Box::new(rec), ctxt: () }
 }
 
 // Meant to be a copy of twist_from_gen from Python & automata_scratch
-fn twist(f: f32, subdiv: usize) -> Rule {
+fn twist(f: f32, subdiv: usize) -> Rule<()> {
     // TODO: Clean this code up.  It was a very naive conversion from
     // the non-closure version.
     let xf = Transform::new().rotate(&Vector3::x_axis(), -0.7);
@@ -73,7 +73,7 @@ fn twist(f: f32, subdiv: usize) -> Rule {
 
     let seed2 = seed.clone();
     // TODO: Why do I need the above?
-    let recur = move |incr: Transform| -> RuleFn {
+    let recur = move |incr: Transform| -> RuleFn<()> {
 
         let seed_next = incr.transform(&seed2);
 
@@ -85,7 +85,7 @@ fn twist(f: f32, subdiv: usize) -> Rule {
             faces: faces,
         });
         
-        let c = move |self_: Rc<Rule>| -> RuleEval {
+        let c = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
             RuleEval {
                 geom: geom.clone(),
                 final_geom: final_geom.clone(),
@@ -103,15 +103,15 @@ fn twist(f: f32, subdiv: usize) -> Rule {
     // TODO: Can a macro do anything to clean up some of the
     // repetition with HOFs & closures?
     
-    let start = move |_| -> RuleEval {
+    let start = move |_| -> RuleEval<()> {
         
-        let child = |incr, dx, i, ang0, div| -> (OpenMesh, Child) {
+        let child = |incr, dx, i, ang0, div| -> (OpenMesh, Child<()>) {
             let xform = Transform::new().
                 rotate(&y, ang0 + (qtr / div * (i as f32))).
                 translate(dx, 0.0, 0.0);
             
             let c = Child {
-                rule: Rc::new(Rule { eval: (recur.clone())(incr) }),
+                rule: Rc::new(Rule { eval: (recur.clone())(incr), ctxt: () }),
                 // TODO: Cleanliness fix - can macros clean up above?
                 xf: xform,
                 vmap: (0..(n+1)).collect(),
@@ -131,10 +131,10 @@ fn twist(f: f32, subdiv: usize) -> Rule {
         RuleEval::from_pairs(inner.chain(outer), prim::empty_mesh())
     };
     
-    Rule { eval: Box::new(start) }
+    Rule { eval: Box::new(start), ctxt: () }
 }
 
-fn ramhorn() -> Rule {
+fn ramhorn() -> Rule<()> {
 
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
@@ -170,7 +170,7 @@ fn ramhorn() -> Rule {
         ],
     });
     
-    let recur = move |self_: Rc<Rule>| -> RuleEval {
+    let recur = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
         RuleEval {
             geom: geom.clone(),
             final_geom: final_geom.clone(),
@@ -193,7 +193,7 @@ fn ramhorn() -> Rule {
             translate(0.0, 0.0, -1.0)
     };
 
-    let start = move |_| -> RuleEval {
+    let start = move |_| -> RuleEval<()> {
 
         //let ofn = opening_xform.clone();
         
@@ -244,22 +244,22 @@ fn ramhorn() -> Rule {
             final_geom: Rc::new(prim::empty_mesh()),
             children: vec![
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
+                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(0.0),
                     vmap: vec![5,2,6,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
+                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(1.0),
                     vmap: vec![4,1,5,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
+                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(2.0),
                     vmap: vec![7,0,4,8],
                 },
                 Child {
-                    rule: Rc::new(Rule { eval: Box::new(recur.clone()) }),
+                    rule: Rc::new(Rule { eval: Box::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(3.0),
                     vmap: vec![6,3,7,8],
                 },
@@ -272,7 +272,7 @@ fn ramhorn() -> Rule {
         }
     };
 
-    Rule { eval: Box::new(start) }
+    Rule { eval: Box::new(start), ctxt: () }
 }
 
 /*
@@ -429,7 +429,7 @@ pub fn main() {
     }
      */
     
-    fn run_test_iter(r: &Rc<Rule>, iters: usize, name: &str) {
+    fn run_test_iter<S>(r: &Rc<Rule<S>>, iters: usize, name: &str) {
         println!("Running {}...", name);
         let start = Instant::now();
         let n = 5;
