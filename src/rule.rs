@@ -77,14 +77,6 @@ pub struct Child<S> {
 
 impl<S> Rule<S> {
 
-    // TODO: Do I want to make 'geom' shared somehow, maybe with Rc? I
-    // could end up having a lot of identical geometry that need not be
-    // duplicated until it is transformed into the global space.
-    //
-    // This might produce bigger gains if I rewrite to_mesh so that
-    // rather than repeatedly transforming meshes, it stacks
-    // transformations and then applies them all at once.
-
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
@@ -229,10 +221,9 @@ impl<S> Rule<S> {
             // merged 'new_geom' into, not 'new_geom' directly.  To
             // account for this, we must shift vmap by the offset that
             // 'geom.connect' gave us:
-            for (offset, child) in offsets.iter().zip(eval.children.iter_mut()) {
-                child.vmap = child.vmap.iter().map(|n| {
-                    n + offset
-                }).collect();
+            let off = offsets[0];
+            for child in eval.children.iter_mut() {
+                child.vmap = child.vmap.iter().map(|n| n + off).collect();
             }
 
             // We're done evaluating this rule, so increment 'next'.
