@@ -2,13 +2,13 @@
 
 ## Highest priority:
 
+- Clean up `ramhorn_branch` because it's fugly.  Also, fix
+  non-manifold stuff at higher recursions.
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose
     efficiently?)
   - `twisty_torus`
-  - `ram_horn_branch` - Can I pass depth via a closure?  Do I need
-    mutual recursion for this?
 
 ## Important but less critical:
 
@@ -38,6 +38,10 @@
   - the closure can move them
 - Use an actual logging framework.
 - Migrate tests to... well... actual tests.
+- I am starting to see a pattern emerge in how I have to modularize
+  things around closures.  What can a macro do for me here?
+- swept-isocontour stuff from
+  `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`
 
 ## If I'm bored:
 
