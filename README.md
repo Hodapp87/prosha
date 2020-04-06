@@ -2,8 +2,7 @@
 
 ## Highest priority:
 
-- Clean up `ramhorn_branch` because it's fugly.  Also, fix
-  non-manifold stuff at higher recursions.
+- Clean up `ramhorn_branch` because it's fugly.
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `spiral_nested_2` & `spiral_nested_3` (how to compose
@@ -15,8 +14,9 @@
 - Elegance & succinctness (my recent closure work may help with this):
   - Why must I repeat myself so much in these definitions?
   - What patterns can I factor out?  I do some things regularly, like:
-    the clockwise boundaries, the zigzag connections, the iterating over
-    a `Vec<Vertex>` to transform each element and make another vector.
+    the clockwise boundaries, the zigzag connections
+  - Procedural macro to shorten this `Tag::Parent`, `Tag::Body`
+    nonsense - and perhaps force to groups of 3?
 - Docs on modules
 - Grep for all TODOs in code, really.
 - Look at performance.  Can I save on copies of geometry by using

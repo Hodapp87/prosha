@@ -202,10 +202,17 @@ impl<S> Rule<S> {
                 
                 geom = geom.connect(vec![(geom2, child.vmap.clone())]).0;
                 // TODO: Fix clone?
-                
-                // and backtrack:
-                stack.pop();
-                n -= 1;
+
+                // If we end recursion on one child, we must end it
+                // similarly on every sibling (i.e. get its geometry &
+                // final geometry, and merge it in) - so we increment
+                // s.next and let the loop re-run.
+                s.next += 1;
+                if s.next >= s.rules.len() {
+                    // Backtrack only at the last child:
+                    stack.pop();
+                    n -= 1;
+                }
                 continue;
             }
 
@@ -248,7 +255,7 @@ impl<S> Rule<S> {
                 n += 1;
             }
         }
-
+        
         return (geom, eval_count); 
     }
     
