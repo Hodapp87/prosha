@@ -28,14 +28,9 @@
     like I should be able to share geometry with the `Rc` (like noted
     above), defer copying until actually needed, and pre-allocate the
     vector to its size (which should be easy to compute).
+  - The cost of small appends/connects seems to be killing
+    performance.
 - Look at everything in `README.md` in `automata_scratch`.
-- I can't really do *mutual* recursion with the closure method, can I?
-  I'd need actual functions for that.
-- N.B. "Constants" outside the closure only work the way I think they
-  should work if:
-  - they're actually static
-  - they implement Copy
-  - the closure can move them
 - Use an actual logging framework.
 - Migrate tests to... well... actual tests.
 - I am starting to see a pattern emerge in how I have to modularize

@@ -195,8 +195,6 @@ fn ramhorn() -> Rule<()> {
 
     let start = move |_| -> RuleEval<()> {
 
-        //let ofn = opening_xform.clone();
-        
         RuleEval {
             geom: Rc::new(OpenMesh {
                 verts: vec![
@@ -280,21 +278,17 @@ struct RamHornCtxt {
 
 fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
 
-    // Quarter-turn in radians:
-    //let qtr = std::f32::consts::FRAC_PI_2;
-    //let z = Vector3::z_axis();
-
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
         translate(0.0, 0.0, 0.8).
-        rotate(&v, 0.3).
-        scale(0.9);
+        rotate(&v, 0.4).
+        scale(0.95);
 
     let seed = vec![
-        vertex(-0.5, -0.5, 1.0),
-        vertex(-0.5,  0.5, 1.0),
-        vertex( 0.5,  0.5, 1.0),
-        vertex( 0.5, -0.5, 1.0),
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
     ];
     let next = incr.transform(&seed);
     let geom = Rc::new(OpenMesh {
@@ -322,24 +316,23 @@ fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
         let r = std::f32::consts::FRAC_PI_2 * i;
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
-            translate(0.25, 0.25, 1.0).
-            scale(0.5).
-            translate(0.0, 0.0, -1.0)
+            translate(0.25, 0.25, 0.0).
+            scale(0.5)
     };
     
     let trans_verts = vec![
         // 'Top' vertices:
-        vertex(-0.5, -0.5, 1.0),  //  0 (above 9)
-        vertex(-0.5,  0.5, 1.0),  //  1 (above 10)
-        vertex( 0.5,  0.5, 1.0),  //  2 (above 11)
-        vertex( 0.5, -0.5, 1.0),  //  3 (above 12)
+        vertex(-0.5, -0.5, 0.0),  //  0 (above 9)
+        vertex(-0.5,  0.5, 0.0),  //  1 (above 10)
+        vertex( 0.5,  0.5, 0.0),  //  2 (above 11)
+        vertex( 0.5, -0.5, 0.0),  //  3 (above 12)
         // Top edge midpoints:
-        vertex(-0.5,  0.0, 1.0),  //  4 (connects 0-1)
-        vertex( 0.0,  0.5, 1.0),  //  5 (connects 1-2)
-        vertex( 0.5,  0.0, 1.0),  //  6 (connects 2-3)
-        vertex( 0.0, -0.5, 1.0),  //  7 (connects 3-0)
+        vertex(-0.5,  0.0, 0.0),  //  4 (connects 0-1)
+        vertex( 0.0,  0.5, 0.0),  //  5 (connects 1-2)
+        vertex( 0.5,  0.0, 0.0),  //  6 (connects 2-3)
+        vertex( 0.0, -0.5, 0.0),  //  7 (connects 3-0)
         // Top middle:
-        vertex( 0.0,  0.0, 1.0),  //  8
+        vertex( 0.0,  0.0, 0.0),  //  8
     ];
     let trans_faces = vec![
         // two faces straddling edge from vertex 0:
@@ -393,11 +386,15 @@ fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
     };
     
     let tg = trans_geom.clone();
+    // TODO: Why is that necessary?
     let recur = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
         if self_.ctxt.depth <= 0 {
             RuleEval {
                 geom: tg.clone(),
-                final_geom: Rc::new(prim::empty_mesh()),
+                final_geom: final_geom.clone(),
+                // This final_geom will leave midpoint/centroid
+                // vertices, but stopping here means none are
+                // connected anyway - so they can just be ignored.
                 children: trans_children(self_.eval.clone(), RamHornCtxt { depth }),
             }
         } else {
@@ -431,10 +428,10 @@ fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
         RuleEval {
             geom: Rc::new(OpenMesh {
                 verts: vec![
-                    vertex(-0.5, -0.5, 0.0),
-                    vertex(-0.5,  0.5, 0.0),
-                    vertex( 0.5,  0.5, 0.0),
-                    vertex( 0.5, -0.5, 0.0),
+                    vertex(-0.5, -0.5, -0.5),
+                    vertex(-0.5,  0.5, -0.5),
+                    vertex( 0.5,  0.5, -0.5),
+                    vertex( 0.5, -0.5, -0.5),
                 ],
                 faces: vec![
                     Tag::Body(0), Tag::Body(1), Tag::Body(2),
@@ -542,7 +539,7 @@ impl CurveHorn {
                 Tag::Body(2), Tag::Parent(1), Tag::Body(1),
                 Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
                 Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-                Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
+       g         Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
                 Tag::Body(0), Tag::Parent(3), Tag::Body(3),
                 Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
                 // TODO: I should really generate these, not hard-code them.
@@ -623,5 +620,5 @@ pub fn main() {
     run_test(&Rc::new(cube_thing()), 3, "cube_thing3", false);
     run_test(&Rc::new(twist(1.0, 2)), 200, "twist", false);
     run_test(&Rc::new(ramhorn()), 100, "ram_horn3", false);
-    run_test(&Rc::new(ramhorn_branch(4)), 22, "ram_horn_branch", false);
+    run_test(&Rc::new(ramhorn_branch(6)), 31/*42*/, "ram_horn_branch", false);
 }
