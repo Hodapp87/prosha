@@ -12,31 +12,32 @@
 ## Important but less critical:
 
 - Elegance & succinctness (my recent closure work may help with this):
-  - Why must I repeat myself so much in these definitions?
   - What patterns can I factor out?  I do some things regularly, like:
-    the clockwise boundaries, the zigzag connections
-  - Procedural macro to shorten this `Tag::Parent`, `Tag::Body`
-    nonsense - and perhaps force to groups of 3?
+    the clockwise boundaries, the zigzag connections.
+  - Declarative macro to shorten this `Tag::Parent`, `Tag::Body`
+    nonsense - and perhaps force to groups of 3?  Does this have any
+    value, though, over just making helper functions like `p(...)` and
+    `b(...)`?
+  - I'm near certain a declarative macros can simplify some bigger
+    things like my patterns with closures (e.g. the Y combinator like
+    method for recursive calls).
 - Docs on modules
-- Grep for all TODOs in code, really.
-- Look at performance.  Can I save on copies of geometry by using
-  `Rc<OpenMesh>` or the like?  In many cases I have nothing but copied
-  geometry.  Can I pre-allocate vectors instead of
-  extending/appending?
+- Look at performance.
+  - Start at `to_mesh_iter()`. The cost of small appends/connects
+    seems to be killing performance.
   - `connect()` is a big performance hot-spot: 85% of total time in
     one test, around 51% in `extend()`, 33% in `clone()`. It seems
     like I should be able to share geometry with the `Rc` (like noted
     above), defer copying until actually needed, and pre-allocate the
     vector to its size (which should be easy to compute).
-  - The cost of small appends/connects seems to be killing
-    performance.
-- Look at everything in `README.md` in `automata_scratch`.
-- Use an actual logging framework.
-- Migrate tests to... well... actual tests.
-- I am starting to see a pattern emerge in how I have to modularize
-  things around closures.  What can a macro do for me here?
+- Compute global scale factor, and perhaps pass it to a rule (to
+  eventually be used for, perhaps, adaptive subdivision)
 - swept-isocontour stuff from
   `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`
+
+- Catch-alls:
+  - Grep for all TODOs in code, really.
+  - Look at everything in `README.md` in `automata_scratch`.
 
 ## If I'm bored:
 
@@ -47,3 +48,5 @@
 - Multithread!  This looks very task-parallel anywhere that I branch.
 - Would being able to name a rule node (perhaps conditionally under
   some compile-time flag) help for debugging?
+- Use an actual logging framework.
+- Migrate tests to... well... actual tests.

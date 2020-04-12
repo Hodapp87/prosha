@@ -126,7 +126,8 @@ fn twist(f: f32, subdiv: usize) -> Rule<()> {
         
         // Generate 'count' children, shifted/rotated differently:
         let inner = (0..count).map(|i| child(incr_inner, dx0, i, 0.0, 1.0));
-        let outer = (0..count).map(|i| child(incr_outer, dx0*2.0, i, qtr/2.0, 2.0));
+        //let outer = (0..count).map(|i| child(incr_outer, dx0*2.0, i, qtr/2.0, 2.0));
+        let outer = (0..0).map(|i| child(incr_outer, dx0*2.0, i, qtr/2.0, 2.0));
 
         RuleEval::from_pairs(inner.chain(outer), prim::empty_mesh())
     };
@@ -276,13 +277,13 @@ struct RamHornCtxt {
     depth: usize,
 }
 
-fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
+fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
 
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
-        translate(0.0, 0.0, 0.8).
-        rotate(&v, 0.4).
-        scale(0.95);
+        translate(0.0, 0.0, 0.8 * f).
+        rotate(&v, 0.4 * f).
+        scale(1.0 - (1.0 - 0.95)*f);
 
     let seed = vec![
         vertex(-0.5, -0.5, 0.0),
@@ -427,12 +428,7 @@ fn ramhorn_branch(depth: usize) -> Rule<RamHornCtxt> {
     let start = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
         RuleEval {
             geom: Rc::new(OpenMesh {
-                verts: vec![
-                    vertex(-0.5, -0.5, -0.5),
-                    vertex(-0.5,  0.5, -0.5),
-                    vertex( 0.5,  0.5, -0.5),
-                    vertex( 0.5, -0.5, -0.5),
-                ],
+                verts: Transform::new().translate(0.0, 0.0, -0.5).transform(&seed),
                 faces: vec![
                     Tag::Body(0), Tag::Body(1), Tag::Body(2),
                     Tag::Body(0), Tag::Body(2), Tag::Body(3),
@@ -613,12 +609,13 @@ pub fn main() {
     // some sort of numerical precision issue.
     
     //run_test_iter(Twist::init(1.0, 2), 100, "twist");
-    // This is a stress test:
-    // let f = 20;
-    // run_test_iter(Twist::init(f as f32, 32), 100*f, "twist2");
 
     run_test(&Rc::new(cube_thing()), 3, "cube_thing3", false);
     run_test(&Rc::new(twist(1.0, 2)), 200, "twist", false);
     run_test(&Rc::new(ramhorn()), 100, "ram_horn3", false);
-    run_test(&Rc::new(ramhorn_branch(6)), 31/*42*/, "ram_horn_branch", false);
+    run_test(&Rc::new(ramhorn_branch(24, 0.25)), 32/*128*/, "ram_horn_branch", false);
+
+    // This is a stress test:
+    //let f = 40;
+    //run_test(&Rc::new(twist(f as f32, 128)), 100*f, "screw", false);
 }
