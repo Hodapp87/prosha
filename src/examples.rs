@@ -59,9 +59,9 @@ fn twist(f: f32, subdiv: usize) -> Rule<()> {
         util::subdivide_cycle(&xf.transform(&s), subdiv)
     };
     let n = seed.len();
-    let dx0: f32 = 1.5;
+    let dx0: f32 = 2.0;
     let dy: f32 = 0.1/f;
-    let ang: f32 = 0.05/f;
+    let ang: f32 = 0.1/f;
     let count: usize = 4;
     
     // Quarter-turn in radians:
@@ -610,12 +610,14 @@ pub fn main() {
     
     //run_test_iter(Twist::init(1.0, 2), 100, "twist");
 
+    /*
     run_test(&Rc::new(cube_thing()), 3, "cube_thing3", false);
     run_test(&Rc::new(twist(1.0, 2)), 200, "twist", false);
     run_test(&Rc::new(ramhorn()), 100, "ram_horn3", false);
     run_test(&Rc::new(ramhorn_branch(24, 0.25)), 32/*128*/, "ram_horn_branch", false);
+    */
 
     // This is a stress test:
-    //let f = 40;
-    //run_test(&Rc::new(twist(f as f32, 128)), 100*f, "screw", false);
+    let f = 40;
+    run_test(&Rc::new(twist(f as f32, 128)), 100*f, "screw", false);
 }
