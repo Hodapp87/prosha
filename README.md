@@ -49,4 +49,3 @@
 - Would being able to name a rule node (perhaps conditionally under
   some compile-time flag) help for debugging?
 - Use an actual logging framework.
-- Migrate tests to... well... actual tests.

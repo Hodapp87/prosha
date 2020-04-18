@@ -8,9 +8,7 @@ use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
 
-use std::time::Instant;
-
-fn cube_thing() -> Rule<()> {
+pub fn cube_thing() -> Rule<()> {
 
     // Quarter-turn in radians:
     let qtr = std::f32::consts::FRAC_PI_2;
@@ -47,7 +45,7 @@ fn cube_thing() -> Rule<()> {
 }
 
 // Meant to be a copy of twist_from_gen from Python & automata_scratch
-fn twist(f: f32, subdiv: usize) -> Rule<()> {
+pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     // TODO: Clean this code up.  It was a very naive conversion from
     // the non-closure version.
     let xf = Transform::new().rotate(&Vector3::x_axis(), -0.7);
@@ -135,7 +133,7 @@ fn twist(f: f32, subdiv: usize) -> Rule<()> {
     Rule { eval: Rc::new(start), ctxt: () }
 }
 
-fn ramhorn() -> Rule<()> {
+pub fn ramhorn() -> Rule<()> {
 
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
@@ -273,11 +271,11 @@ fn ramhorn() -> Rule<()> {
 }
 
 #[derive(Copy, Clone)]
-struct RamHornCtxt {
+pub struct RamHornCtxt {
     depth: usize,
 }
 
-fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
+pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
 
     let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
     let incr: Transform = Transform::new().
@@ -320,7 +318,8 @@ fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
             translate(0.25, 0.25, 0.0).
             scale(0.5)
     };
-    
+
+    // 'transition' geometry (when something splits):
     let trans_verts = vec![
         // 'Top' vertices:
         vertex(-0.5, -0.5, 0.0),  //  0 (above 9)
@@ -535,7 +534,7 @@ impl CurveHorn {
                 Tag::Body(2), Tag::Parent(1), Tag::Body(1),
                 Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
                 Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-       g         Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
+                Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
                 Tag::Body(0), Tag::Parent(3), Tag::Body(3),
                 Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
                 // TODO: I should really generate these, not hard-code them.
@@ -567,57 +566,3 @@ impl CurveHorn {
     }
 }
 */
-
-pub fn main() {
-    
-    fn run_test<S>(r: &Rc<Rule<S>>, iters: usize, name: &str, use_old: bool) {
-        println!("---------------------------------------------------");
-        println!("Running {} with {}...",
-                 name, if use_old { "to_mesh" } else { "to_mesh_iter" });
-        if false {
-            let start = Instant::now();
-            let n = 5;
-            for _ in 0..n {
-                Rule::to_mesh_iter(r.clone(), iters);
-            }
-            let elapsed = start.elapsed();
-            println!("DEBUG: {} ms per run", elapsed.as_millis() / n);
-        }
-        let mesh_fn = if use_old { Rule::to_mesh } else { Rule::to_mesh_iter };
-        let (mesh, nodes) = mesh_fn(r.clone(), iters);
-        println!("Evaluated {} rules to {} verts", nodes, mesh.verts.len());
-        let fname = format!("{}.stl", name);
-        println!("Writing {}...", fname);
-        mesh.write_stl_file(&fname).unwrap();
-    }
-    
-    /*
-    run_test(CubeThing::init(), Rule { eval: CubeThing::rec }, 3, "cube_thing");
-    // this can't work on its own because the resultant OpenMesh still
-    // has parent references:
-    //run_test(Rule { eval: recur }, 100, "curve_horn_thing");
-    run_test(CurveHorn::init(), Rule { eval: CurveHorn::start }, 100, "curve_horn2");
-    run_test(RamHorn::init(), Rule { eval: RamHorn::start }, 200, "ram_horn");
-    run_test(Twist::init(), Rule { eval: Twist::start }, 200, "twist");
-    */
-
-    //run_test_iter(CubeThing::init(), 3, "cube_thing2");
-    //run_test_iter(CurveHorn::init(), 100, "curve_horn2_iter");
-    //run_test_iter(RamHorn::init(), 100, "ram_horn2");
-    // TODO: If I increase the above from 100 to ~150, Blender reports
-    // that the very tips are non-manifold.  I am wondering if this is
-    // some sort of numerical precision issue.
-    
-    //run_test_iter(Twist::init(1.0, 2), 100, "twist");
-
-    /*
-    run_test(&Rc::new(cube_thing()), 3, "cube_thing3", false);
-    run_test(&Rc::new(twist(1.0, 2)), 200, "twist", false);
-    run_test(&Rc::new(ramhorn()), 100, "ram_horn3", false);
-    run_test(&Rc::new(ramhorn_branch(24, 0.25)), 32/*128*/, "ram_horn_branch", false);
-    */
-
-    // This is a stress test:
-    let f = 40;
-    run_test(&Rc::new(twist(f as f32, 128)), 100*f, "screw", false);
-}
