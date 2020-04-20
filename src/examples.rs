@@ -139,17 +139,17 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
 
 #[derive(Copy, Clone)]
 pub struct TorusCtxt {
-    xform1: Transform,
-    xform2: Transform,
+    init: bool,
+    stack: [Transform; 3],
 }
 
 pub fn twisty_torus() -> Rule<TorusCtxt> {
     let subdiv = 8;
     let seed = vec![
-        vertex(-0.5, -0.5, 1.0),
-        vertex(-0.5,  0.5, 1.0),
-        vertex( 0.5,  0.5, 1.0),
-        vertex( 0.5, -0.5, 1.0),
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
     ];
     let seed = util::subdivide_cycle(&seed, subdiv);
     
@@ -161,68 +161,68 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
         faces: faces,
     });
 
-    let rad = 4.0;
+    let rad = 1.0;
+    let rad2 = 5.0;
     let dx0 = 2.0;
     let ang = 0.1;
-        
+
     let recur = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
-        let y = &Vector3::y_axis();
+        //let y = &Vector3::y_axis();
         let z = &Vector3::z_axis();
-        let xf1 = self_.ctxt.xform1;
-        let xf2 = self_.ctxt.xform2;
+        let stack = self_.ctxt.stack;
         let next_rule = Rule {
             eval: self_.eval.clone(),
             ctxt: TorusCtxt {
-                xform1: xf1.rotate(y, 0.1),
-                xform2: xf2.rotate(z, ang),
+                init: false,
+                stack: [
+                    stack[0],
+                    Transform::new().rotate(z, 0.05) * stack[1],
+                    Transform::new().translate(0.0, 0.0, 0.1) * stack[2],
+                ],
             },
         };
-        let xf = xf1 * xf2;
-        RuleEval {
-            geom: Rc::new(geom.transform(&xf)),
-            final_geom: Rc::new(final_geom.transform(&xf)),
-            children: vec![
-                Child {
-                    rule: Rc::new(next_rule),
-                    xf: Transform::new(),
-                    vmap: (0..n).collect(),
-                },
-            ],
+        let xf = stack.iter().fold(Transform::new(), |acc,m| acc * (*m));
+        if self_.ctxt.init {
+            let mut s2 = seed.clone();
+            let (centroid, f) = util::connect_convex(&s2, false);
+            s2.push(centroid);
+            let n2 = s2.len();
+            let g = OpenMesh { verts: s2, faces: f };
+            RuleEval {
+                geom: Rc::new(g.transform(&xf)),
+                final_geom: Rc::new(prim::empty_mesh()),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n2).collect(),
+                    },
+                ],
+            }
+        } else {
+            RuleEval {
+                geom: Rc::new(geom.transform(&xf)),
+                final_geom: Rc::new(final_geom.transform(&xf)),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n).collect(),
+                    },
+                ],
+            }
         }
     };
 
-    let start = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
-        let xf1 = self_.ctxt.xform1;
-        let xf2 = self_.ctxt.xform2;
-        let xf = xf1 * xf2;
-        
-        let mut s2 = seed.clone();
-        let (centroid, f) = util::connect_convex(&s2, false);
-        s2.push(centroid);
-        let n2 = s2.len();
-        let g = OpenMesh { verts: s2, faces: f };
-        let fg = prim::empty_mesh();
-        RuleEval {
-            geom: Rc::new(g.transform(&xf)),
-            final_geom: Rc::new(fg),
-            children: vec![
-                Child {
-                    rule: Rc::new(Rule {
-                        eval: Rc::new(recur.clone()),
-                        ctxt: self_.ctxt,
-                    }),
-                    xf: Transform::new(),
-                    vmap: (0..n2).collect(),
-                },
-            ],
-        }
-    };
-    
     Rule {
-        eval: Rc::new(start),
+        eval: Rc::new(recur),
         ctxt: TorusCtxt {
-            xform1: Transform::new().translate(rad, 0.0, 0.0),
-            xform2: Transform::new().translate(dx0, 0.0, 0.0),
+            init: true,
+            stack: [
+                Transform::new().translate(0.0, rad2, 0.0),
+                Transform::new().translate(rad, 0.0, 0.0),
+                Transform::new(), // .translate(dx0, 0.0, 0.0),
+            ],
         },
     }
 }
