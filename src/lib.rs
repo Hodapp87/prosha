@@ -50,6 +50,11 @@ mod tests {
         run_test(examples::twist(1.0, 2), 200, "screw", false);
     }
 
+    #[test]
+    fn twisty_torus() {
+        run_test(examples::twisty_torus(), 50, "twisty_torus", false);
+    }
+
     // This one is very time-consuming to run:
     #[test]
     #[ignore]

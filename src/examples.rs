@@ -44,7 +44,8 @@ pub fn cube_thing() -> Rule<()> {
     Rule { eval: Rc::new(rec), ctxt: () }
 }
 
-// Meant to be a copy of twist_from_gen from Python & automata_scratch
+// Meant to be a copy of twist_from_gen from Python &
+// automata_scratch, but has since acquired a sort of life of its own
 pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     // TODO: Clean this code up.  It was a very naive conversion from
     // the non-closure version.
@@ -71,6 +72,9 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
 
     let seed2 = seed.clone();
     // TODO: Why do I need the above?
+    // TODO: Could a macro get rid of some of this or would it just be
+    // equally cumbersome because I'd have to sort of pass 'seed'
+    // explicitly?
     let recur = move |incr: Transform| -> RuleFn<()> {
 
         let seed_next = incr.transform(&seed2);
@@ -131,6 +135,96 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     };
     
     Rule { eval: Rc::new(start), ctxt: () }
+}
+
+#[derive(Copy, Clone)]
+pub struct TorusCtxt {
+    xform1: Transform,
+    xform2: Transform,
+}
+
+pub fn twisty_torus() -> Rule<TorusCtxt> {
+    let subdiv = 8;
+    let seed = vec![
+        vertex(-0.5, -0.5, 1.0),
+        vertex(-0.5,  0.5, 1.0),
+        vertex( 0.5,  0.5, 1.0),
+        vertex( 0.5, -0.5, 1.0),
+    ];
+    let seed = util::subdivide_cycle(&seed, subdiv);
+    
+    let n = seed.len();
+    let geom = Rc::new(util::zigzag_to_parent(seed.clone(), n));
+    let (vc, faces) = util::connect_convex(&seed, true);
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![vc],
+        faces: faces,
+    });
+
+    let rad = 4.0;
+    let dx0 = 2.0;
+    let ang = 0.1;
+        
+    let recur = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
+        let y = &Vector3::y_axis();
+        let z = &Vector3::z_axis();
+        let xf1 = self_.ctxt.xform1;
+        let xf2 = self_.ctxt.xform2;
+        let next_rule = Rule {
+            eval: self_.eval.clone(),
+            ctxt: TorusCtxt {
+                xform1: xf1.rotate(y, 0.1),
+                xform2: xf2.rotate(z, ang),
+            },
+        };
+        let xf = xf1 * xf2;
+        RuleEval {
+            geom: Rc::new(geom.transform(&xf)),
+            final_geom: Rc::new(final_geom.transform(&xf)),
+            children: vec![
+                Child {
+                    rule: Rc::new(next_rule),
+                    xf: Transform::new(),
+                    vmap: (0..n).collect(),
+                },
+            ],
+        }
+    };
+
+    let start = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
+        let xf1 = self_.ctxt.xform1;
+        let xf2 = self_.ctxt.xform2;
+        let xf = xf1 * xf2;
+        
+        let mut s2 = seed.clone();
+        let (centroid, f) = util::connect_convex(&s2, false);
+        s2.push(centroid);
+        let n2 = s2.len();
+        let g = OpenMesh { verts: s2, faces: f };
+        let fg = prim::empty_mesh();
+        RuleEval {
+            geom: Rc::new(g.transform(&xf)),
+            final_geom: Rc::new(fg),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule {
+                        eval: Rc::new(recur.clone()),
+                        ctxt: self_.ctxt,
+                    }),
+                    xf: Transform::new(),
+                    vmap: (0..n2).collect(),
+                },
+            ],
+        }
+    };
+    
+    Rule {
+        eval: Rc::new(start),
+        ctxt: TorusCtxt {
+            xform1: Transform::new().translate(rad, 0.0, 0.0),
+            xform2: Transform::new().translate(dx0, 0.0, 0.0),
+        },
+    }
 }
 
 pub fn ramhorn() -> Rule<()> {

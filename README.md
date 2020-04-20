@@ -2,16 +2,31 @@
 
 ## Highest priority:
 
-- Clean up `ramhorn_branch` because it's fugly.
+- Adaptive subdivision - which means having to generalize past some
+  `vmap` stuff.
+- Try some non-deterministic examples
+- Get identical or near-identical meshes to `ramhorn_branch` from
+  Python.  (Should just be a matter of tweaking parameters.)
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
-  - `spiral_nested_2` & `spiral_nested_3` (how to compose
-    efficiently?)
-  - `twisty_torus`
+  - `twisty_torus`, `spiral_nested_2`, & `spiral_nested_3` are all
+    that remain.  To do them, I need to compose transformations (not
+    in the matrix sense), but I also probably need to produce
+    RuleEvals which always have `xf` of identity transformation since
+    the Python code does not 'inherit' transforms unless I tell it to.
 
 ## Important but less critical:
 
-- Elegance & succinctness (my recent closure work may help with this):
+- Look at performance.
+  - Start at `to_mesh_iter()`. The cost of small appends/connects
+    seems to be killing performance.
+  - `connect()` is a big performance hot-spot: 85% of total time in
+    one test, around 51% in `extend()`, 33% in `clone()`. It seems
+    like I should be able to share geometry with the `Rc` (like noted
+    above), defer copying until actually needed, and pre-allocate the
+    vector to its size (which should be easy to compute).
+- Elegance & succinctness:
+  - Clean up `ramhorn_branch` because it's ugly.
   - What patterns can I factor out?  I do some things regularly, like:
     the clockwise boundaries, the zigzag connections.
   - Declarative macro to shorten this `Tag::Parent`, `Tag::Body`
@@ -22,14 +37,6 @@
     things like my patterns with closures (e.g. the Y combinator like
     method for recursive calls).
 - Docs on modules
-- Look at performance.
-  - Start at `to_mesh_iter()`. The cost of small appends/connects
-    seems to be killing performance.
-  - `connect()` is a big performance hot-spot: 85% of total time in
-    one test, around 51% in `extend()`, 33% in `clone()`. It seems
-    like I should be able to share geometry with the `Rc` (like noted
-    above), defer copying until actually needed, and pre-allocate the
-    vector to its size (which should be easy to compute).
 - Compute global scale factor, and perhaps pass it to a rule (to
   eventually be used for, perhaps, adaptive subdivision)
 - swept-isocontour stuff from
