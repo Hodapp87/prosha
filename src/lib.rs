@@ -14,6 +14,7 @@ mod tests {
     use std::rc::Rc;
     use std::time::Instant;
     use rule::Rule;
+    use nalgebra::*;
 
     fn run_test<S>(rule: Rule<S>, iters: usize, name: &str, use_old: bool) {
         let r = Rc::new(rule);
@@ -37,9 +38,33 @@ mod tests {
         mesh.write_stl_file(&fname).unwrap();
     }
 
+    #[test]
+    fn xform_order() {
+        let geom = prim::cube();
+
+        let y = &Vector3::y_axis();
+
+        let dx = 4.0;
+        let r = -0.5;
+        
+        let trans = xform::Transform::new().translate(dx, 0.0, 0.0);
+        let rot = xform::Transform::new().rotate(y, r);
+
+        let xf1 = trans.rotate(y, r);
+        let xf2 = rot.translate(dx, 0.0, 0.0);
+
+        // Rotate entire space, *then* translate in that rotated plane:
+        geom.transform(&trans).transform(&rot).write_stl_file("xform_apply_trans_rot.stl").unwrap();
+        geom.transform(&(rot * trans)).write_stl_file("xform_mul_rot_trans.stl").unwrap();
+        geom.transform(&xf2).write_stl_file("xform_rot_trans.stl").unwrap();
+        // Translate cube, *then* rotate it:
+        geom.transform(&rot).transform(&trans).write_stl_file("xform_apply_rot_trans.stl").unwrap();
+        geom.transform(&(trans * rot)).write_stl_file("xform_mul_trans_rot.stl").unwrap();
+        geom.transform(&xf1).write_stl_file("xform_trans_rot.stl").unwrap();
+    }
+    
     // TODO: These tests don't test any conditions, so this is useful
     // short-hand to run, but not very meaningful as a test.
-    
     #[test]
     fn cube_thing() {
         run_test(examples::cube_thing(), 3, "cube_thing3", false);
@@ -52,7 +77,11 @@ mod tests {
 
     #[test]
     fn twisty_torus() {
-        run_test(examples::twisty_torus(), 50, "twisty_torus", false);
+        run_test(examples::twisty_torus(), 400, "twisty_torus", false);
+    }
+
+    fn wind_chime_mistake_thing() {
+        run_test(examples::wind_chime_mistake_thing(), 400, "wind_chime_mistake_thing", false);
     }
 
     // This one is very time-consuming to run:

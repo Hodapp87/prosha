@@ -2,6 +2,9 @@
 
 ## Highest priority:
 
+- Make a series of guidelines for *exactly* how to order
+  transformations so that I'm actually constructing things to be
+  correct instead of just throwing shit at the wall
 - Adaptive subdivision - which means having to generalize past some
   `vmap` stuff.
 - Try some non-deterministic examples
@@ -56,3 +59,6 @@
 - Would being able to name a rule node (perhaps conditionally under
   some compile-time flag) help for debugging?
 - Use an actual logging framework.
+- Take a square.  Wrap it around to a torus. Now add a twist (about
+  the axis that is normal to the square). This is simple, but it looks
+  pretty cool.

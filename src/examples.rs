@@ -140,6 +140,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
 #[derive(Copy, Clone)]
 pub struct TorusCtxt {
     init: bool,
+    count: usize,
     stack: [Transform; 3],
 }
 
@@ -162,22 +163,25 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
     });
 
     let rad = 1.0;
-    let rad2 = 5.0;
+    let rad2 = 8.0;
     let dx0 = 2.0;
     let ang = 0.1;
 
     let recur = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
-        //let y = &Vector3::y_axis();
+        let x = &Vector3::x_axis();
         let z = &Vector3::z_axis();
         let stack = self_.ctxt.stack;
+        let count = self_.ctxt.count;
         let next_rule = Rule {
             eval: self_.eval.clone(),
             ctxt: TorusCtxt {
                 init: false,
+                count: count + 1,
                 stack: [
-                    stack[0],
-                    Transform::new().rotate(z, 0.05) * stack[1],
-                    Transform::new().translate(0.0, 0.0, 0.1) * stack[2],
+                    Transform::new().translate(0.1, 0.0, 0.0).rotate(x, 0.01) * stack[0],
+                    // stack[0], //Transform::new().rotate(z, 0.05 * (count as f32)).translate(0.0, rad2, 0.0),
+                    Transform::new().rotate(z, 0.30) * stack[1],
+                    stack[2],
                 ],
             },
         };
@@ -218,6 +222,103 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
         eval: Rc::new(recur),
         ctxt: TorusCtxt {
             init: true,
+            count: 0,
+            stack: [
+                Transform::new().translate(0.0, rad2, 0.0),
+                Transform::new().translate(rad, 0.0, 0.0),
+                Transform::new(), // .translate(dx0, 0.0, 0.0),
+            ],
+        },
+    }
+}
+
+// This was a mistake that I'd like to understand later:
+#[derive(Copy, Clone)]
+pub struct WindChimeCtxt {
+    init: bool,
+    count: usize,
+    stack: [Transform; 3],
+}
+
+pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
+    let subdiv = 8;
+    let seed = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+    let seed = util::subdivide_cycle(&seed, subdiv);
+    
+    let n = seed.len();
+    let geom = Rc::new(util::zigzag_to_parent(seed.clone(), n));
+    let (vc, faces) = util::connect_convex(&seed, true);
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![vc],
+        faces: faces,
+    });
+
+    let rad = 1.0;
+    let rad2 = 8.0;
+    let dx0 = 2.0;
+    let ang = 0.1;
+
+    let recur = move |self_: Rc<Rule<WindChimeCtxt>>| -> RuleEval<WindChimeCtxt> {
+        let x = &Vector3::x_axis();
+        let z = &Vector3::z_axis();
+        let stack = self_.ctxt.stack;
+        let count = self_.ctxt.count;
+        let next_rule = Rule {
+            eval: self_.eval.clone(),
+            ctxt: WindChimeCtxt {
+                init: false,
+                count: count + 1,
+                stack: [
+                    Transform::new().rotate(x, 0.01) * stack[0],
+                    // stack[0], //Transform::new().rotate(z, 0.05 * (count as f32)).translate(0.0, rad2, 0.0),
+                    Transform::new().rotate(z, 0.30) * stack[1],
+                    Transform::new().translate(0.1, 0.0, 0.0) * stack[2],
+                ],
+            },
+        };
+        let xf = stack.iter().fold(Transform::new(), |acc,m| acc * (*m));
+        if self_.ctxt.init {
+            let mut s2 = seed.clone();
+            let (centroid, f) = util::connect_convex(&s2, false);
+            s2.push(centroid);
+            let n2 = s2.len();
+            let g = OpenMesh { verts: s2, faces: f };
+            RuleEval {
+                geom: Rc::new(g.transform(&xf)),
+                final_geom: Rc::new(prim::empty_mesh()),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n2).collect(),
+                    },
+                ],
+            }
+        } else {
+            RuleEval {
+                geom: Rc::new(geom.transform(&xf)),
+                final_geom: Rc::new(final_geom.transform(&xf)),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n).collect(),
+                    },
+                ],
+            }
+        }
+    };
+
+    Rule {
+        eval: Rc::new(recur),
+        ctxt: WindChimeCtxt {
+            init: true,
+            count: 0,
             stack: [
                 Transform::new().translate(0.0, rad2, 0.0),
                 Transform::new().translate(rad, 0.0, 0.0),
