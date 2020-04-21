@@ -77,7 +77,12 @@ mod tests {
 
     #[test]
     fn twisty_torus() {
-        run_test(examples::twisty_torus(), 400, "twisty_torus", false);
+        run_test(examples::twisty_torus(), 3000, "twisty_torus", false);
+    }
+
+    #[test]
+    fn twisty_torus_full() {
+        run_test(examples::twisty_torus(), 40000, "twisty_torus_full", false);
     }
 
     fn wind_chime_mistake_thing() {

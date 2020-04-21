@@ -62,3 +62,5 @@
 - Take a square.  Wrap it around to a torus. Now add a twist (about
   the axis that is normal to the square). This is simple, but it looks
   pretty cool.
+- How can I take tangled things like the cinquefoil and produce more
+  'iterative' versions that still weave around?

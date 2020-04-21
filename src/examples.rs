@@ -165,7 +165,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
 
     let rad = 1.0;
     let rad2 = 8.0;
-    let dx = 0.01;
+    let rad3 = 24.0;
+    let rz3 = 0.0004;
+    let dx = 0.00;
     let rx = 0.01;
     let rz = 0.30;
     let ang = 0.1;
@@ -181,10 +183,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
                 init: false,
                 count: count + 1,
                 stack: [
-                    Transform::new().translate(dx, 0.0, 0.0).rotate(x, rx) * stack[0],
-                    // stack[0], //Transform::new().rotate(z, 0.05 * (count as f32)).translate(0.0, rad2, 0.0),
-                    Transform::new().rotate(z, rz) * stack[1],
-                    stack[2],
+                    Transform::new().rotate(z, rz3) * stack[0],
+                    Transform::new().translate(dx, 0.0, 0.0).rotate(x, rx) * stack[1],
+                    Transform::new().rotate(z, rz) * stack[2],
                 ],
             },
         };
@@ -227,9 +228,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
             init: true,
             count: 0,
             stack: [
+                Transform::new().translate(0.0, rad3, 0.0),
                 Transform::new().translate(0.0, rad2, 0.0),
                 Transform::new().translate(rad, 0.0, 0.0),
-                Transform::new(), // .translate(dx0, 0.0, 0.0),
             ],
         },
     }
