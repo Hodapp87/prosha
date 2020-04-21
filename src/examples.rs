@@ -152,7 +152,8 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
         vertex( 0.5,  0.5, 0.0),
         vertex( 0.5, -0.5, 0.0),
     ];
-    let seed = util::subdivide_cycle(&seed, subdiv);
+    let xf = Transform::new().rotate(&Vector3::x_axis(), -0.9);
+    let seed = util::subdivide_cycle(&xf.transform(&seed), subdiv);
     
     let n = seed.len();
     let geom = Rc::new(util::zigzag_to_parent(seed.clone(), n));
@@ -164,7 +165,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
 
     let rad = 1.0;
     let rad2 = 8.0;
-    let dx0 = 2.0;
+    let dx = 0.01;
+    let rx = 0.01;
+    let rz = 0.30;
     let ang = 0.1;
 
     let recur = move |self_: Rc<Rule<TorusCtxt>>| -> RuleEval<TorusCtxt> {
@@ -178,9 +181,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
                 init: false,
                 count: count + 1,
                 stack: [
-                    Transform::new().translate(0.1, 0.0, 0.0).rotate(x, 0.01) * stack[0],
+                    Transform::new().translate(dx, 0.0, 0.0).rotate(x, rx) * stack[0],
                     // stack[0], //Transform::new().rotate(z, 0.05 * (count as f32)).translate(0.0, rad2, 0.0),
-                    Transform::new().rotate(z, 0.30) * stack[1],
+                    Transform::new().rotate(z, rz) * stack[1],
                     stack[2],
                 ],
             },
