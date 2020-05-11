@@ -4,12 +4,31 @@
 
 - Make a series of guidelines for *exactly* how to order
   transformations so that I'm actually constructing things to be
-  correct instead of just throwing shit at the wall
+  correct instead of just throwing shit at the wall.
+  See my "Composing Transformations" link in log.org.
+- My "Barbs" example revealed another pesky limitation: a parent vertex
+  cannot refer to a parent vertex of the parent itself. This came up
+  because I had a rule inheriting 4 vertices (one side of a cube), and
+  creating 4 new vertices (the opposite side of a cube). I wanted its
+  child rules to be able to create faces that had 2 vertices of the
+  parent and 2 vertices that the parent inherited (basically grandparent
+  vertices) - think of one of the remaining 4 sides of the cube. I have
+  no way to do this and no easy workarounds I can see, given that the
+  rule does not have access to the exact vertex positions (so just making
+  new vertices that are 'close' and connecting them isn't an option).
 - Adaptive subdivision - which means having to generalize past some
   `vmap` stuff.
-- Try some non-deterministic examples
+- Try some non-deterministic examples.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
+- Look at performance.
+  - Start at `to_mesh_iter()`. The cost of small appends/connects
+    seems to be killing performance.
+  - `connect()` is a big performance hot-spot: 85% of total time in
+    one test, around 51% in `extend()`, 33% in `clone()`. It seems
+    like I should be able to share geometry with the `Rc` (like noted
+    above), defer copying until actually needed, and pre-allocate the
+    vector to its size (which should be easy to compute).
 - See `automata_scratch/examples.py` and implement some of the tougher
   examples.
   - `twisty_torus`, `spiral_nested_2`, & `spiral_nested_3` are all
@@ -20,14 +39,6 @@
 
 ## Important but less critical:
 
-- Look at performance.
-  - Start at `to_mesh_iter()`. The cost of small appends/connects
-    seems to be killing performance.
-  - `connect()` is a big performance hot-spot: 85% of total time in
-    one test, around 51% in `extend()`, 33% in `clone()`. It seems
-    like I should be able to share geometry with the `Rc` (like noted
-    above), defer copying until actually needed, and pre-allocate the
-    vector to its size (which should be easy to compute).
 - Elegance & succinctness:
   - Clean up `ramhorn_branch` because it's ugly.
   - What patterns can I factor out?  I do some things regularly, like:
@@ -43,7 +54,10 @@
 - Compute global scale factor, and perhaps pass it to a rule (to
   eventually be used for, perhaps, adaptive subdivision)
 - swept-isocontour stuff from
-  `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`
+  `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`.  This
+  will probably require that I figure out parametric curves
+- Make an example that is more discrete-automata, less
+  approximation-of-space-curve.
 
 - Catch-alls:
   - Grep for all TODOs in code, really.
@@ -64,3 +78,29 @@
   pretty cool.
 - How can I take tangled things like the cinquefoil and produce more
   'iterative' versions that still weave around?
+
+## Research Areas
+
+- When I have an iterated transform, that is basically transforming by
+  M, MM=M^2, MMM=M^3, ..., and it seems to me that I should be able to
+  compute its eigendecomposition and use this to compute fractional
+  powers of the matrix.  Couldn't I then determine the continuous
+  function I'm approximating by taking the `d/di (M^i)V` - i.e. the
+  partial derivative of the result of transforming a vector `V` with
+  `M^i`?  (See also:
+  https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix#Functional_calculus
+  and my 2020-04-20 paper notes.  My 2020-04-24 org notes have some
+  things too - this relates to dynamical systems and eigenvalues.)
+  Later note: I have a feeling I was dead wrong about a bunch of this.
+
+## Reflections
+
+- My old Python version composed rules in the opposite order and I
+  think this made things more complicated.  I didn't realize that I
+  did it differently in this code, but it became much easier -
+  particularly, more "inner" transformations are much easier to write
+  because all that matters is that they work properly in the
+  coordinate space they inherit.
+- Generalizing to space curves moves this away from the "discrete
+  automata" roots, but it still ends up needing the machinery I made
+  for discrete automata.
