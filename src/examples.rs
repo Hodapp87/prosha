@@ -1,9 +1,10 @@
 use std::rc::Rc;
 use nalgebra::*;
+use rand::Rng;
 //pub mod examples;
 
 use crate::openmesh::{OpenMesh, Tag};
-use crate::xform::{Transform, vertex};
+use crate::xform::{Transform, vertex, Mat4};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::util;
@@ -15,7 +16,7 @@ pub fn cube_thing() -> Rule<()> {
     //let x = &Vector3::x_axis();
     let y = &Vector3::y_axis();
     let z = &Vector3::z_axis();
-    
+
     // Each element of this turns to a branch for the recursion:
     let id = Transform::new();
     let turns: Vec<Transform> = vec![
@@ -40,8 +41,96 @@ pub fn cube_thing() -> Rule<()> {
             }).collect(),
         }
     };
-    
+
     Rule { eval: Rc::new(rec), ctxt: () }
+}
+
+pub fn barbs() -> Rule<()> {
+
+    let base_verts = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+    let n = base_verts.len();
+
+    let incr: Transform = Transform::new().
+        translate(0.0, 0.0, 1.0).
+        rotate(&Vector3::z_axis(), 0.1).
+        scale(0.95);
+
+    let b = base_verts.clone();
+    let barb = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+        let next_verts = incr.transform(&b);
+
+        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), n));
+        let (vc, faces) = util::connect_convex(&next_verts, true);
+        let final_geom = Rc::new(OpenMesh {
+            verts: vec![vc],
+            faces: faces,
+        });
+
+        RuleEval {
+            geom: geom,
+            final_geom: final_geom,
+            children: vec![
+                Child {
+                    rule: self_.clone(),
+                    xf: incr,
+                    vmap: (0..n).collect(),
+                }
+            ]
+        }
+    };
+
+    let b = base_verts.clone();
+    let main = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+        let next_verts = incr.transform(&b);
+
+        // TODO: Once I start doing the barbs this will go away
+        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), n));
+        let (vc, faces) = util::connect_convex(&next_verts, true);
+        let final_geom = Rc::new(OpenMesh {
+            verts: vec![vc],
+            faces: faces,
+        });
+
+        RuleEval {
+            geom: geom,
+            final_geom: final_geom,
+            children: vec![
+                Child {
+                    rule: self_.clone(),
+                    xf: incr,
+                    vmap: (0..n).collect(),
+                }
+            ]
+        }
+    };
+
+    let main_ = Rc::new(main);
+    let base = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+        RuleEval {
+            geom: Rc::new(OpenMesh {
+                verts: base_verts.clone(),
+                faces: vec![
+                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
+                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                ],
+            }),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule { eval: main_.clone(), ctxt: () }),
+                    xf: Transform::new(),
+                    vmap: (0..n).collect(),
+                },
+            ],
+        }
+    };
+
+    Rule { eval: Rc::new(base), ctxt: () }
 }
 
 // Meant to be a copy of twist_from_gen from Python &
@@ -136,6 +225,126 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     
     Rule { eval: Rc::new(start), ctxt: () }
 }
+
+#[derive(Copy, Clone)]
+pub struct NestSpiral2Ctxt {
+    init: bool,
+    stack: [Transform; 2],
+}
+
+pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
+    let subdiv = 8;
+    let seed = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+    let seed = util::subdivide_cycle(&seed, subdiv);
+
+    let n = seed.len();
+    let geom = Rc::new(util::zigzag_to_parent(seed.clone(), n));
+    let (vc, faces) = util::connect_convex(&seed, true);
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![vc],
+        faces: faces,
+    });
+
+    let rad = 1.0;
+    let dz = 0.1;
+    let rz = 0.1;
+    let rad2 = 4.0;
+    let rz2 = 0.1;
+
+    let recur = move |self_: Rc<Rule<NestSpiral2Ctxt>>| -> RuleEval<NestSpiral2Ctxt> {
+        //let x = &Vector3::x_axis();
+        let z = &Vector3::z_axis();
+        let stack = self_.ctxt.stack;
+        let next_rule = Rule {
+            eval: self_.eval.clone(),
+            ctxt: NestSpiral2Ctxt {
+                init: false,
+                stack: [
+                    Transform::new().rotate(z, rz2) * stack[0],
+                    Transform::new().translate(0.0, 0.0, dz).rotate(z, rz) * stack[1],
+                ],
+            },
+        };
+        let xf = stack.iter().fold(Transform::new(), |acc,m| acc * (*m));
+        if self_.ctxt.init {
+            let mut s2 = seed.clone();
+            let (centroid, f) = util::connect_convex(&s2, false);
+            s2.push(centroid);
+            let n2 = s2.len();
+            let g = OpenMesh { verts: s2, faces: f };
+            RuleEval {
+                geom: Rc::new(g.transform(&xf)),
+                final_geom: Rc::new(prim::empty_mesh()),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n2).collect(),
+                    },
+                ],
+            }
+        } else {
+            RuleEval {
+                geom: Rc::new(geom.transform(&xf)),
+                final_geom: Rc::new(final_geom.transform(&xf)),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: Transform::new(),
+                        vmap: (0..n).collect(),
+                    },
+                ],
+            }
+        }
+    };
+
+    let count = 3;
+
+    let r = Rc::new(recur);
+    let start = move |self_: Rc<Rule<NestSpiral2Ctxt>>| -> RuleEval<NestSpiral2Ctxt> {
+        let z = &Vector3::z_axis();
+        let child = |i: usize| -> Child<NestSpiral2Ctxt> {
+            let ang = std::f32::consts::PI * 2.0 * (i as f32) / (count as f32);
+            Child {
+                rule: Rc::new(Rule {
+                    eval: r.clone(),
+                    ctxt: NestSpiral2Ctxt {
+                        init: true,
+                        stack: [
+                            Transform::new().translate(rad2, 0.0, 0.0),
+                            Transform::new().rotate(z, ang).translate(rad, 0.0, 0.0),
+                        ],
+                    },
+                }),
+                xf: Transform::new(),
+                vmap: vec![], // no parent vertices
+            }
+        };
+
+        RuleEval {
+            geom: Rc::new(prim::empty_mesh()),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: (0..count).map(child).collect(),
+        }
+    };
+
+    Rule {
+        eval: Rc::new(start),
+        ctxt: NestSpiral2Ctxt {
+            init: true,
+            stack: [ // doesn't matter
+                Transform::new(),
+                Transform::new(),
+            ],
+        },
+    }
+}
+
 
 #[derive(Copy, Clone)]
 pub struct TorusCtxt {
@@ -233,6 +442,78 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
                 Transform::new().translate(rad, 0.0, 0.0),
             ],
         },
+    }
+}
+
+pub fn twisty_torus_hardcode() -> Rule<()> {
+    let subdiv = 8;
+    let seed = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+    let xf = Transform::new().rotate(&Vector3::x_axis(), -0.9);
+    let seed = util::subdivide_cycle(&xf.transform(&seed), subdiv);
+    let incr = Transform { mtx: Mat4::from_vec(vec![
+        0.955234,    0.29576725, -0.0070466697, 0.0,
+       -0.29581502,  0.9552189,  -0.007100463,  0.0,
+        0.004630968, 0.008867174, 0.99994993,   0.0,
+       -0.034161568, 0.290308,    0.07295418,   0.9999999,
+    ])};
+    
+    let n = seed.len();
+    
+    let next = incr.transform(&seed);
+    let geom = Rc::new(util::zigzag_to_parent(next.clone(), n));
+    let (vc, faces) = util::connect_convex(&next, true);
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![vc],
+        faces: faces,
+    });
+
+    let rad = 1.0;
+    let rad2 = 8.0;
+    let rad3 = 24.0;
+
+    let start = Transform::new().translate(0.0, rad3, 0.0) * Transform::new().translate(0.0, rad2, 0.0) * Transform::new().translate(rad, 0.0, 0.0);
+    
+    let recur = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+        RuleEval {
+            geom: geom.clone(),
+            final_geom: final_geom.clone(),
+            children: vec![
+                Child {
+                    rule: self_.clone(),
+                    xf: incr,
+                    vmap: (0..n).collect(),
+                },
+            ],
+        }
+    };
+
+    let start = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+        let mut s2 = seed.clone();
+        let (centroid, f) = util::connect_convex(&s2, false);
+        s2.push(centroid);
+        let n2 = s2.len();
+        let g = OpenMesh { verts: s2, faces: f };
+        RuleEval {
+            geom: Rc::new(g.transform(&xf)),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
+                    xf: incr,
+                    vmap: (0..n2).collect(),
+                },
+            ],
+        }
+    };
+
+    Rule {
+        eval: Rc::new(start),
+        ctxt: (),
     }
 }
 
@@ -491,16 +772,7 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     let next = incr.transform(&seed);
     let geom = Rc::new(OpenMesh {
         verts: next,
-        faces: vec![
-            Tag::Body(1), Tag::Parent(0), Tag::Body(0),
-            Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
-            Tag::Body(2), Tag::Parent(1), Tag::Body(1),
-            Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
-            Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-            Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
-            Tag::Body(0), Tag::Parent(3), Tag::Body(3),
-            Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
-        ],
+        faces: util::parallel_zigzag_faces(4),
     });
     let final_geom = Rc::new(OpenMesh {
         verts: vec![],
@@ -644,6 +916,175 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     };
     
     Rule { eval: Rc::new(start), ctxt: RamHornCtxt { depth } }
+}
+
+#[derive(Copy, Clone)]
+pub struct RamHornCtxt2 {
+    depth: usize,
+}
+
+pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
+
+    let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
+    let incr: Transform = Transform::new().
+        translate(0.0, 0.0, 0.8 * f).
+        rotate(&v, 0.4 * f).
+        scale(1.0 - (1.0 - 0.95)*f);
+
+    let seed = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+    let next = incr.transform(&seed);
+    let geom = Rc::new(OpenMesh {
+        verts: next,
+        faces: util::parallel_zigzag_faces(4),
+    });
+    let final_geom = Rc::new(OpenMesh {
+        verts: vec![],
+        faces: vec![
+            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
+            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+        ],
+    });
+
+    let opening_xform = |i| {
+        let r = std::f32::consts::FRAC_PI_2 * i;
+        Transform::new().
+            rotate(&nalgebra::Vector3::z_axis(), r).
+            translate(0.25, 0.25, 0.0).
+            scale(0.5)
+    };
+
+    // 'transition' geometry (when something splits):
+    let trans_verts = vec![
+        // 'Top' vertices:
+        vertex(-0.5, -0.5, 0.0),  //  0 (above 9)
+        vertex(-0.5,  0.5, 0.0),  //  1 (above 10)
+        vertex( 0.5,  0.5, 0.0),  //  2 (above 11)
+        vertex( 0.5, -0.5, 0.0),  //  3 (above 12)
+        // Top edge midpoints:
+        vertex(-0.5,  0.0, 0.0),  //  4 (connects 0-1)
+        vertex( 0.0,  0.5, 0.0),  //  5 (connects 1-2)
+        vertex( 0.5,  0.0, 0.0),  //  6 (connects 2-3)
+        vertex( 0.0, -0.5, 0.0),  //  7 (connects 3-0)
+        // Top middle:
+        vertex( 0.0,  0.0, 0.0),  //  8
+    ];
+    let trans_faces = vec![
+        // two faces straddling edge from vertex 0:
+        Tag::Parent(0), Tag::Body(0), Tag::Body(4),
+        Tag::Parent(0), Tag::Body(7), Tag::Body(0),
+        // two faces straddling edge from vertex 1:
+        Tag::Parent(1), Tag::Body(1), Tag::Body(5),
+        Tag::Parent(1), Tag::Body(4), Tag::Body(1),
+        // two faces straddling edge from vertex 2:
+        Tag::Parent(2), Tag::Body(2), Tag::Body(6),
+        Tag::Parent(2), Tag::Body(5), Tag::Body(2),
+        // two faces straddling edge from vertex 3:
+        Tag::Parent(3), Tag::Body(3), Tag::Body(7),
+        Tag::Parent(3), Tag::Body(6), Tag::Body(3),
+        // four faces from edge (0,1), (1,2), (2,3), (3,0):
+        Tag::Parent(0), Tag::Body(4), Tag::Parent(1),
+        Tag::Parent(1), Tag::Body(5), Tag::Parent(2),
+        Tag::Parent(2), Tag::Body(6), Tag::Parent(3),
+        Tag::Parent(3), Tag::Body(7), Tag::Parent(0),
+    ];
+    let trans_geom = Rc::new(OpenMesh {
+        verts: trans_verts.clone(),
+        faces: trans_faces.clone(),
+    });
+    let trans_children = move |recur: RuleFn<RamHornCtxt2>, ctxt: RamHornCtxt2| {
+        vec![
+            Child {
+                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
+                xf: opening_xform(0.0),
+                vmap: vec![5,2,6,8],
+            },
+            Child {
+                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
+                xf: opening_xform(1.0),
+                vmap: vec![4,1,5,8],
+            },
+            Child {
+                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
+                xf: opening_xform(2.0),
+                vmap: vec![7,0,4,8],
+            },
+            Child {
+                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
+                xf: opening_xform(3.0),
+                vmap: vec![6,3,7,8],
+            },
+            // TODO: These vertex mappings appear to be right.
+            // Explain *why* they are right.
+            // TODO: Factor out the repetition here.
+        ]
+    };
+
+    let tg = trans_geom.clone();
+    // TODO: Why is that necessary?
+    let recur = move |self_: Rc<Rule<RamHornCtxt2>>| -> RuleEval<RamHornCtxt2> {
+        if self_.ctxt.depth <= 0 {
+            let d2 = rand::thread_rng().gen_range(2, 60);
+            RuleEval {
+                geom: tg.clone(),
+                final_geom: final_geom.clone(),
+                // This final_geom will leave midpoint/centroid
+                // vertices, but stopping here means none are
+                // connected anyway - so they can just be ignored.
+                children: trans_children(self_.eval.clone(), RamHornCtxt2 { depth: d2 }),
+            }
+        } else {
+            let next_rule = Rule {
+                eval: self_.eval.clone(),
+                ctxt: RamHornCtxt2 { depth: self_.ctxt.depth - 1 },
+            };
+            RuleEval {
+                geom: geom.clone(),
+                final_geom: final_geom.clone(),
+                children: vec![
+                    Child {
+                        rule: Rc::new(next_rule),
+                        xf: incr,
+                        vmap: vec![0,1,2,3],
+                    },
+                ],
+            }
+        }
+    };
+
+    let trans = move |self_: Rc<Rule<RamHornCtxt2>>| -> RuleEval<RamHornCtxt2> {
+        RuleEval {
+            geom: trans_geom.clone(),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: trans_children(Rc::new(recur.clone()), self_.ctxt),
+        }
+    };
+
+    let start = move |self_: Rc<Rule<RamHornCtxt2>>| -> RuleEval<RamHornCtxt2> {
+        RuleEval {
+            geom: Rc::new(OpenMesh {
+                verts: Transform::new().translate(0.0, 0.0, -0.5).transform(&seed),
+                faces: vec![
+                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
+                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                ],
+            }),
+            final_geom: Rc::new(prim::empty_mesh()),
+            children: vec![
+                Child {
+                    rule: Rc::new(Rule { eval: Rc::new(trans.clone()), ctxt: self_.ctxt }),
+                    xf: Transform::new(),
+                    vmap: vec![0,1,2,3],
+                },
+            ],
+        }
+    };
+
+    Rule { eval: Rc::new(start), ctxt: RamHornCtxt2 { depth } }
 }
 
 /*

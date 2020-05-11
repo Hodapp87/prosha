@@ -71,6 +71,9 @@ mod tests {
     }
 
     #[test]
+    fn barbs() { run_test(examples::barbs(), 20, "barbs", false); }
+
+    #[test]
     fn twist() {
         run_test(examples::twist(1.0, 2), 200, "screw", false);
     }
@@ -81,12 +84,25 @@ mod tests {
     }
 
     #[test]
+    fn twisty_torus_hardcode() {
+        run_test(examples::twisty_torus_hardcode(), 1000, "twisty_torus_hardcode", false);
+    }
+    
+    #[test]
+    #[ignore]
     fn twisty_torus_full() {
         run_test(examples::twisty_torus(), 40000, "twisty_torus_full", false);
     }
 
+    #[test]
+    #[ignore]
     fn wind_chime_mistake_thing() {
         run_test(examples::wind_chime_mistake_thing(), 400, "wind_chime_mistake_thing", false);
+    }
+
+    #[test]
+    fn nest_spiral_2() {
+        run_test(examples::nest_spiral_2(), 200, "nest_spiral_2", false);
     }
 
     // This one is very time-consuming to run:
@@ -105,6 +121,11 @@ mod tests {
     #[test]
     fn ramhorn_branch() {
         run_test(examples::ramhorn_branch(24, 0.25), 32, "ram_horn_branch", false);
+    }
+
+    #[test]
+    fn ramhorn_branch_random() {
+        run_test(examples::ramhorn_branch_random(24, 0.25), 32, "ram_horn_branch_random", false);
     }
 }
 // need this for now:
