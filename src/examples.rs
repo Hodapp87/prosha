@@ -1,14 +1,15 @@
 use std::rc::Rc;
+
 use nalgebra::*;
 use rand::Rng;
-//pub mod examples;
 
-use crate::openmesh::{OpenMesh, Tag};
-use crate::xform::{Transform, vertex, Mat4};
+use crate::util;
+use crate::mesh::{Mesh, MeshTemplate};
+use crate::xform::{Transform, Vertex, vertex, Mat4};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
-use crate::util;
 
+/*
 pub fn cube_thing() -> Rule<()> {
 
     // Quarter-turn in radians:
@@ -47,11 +48,12 @@ pub fn cube_thing() -> Rule<()> {
 
 pub fn barbs() -> Rule<()> {
 
-    let base_verts = vec![
-        vertex(-0.5, -0.5, 0.0),
+    let (a0, a1);
+    let base_verts: Vec<Vertex> = vec_indexed![
+        @a0: vertex(-0.5, -0.5, 0.0),
         vertex(-0.5,  0.5, 0.0),
         vertex( 0.5,  0.5, 0.0),
-        vertex( 0.5, -0.5, 0.0),
+        @a1: vertex( 0.5, -0.5, 0.0),
     ];
     let n = base_verts.len();
 
@@ -64,10 +66,11 @@ pub fn barbs() -> Rule<()> {
     let barb = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
         let next_verts = incr.transform(&b);
 
-        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), n));
+        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), a0..a1));
         let (vc, faces) = util::connect_convex(&next_verts, true);
         let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
+            alias_verts: vec![],
             faces: faces,
         });
 
@@ -93,6 +96,7 @@ pub fn barbs() -> Rule<()> {
         let (vc, faces) = util::connect_convex(&next_verts, true);
         let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
+            alias_verts: vec![],
             faces: faces,
         });
 
@@ -114,9 +118,10 @@ pub fn barbs() -> Rule<()> {
         RuleEval {
             geom: Rc::new(OpenMesh {
                 verts: base_verts.clone(),
+                alias_verts: vec![],
                 faces: vec![
-                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
-                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                    0, 1, 2,
+                    0, 1, 3,
                 ],
             }),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -173,6 +178,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
         let (vc, faces) = util::connect_convex(&seed_next, true);
         let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
+            alias_verts: vec![],
             faces: faces,
         });
         
@@ -212,7 +218,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);
-            (OpenMesh { verts: vs, faces: f }, c)
+            (OpenMesh { verts: vs, faces: f, alias_verts: vec![] }, c)
         };
         
         // Generate 'count' children, shifted/rotated differently:
@@ -247,6 +253,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
     let (vc, faces) = util::connect_convex(&seed, true);
     let final_geom = Rc::new(OpenMesh {
         verts: vec![vc],
+        alias_verts: vec![],
         faces: faces,
     });
 
@@ -276,7 +283,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
             let (centroid, f) = util::connect_convex(&s2, false);
             s2.push(centroid);
             let n2 = s2.len();
-            let g = OpenMesh { verts: s2, faces: f };
+            let g = OpenMesh { verts: s2, faces: f, alias_verts: vec![] };
             RuleEval {
                 geom: Rc::new(g.transform(&xf)),
                 final_geom: Rc::new(prim::empty_mesh()),
@@ -369,6 +376,7 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
     let (vc, faces) = util::connect_convex(&seed, true);
     let final_geom = Rc::new(OpenMesh {
         verts: vec![vc],
+        alias_verts: (0..(n+1)).collect(),
         faces: faces,
     });
 
@@ -404,7 +412,7 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
             let (centroid, f) = util::connect_convex(&s2, false);
             s2.push(centroid);
             let n2 = s2.len();
-            let g = OpenMesh { verts: s2, faces: f };
+            let g = OpenMesh { verts: s2, faces: f, alias_verts: vec![] };
             RuleEval {
                 geom: Rc::new(g.transform(&xf)),
                 final_geom: Rc::new(prim::empty_mesh()),
@@ -469,6 +477,7 @@ pub fn twisty_torus_hardcode() -> Rule<()> {
     let (vc, faces) = util::connect_convex(&next, true);
     let final_geom = Rc::new(OpenMesh {
         verts: vec![vc],
+        alias_verts: (0..(n+1)).collect(), // TODO: Fix parent/connect_convex
         faces: faces,
     });
 
@@ -497,7 +506,7 @@ pub fn twisty_torus_hardcode() -> Rule<()> {
         let (centroid, f) = util::connect_convex(&s2, false);
         s2.push(centroid);
         let n2 = s2.len();
-        let g = OpenMesh { verts: s2, faces: f };
+        let g = OpenMesh { verts: s2, faces: f, alias_verts: vec![] };
         RuleEval {
             geom: Rc::new(g.transform(&xf)),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -540,6 +549,7 @@ pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
     let (vc, faces) = util::connect_convex(&seed, true);
     let final_geom = Rc::new(OpenMesh {
         verts: vec![vc],
+        alias_verts: (0..(n + 1)).collect(), // TODO: Check with parents (zigzag/connect_convex)
         faces: faces,
     });
 
@@ -572,7 +582,7 @@ pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
             let (centroid, f) = util::connect_convex(&s2, false);
             s2.push(centroid);
             let n2 = s2.len();
-            let g = OpenMesh { verts: s2, faces: f };
+            let g = OpenMesh { verts: s2, faces: f, alias_verts: vec![] };
             RuleEval {
                 geom: Rc::new(g.transform(&xf)),
                 final_geom: Rc::new(prim::empty_mesh()),
@@ -629,23 +639,25 @@ pub fn ramhorn() -> Rule<()> {
     ];
     let next = incr.transform(&seed);
     let geom = Rc::new(OpenMesh {
+        alias_verts: vec![0, 1, 2, 3],
         verts: next,
         faces: vec![
-            Tag::Body(1), Tag::Parent(0), Tag::Body(0),
-            Tag::Parent(1), Tag::Parent(0), Tag::Body(1),
-            Tag::Body(2), Tag::Parent(1), Tag::Body(1),
-            Tag::Parent(2), Tag::Parent(1), Tag::Body(2),
-            Tag::Body(3), Tag::Parent(2), Tag::Body(2),
-            Tag::Parent(3), Tag::Parent(2), Tag::Body(3),
-            Tag::Body(0), Tag::Parent(3), Tag::Body(3),
-            Tag::Parent(0), Tag::Parent(3), Tag::Body(0),
+            5, 0, 4,
+            1, 0, 5,
+            6, 1, 5,
+            2, 1, 6,
+            7, 2, 6,
+            3, 2, 7,
+            4, 3, 7,
+            0, 3, 4,
         ],
     });
     let final_geom = Rc::new(OpenMesh {
         verts: vec![],
+        alias_verts: vec![0, 1, 2, 3],
         faces: vec![
-            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
-            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+            0, 2, 1,
+            0, 3, 2,
         ],
     });
     
@@ -695,27 +707,28 @@ pub fn ramhorn() -> Rule<()> {
                     vertex( 0.5,  0.5, 0.0),  // 11
                     vertex( 0.5, -0.5, 0.0),  // 12
                 ],
+                alias_verts: vec![],
                 faces: vec![
                     // bottom face:
-                    Tag::Body(9), Tag::Body(10), Tag::Body(11),
-                    Tag::Body(9), Tag::Body(11), Tag::Body(12),
+                    9, 10, 11,
+                    9, 11, 12,
                     // two faces straddling edge from vertex 0:
-                    Tag::Body(9), Tag::Body(0), Tag::Body(4),
-                    Tag::Body(9), Tag::Body(7), Tag::Body(0),
+                    9, 0, 4,
+                    9, 7, 0,
                     // two faces straddling edge from vertex 1:
-                    Tag::Body(10), Tag::Body(1), Tag::Body(5),
-                    Tag::Body(10), Tag::Body(4), Tag::Body(1),
+                    10, 1, 5,
+                    10, 4, 1,
                     // two faces straddling edge from vertex 2:
-                    Tag::Body(11), Tag::Body(2), Tag::Body(6),
-                    Tag::Body(11), Tag::Body(5), Tag::Body(2),
+                    11, 2, 6,
+                    11, 5, 2,
                     // two faces straddling edge from vertex 3:
-                    Tag::Body(12), Tag::Body(3), Tag::Body(7),
-                    Tag::Body(12), Tag::Body(6), Tag::Body(3),
-                    // four faces from edge (0,1), (1,2), (2,3), (3,0):
-                    Tag::Body(9), Tag::Body(4), Tag::Body(10),
-                    Tag::Body(10), Tag::Body(5), Tag::Body(11),
-                    Tag::Body(11), Tag::Body(6), Tag::Body(12),
-                    Tag::Body(12), Tag::Body(7), Tag::Body(9),
+                    12, 3, 7,
+                    12, 6, 3,
+                    // four faces from edge (0,1, (1,2, (2,3, (3,0):
+                    9, 4, 10,
+                    10, 5, 11,
+                    11, 6, 12,
+                    12, 7, 9,
                 ],
             }),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -772,13 +785,16 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     let next = incr.transform(&seed);
     let geom = Rc::new(OpenMesh {
         verts: next,
+        alias_verts: vec![],
         faces: util::parallel_zigzag_faces(4),
+        // TODO: Fix this (parallel_zigzag_faces has parents)
     });
     let final_geom = Rc::new(OpenMesh {
         verts: vec![],
+        alias_verts: vec![0, 1, 2, 3],
         faces: vec![
-            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
-            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+            0, 2, 1,
+            0, 3, 2,
         ],
     });
 
@@ -807,24 +823,25 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     ];
     let trans_faces = vec![
         // two faces straddling edge from vertex 0:
-        Tag::Parent(0), Tag::Body(0), Tag::Body(4),
-        Tag::Parent(0), Tag::Body(7), Tag::Body(0),
+        0, 4, 8,
+        0, 11, 4,
         // two faces straddling edge from vertex 1:
-        Tag::Parent(1), Tag::Body(1), Tag::Body(5),
-        Tag::Parent(1), Tag::Body(4), Tag::Body(1),
+        1, 5, 9,
+        1, 8, 5,
         // two faces straddling edge from vertex 2:
-        Tag::Parent(2), Tag::Body(2), Tag::Body(6),
-        Tag::Parent(2), Tag::Body(5), Tag::Body(2),
+        2, 6, 10,
+        2, 9, 6,
         // two faces straddling edge from vertex 3:
-        Tag::Parent(3), Tag::Body(3), Tag::Body(7),
-        Tag::Parent(3), Tag::Body(6), Tag::Body(3),
+        3, 7, 11,
+        3, 10, 7,
         // four faces from edge (0,1), (1,2), (2,3), (3,0):
-        Tag::Parent(0), Tag::Body(4), Tag::Parent(1),
-        Tag::Parent(1), Tag::Body(5), Tag::Parent(2),
-        Tag::Parent(2), Tag::Body(6), Tag::Parent(3),
-        Tag::Parent(3), Tag::Body(7), Tag::Parent(0),
+        0, 8, 1,
+        1, 9, 2,
+        2, 10, 3,
+        3, 11, 0,
     ];
     let trans_geom = Rc::new(OpenMesh {
+        alias_verts: vec![0, 1, 2, 3],
         verts: trans_verts.clone(),
         faces: trans_faces.clone(),
     });
@@ -899,9 +916,10 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
         RuleEval {
             geom: Rc::new(OpenMesh {
                 verts: Transform::new().translate(0.0, 0.0, -0.5).transform(&seed),
+                alias_verts: vec![],
                 faces: vec![
-                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
-                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                    0, 1, 2,
+                    0, 2, 3,
                 ],
             }),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -941,12 +959,15 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
     let geom = Rc::new(OpenMesh {
         verts: next,
         faces: util::parallel_zigzag_faces(4),
+        alias_verts: vec![],
+        // TODO: Fix parents with parallel_zigzag
     });
     let final_geom = Rc::new(OpenMesh {
         verts: vec![],
+        alias_verts: vec![0, 1, 2, 3],
         faces: vec![
-            Tag::Parent(0), Tag::Parent(2), Tag::Parent(1),
-            Tag::Parent(0), Tag::Parent(3), Tag::Parent(2),
+            0, 2, 1,
+            0, 3, 2,
         ],
     });
 
@@ -975,24 +996,25 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
     ];
     let trans_faces = vec![
         // two faces straddling edge from vertex 0:
-        Tag::Parent(0), Tag::Body(0), Tag::Body(4),
-        Tag::Parent(0), Tag::Body(7), Tag::Body(0),
+        0, 4, 8,
+        0, 11, 4,
         // two faces straddling edge from vertex 1:
-        Tag::Parent(1), Tag::Body(1), Tag::Body(5),
-        Tag::Parent(1), Tag::Body(4), Tag::Body(1),
+        1, 5, 9,
+        1, 8, 5,
         // two faces straddling edge from vertex 2:
-        Tag::Parent(2), Tag::Body(2), Tag::Body(6),
-        Tag::Parent(2), Tag::Body(5), Tag::Body(2),
+        2, 6, 10,
+        2, 9, 6,
         // two faces straddling edge from vertex 3:
-        Tag::Parent(3), Tag::Body(3), Tag::Body(7),
-        Tag::Parent(3), Tag::Body(6), Tag::Body(3),
+        3, 7, 11,
+        3, 10, 7,
         // four faces from edge (0,1), (1,2), (2,3), (3,0):
-        Tag::Parent(0), Tag::Body(4), Tag::Parent(1),
-        Tag::Parent(1), Tag::Body(5), Tag::Parent(2),
-        Tag::Parent(2), Tag::Body(6), Tag::Parent(3),
-        Tag::Parent(3), Tag::Body(7), Tag::Parent(0),
+        0, 8, 1,
+        1, 9, 2,
+        2, 10, 3,
+        3, 11, 0,
     ];
     let trans_geom = Rc::new(OpenMesh {
+        alias_verts: vec![0, 1, 2, 3],
         verts: trans_verts.clone(),
         faces: trans_faces.clone(),
     });
@@ -1068,9 +1090,10 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
         RuleEval {
             geom: Rc::new(OpenMesh {
                 verts: Transform::new().translate(0.0, 0.0, -0.5).transform(&seed),
+                alias_verts: vec![],
                 faces: vec![
-                    Tag::Body(0), Tag::Body(1), Tag::Body(2),
-                    Tag::Body(0), Tag::Body(2), Tag::Body(3),
+                    0, 1, 2,
+                    0, 2, 3,
                 ],
             }),
             final_geom: Rc::new(prim::empty_mesh()),
@@ -1086,6 +1109,7 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
 
     Rule { eval: Rc::new(start), ctxt: RamHornCtxt2 { depth } }
 }
+ */
 
 /*
 #[derive(Copy, Clone)]

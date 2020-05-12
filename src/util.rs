@@ -1,6 +1,23 @@
-use crate::openmesh::{Tag, OpenMesh};
+use std::ops::Range;
+use crate::mesh::{Mesh, MeshTemplate, VertexUnion};
 use crate::xform::{Vertex};
 //use crate::rule::{Rule, Child};
+
+/// This is like `vec!`, but it can handle elements that are given
+/// with `@var: element` rather than `element`, e.g. like
+/// `vec_indexed![foo, bar, @a: baz, quux]`. The variable (which must
+/// already be declared and a `usize`) is then assigned the index of the
+/// element it precedes.  This can be used any number of times with
+/// different elements and indices.
+#[macro_export]
+macro_rules! vec_indexed {
+    // Thank you to GhostOfSteveJobs and Rantanen in the Rust discord.
+    ($( $(@ $Index:ident :)? $Value:expr,)*) => {{
+        let mut v = Vec::new();
+        $( $($Index = v.len();)? v.push($Value); )*
+        v
+    }};
+}
 
 /// Linearly subdivides a list of points that are to be treated as a
 /// cycle.  This produces 'count' points for every element of 'p'
@@ -21,45 +38,57 @@ pub fn subdivide_cycle(p: &Vec<Vertex>, count: usize) -> Vec<Vertex> {
 // TODO: This can be generalized to an iterator or to IntoIterator
 // trait bound
 
-pub fn parallel_zigzag_faces(count: usize) -> Vec<Tag> {
+pub fn parallel_zigzag_faces(r1: Range<usize>, r2: Range<usize>) -> Vec<usize> {
+    let count = r1.end - r1.start;
+        if (r2.end - r2.start) != count {
+        panic!("Ranges must have the same size");
+    }
+    if (r2.end > r1.start && r2.end < r1.end) ||
+        (r1.end > r2.start && r1.end < r2.end) {
+        panic!("Ranges cannot overlap");
+    }
+
     (0..count).map(|i0| {
-        let i1 = (i0+1) % count;
+        // i0 is an *offset* for the 'current' index.
+        // i1 is for the 'next' index, wrapping back to 0.
+        let i1 = (i0 + 1) % count;
         vec![
-            Tag::Body(i1),   Tag::Parent(i0), Tag::Body(i0),
-            Tag::Parent(i1), Tag::Parent(i0), Tag::Body(i1),
+            // Mind winding order!
+            r1.start + i1, r2.start + i0, r1.start + i0,
+            r2.start + i1, r2.start + i0, r1.start + i1,
         ]
     }).flatten().collect()
 }
 
-pub fn zigzag_to_parent(verts: Vec<Vertex>, count: usize) -> OpenMesh {
-    OpenMesh {
+pub fn zigzag_to_parent(verts: Vec<VertexUnion>, main: Range<usize>, parent: Range<usize>) -> MeshTemplate {
+    MeshTemplate {
         verts: verts,
-        faces: parallel_zigzag_faces(count),
+        faces: parallel_zigzag_faces(main, parent),
     }
 }
 
-pub fn connect_convex(verts: &Vec<Vertex>, as_parent: bool) -> (Vertex, Vec<Tag>) {
+pub fn centroid(verts: &Vec<Vertex>) -> Vertex {
     let n = verts.len();
     let mut centroid = Vertex::new(0.0, 0.0, 0.0, 0.0);
     for v in verts {
         centroid += v;
     }
     centroid /= n as f32;
+    centroid
+}
 
-    let faces: Vec<Tag> = {
-        if as_parent {
-            (0..n).map(|f1| {
-                let f2 = (f1 + 1) % n;
-                vec![Tag::Parent(f2), Tag::Parent(f1), Tag::Body(0)]
-            }).flatten().collect()
-        } else {
-            (0..n).map(|f1| {
-                let f2 = (f1 + 1) % n;
-                // n is used for new center vertex
-                vec![Tag::Body(f1), Tag::Body(f2), Tag::Body(n)]
-            }).flatten().collect()
-        }
-    };
+pub fn connect_convex(range: Range<usize>, target: usize, as_parent: bool) -> Vec<usize> {
 
-    (centroid, faces)
+    let count = range.end - range.start;
+    if as_parent {
+        (0..count).map(|i0| {
+            let i1 = (i0 + 1) % count;
+            vec![range.start + i1, range.start + i0, target]
+        }).flatten().collect()
+    } else {
+        (0..count).map(|i0| {
+            let i1 = (i0 + 1) % count;
+            vec![range.start + i0, range.start + i1, target]
+        }).flatten().collect()
+    }
 }

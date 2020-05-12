@@ -1,9 +1,10 @@
-pub mod examples;
-pub mod openmesh;
+pub mod mesh;
 pub mod rule;
 pub mod prim;
+#[macro_use]
 pub mod util;
 pub mod xform;
+pub mod examples;
 
 //pub use crate::examples;
 //pub use crate::openmesh::test_thing;
@@ -62,7 +63,8 @@ mod tests {
         geom.transform(&(trans * rot)).write_stl_file("xform_mul_trans_rot.stl").unwrap();
         geom.transform(&xf1).write_stl_file("xform_trans_rot.stl").unwrap();
     }
-    
+
+    /*
     // TODO: These tests don't test any conditions, so this is useful
     // short-hand to run, but not very meaningful as a test.
     #[test]
@@ -127,6 +129,7 @@ mod tests {
     fn ramhorn_branch_random() {
         run_test(examples::ramhorn_branch_random(24, 0.25), 32, "ram_horn_branch_random", false);
     }
+     */
 }
 // need this for now:
 // cargo test -- --nocapture
