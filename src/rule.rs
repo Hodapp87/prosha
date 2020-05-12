@@ -1,4 +1,4 @@
-use crate::mesh::{MeshTemplate, VertexUnion};
+use crate::mesh::{MeshFunc, VertexUnion};
 use crate::xform::{Transform};
 //use crate::prim;
 use std::borrow::Borrow;
@@ -38,7 +38,7 @@ pub struct Rule<S> {
 /// `geom`.
 pub struct RuleEval<S> {
     /// The geometry generated at just this iteration
-    pub geom: Rc<MeshTemplate>,
+    pub geom: Rc<MeshFunc>,
 
     /// The "final" geometry that is merged with `geom` via
     /// `connect()` in the event that recursion stops.  This must be
@@ -46,7 +46,7 @@ pub struct RuleEval<S> {
     ///
     /// Parent vertex references will be resolved directly to `geom`
     /// with no mapping.
-    pub final_geom: Rc<MeshTemplate>,
+    pub final_geom: Rc<MeshFunc>,
 
     /// The child invocations (used if recursion continues).  The
     /// 'parent' mesh, from the perspective of all geometry produced
@@ -69,7 +69,7 @@ pub struct Child<S> {
 
     /// The parent vertex mapping: a mapping to apply to turn a
     /// Tag::Parent vertex reference into a vertex index of the parent
-    /// mesh.  That is, if `rule` produces a `MeshTemplate` with a face
+    /// mesh.  That is, if `rule` produces a `MeshFunc` with a face
     /// of `Tag::Parent(n)`, this will correspond to index `vmap[n]`
     /// in the parent mesh.
     pub vmap: Vec<usize>,
@@ -80,7 +80,7 @@ impl<S> Rule<S> {
     /// Convert this `Rule` to mesh data, recursively (depth first).
     /// `iters_left` sets the maximum recursion depth.  This returns
     /// (geometry, number of rule evaluations).
-    pub fn to_mesh(s: Rc<Rule<S>>, iters_left: usize) -> (MeshTemplate, usize) {
+    pub fn to_mesh(s: Rc<Rule<S>>, iters_left: usize) -> (MeshFunc, usize) {
 
         let mut evals = 1;
 
@@ -95,7 +95,7 @@ impl<S> Rule<S> {
         // TODO: This logic is more or less right, but it
         // could perhaps use some un-tupling or something.
 
-        let subgeom: Vec<(MeshTemplate, Vec<usize>)> = rs.children.iter().map(|sub| {
+        let subgeom: Vec<(MeshFunc, Vec<usize>)> = rs.children.iter().map(|sub| {
             // Get sub-geometry (still un-transformed):
             let (submesh, eval) = Rule::to_mesh(sub.rule.clone(), iters_left - 1);
             // Tally up eval count:
@@ -114,7 +114,7 @@ impl<S> Rule<S> {
     /// This should be identical to to_mesh, but implemented
     /// iteratively with an explicit stack rather than with recursive
     /// function calls.
-    pub fn to_mesh_iter(s: Rc<Rule<S>>, max_depth: usize) -> (MeshTemplate, usize) {
+    pub fn to_mesh_iter(s: Rc<Rule<S>>, max_depth: usize) -> (MeshFunc, usize) {
 
         struct State<S> {
             // The set of rules we're currently handling:
@@ -187,7 +187,7 @@ impl<S> Rule<S> {
                     let mut m_ = 0;
                     for v in &final_geom.verts {
                         match *v {
-                            VertexUnion::Alias(a) => {
+                            VertexUnion::Arg(a) => {
                                 if a > m_ {
                                     m_ = a;
                                 }
@@ -262,17 +262,17 @@ impl<S> Rule<S> {
 }
 
 impl<S> RuleEval<S> {
-    /// Turn an iterator of (MeshTemplate, Child) into a single RuleEval.
+    /// Turn an iterator of (MeshFunc, Child) into a single RuleEval.
     /// All meshes are merged, and the `vmap` in each child has the
     /// correct offsets applied to account for this merge.
     ///
     /// (`final_geom` is passed through to the RuleEval unmodified.)
-    pub fn from_pairs<T, U>(m: T, final_geom: MeshTemplate) -> RuleEval<S>
-        where U: Borrow<MeshTemplate>,
+    pub fn from_pairs<T, U>(m: T, final_geom: MeshFunc) -> RuleEval<S>
+        where U: Borrow<MeshFunc>,
               T: IntoIterator<Item = (U, Child<S>)>
     {
         let (meshes, children): (Vec<_>, Vec<_>) = m.into_iter().unzip();
-        let (mesh, offsets) = MeshTemplate::append(meshes);
+        let (mesh, offsets) = MeshFunc::append(meshes);
 
         // Patch up vmap in each child, and copy everything else:
         let children2: Vec<Child<S>> = children.iter().zip(offsets.iter()).map(|(c,off)| {

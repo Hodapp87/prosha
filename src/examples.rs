@@ -4,7 +4,8 @@ use nalgebra::*;
 use rand::Rng;
 
 use crate::util;
-use crate::mesh::{Mesh, MeshTemplate};
+use crate::util::VecExt;
+use crate::mesh::{Mesh, MeshFunc, VertexUnion};
 use crate::xform::{Transform, Vertex, vertex, Mat4};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
@@ -45,15 +46,16 @@ pub fn cube_thing() -> Rule<()> {
 
     Rule { eval: Rc::new(rec), ctxt: () }
 }
+*/
 
 pub fn barbs() -> Rule<()> {
 
-    let (a0, a1);
-    let base_verts: Vec<Vertex> = vec_indexed![
-        @a0: vertex(-0.5, -0.5, 0.0),
-        vertex(-0.5,  0.5, 0.0),
-        vertex( 0.5,  0.5, 0.0),
-        @a1: vertex( 0.5, -0.5, 0.0),
+    let (b0, b1);
+    let base_verts: Vec<VertexUnion> = vec_indexed![
+        @b0: VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
+             VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
+             VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
+        @b1: VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
     ];
     let n = base_verts.len();
 
@@ -64,19 +66,24 @@ pub fn barbs() -> Rule<()> {
 
     let b = base_verts.clone();
     let barb = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
-        let next_verts = incr.transform(&b);
+        let mut next_verts = b.clone();
+        let (a0, a1) = next_verts.append_indexed(
+            &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
+        );
 
-        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), a0..a1));
-        let (vc, faces) = util::connect_convex(&next_verts, true);
+
+        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1, a0..a1);
+        /*let (vc, faces) = util::connect_convex(&next_verts, true);
         let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
             alias_verts: vec![],
             faces: faces,
         });
+         */
 
         RuleEval {
-            geom: geom,
-            final_geom: final_geom,
+            geom: Rc::new(geom.transform(&incr)),
+            final_geom: Rc::new(prim::empty_meshfunc()), // TODO
             children: vec![
                 Child {
                     rule: self_.clone(),
@@ -89,20 +96,24 @@ pub fn barbs() -> Rule<()> {
 
     let b = base_verts.clone();
     let main = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
-        let next_verts = incr.transform(&b);
+        let mut next_verts = b.clone();
+        let (a0, a1) = next_verts.append_indexed(
+            &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
+        );
 
         // TODO: Once I start doing the barbs this will go away
-        let geom = Rc::new(util::zigzag_to_parent(next_verts.clone(), n));
+        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1+1, a0..a1);
+        /*
         let (vc, faces) = util::connect_convex(&next_verts, true);
-        let final_geom = Rc::new(OpenMesh {
+        let final_geom = Rc::new(MeshFunc {
             verts: vec![vc],
-            alias_verts: vec![],
             faces: faces,
         });
+         */
 
         RuleEval {
-            geom: geom,
-            final_geom: final_geom,
+            geom: Rc::new(geom.transform(&incr)),
+            final_geom: Rc::new(prim::empty_meshfunc()), // TODO
             children: vec![
                 Child {
                     rule: self_.clone(),
@@ -116,15 +127,14 @@ pub fn barbs() -> Rule<()> {
     let main_ = Rc::new(main);
     let base = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
         RuleEval {
-            geom: Rc::new(OpenMesh {
+            geom: Rc::new(MeshFunc {
                 verts: base_verts.clone(),
-                alias_verts: vec![],
                 faces: vec![
-                    0, 1, 2,
-                    0, 1, 3,
+                    b0, b0 + 1, b0 + 2,
+                    b0, b0 + 2, b0 + 3,
                 ],
             }),
-            final_geom: Rc::new(prim::empty_mesh()),
+            final_geom: Rc::new(prim::empty_meshfunc()),
             children: vec![
                 Child {
                     rule: Rc::new(Rule { eval: main_.clone(), ctxt: () }),
@@ -138,6 +148,7 @@ pub fn barbs() -> Rule<()> {
     Rule { eval: Rc::new(base), ctxt: () }
 }
 
+/*
 // Meant to be a copy of twist_from_gen from Python &
 // automata_scratch, but has since acquired a sort of life of its own
 pub fn twist(f: f32, subdiv: usize) -> Rule<()> {

@@ -1,9 +1,17 @@
-use crate::mesh::{Mesh};
+use crate::mesh::{Mesh, MeshFunc};
 use crate::xform::{vertex, Transform};
 
 /// Returns an empty mesh (no vertices, no faces).
 pub fn empty_mesh() -> Mesh {
     Mesh {
+        verts: vec![],
+        faces: vec![],
+    }
+}
+
+/// Returns an empty MeshFn (no vertices, no faces, thus no args).
+pub fn empty_meshfunc() -> MeshFunc {
+    MeshFunc {
         verts: vec![],
         faces: vec![],
     }

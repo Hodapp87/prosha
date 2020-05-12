@@ -36,7 +36,7 @@ mod tests {
         println!("Evaluated {} rules to {} verts", nodes, mesh.verts.len());
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
-        mesh.write_stl_file(&fname).unwrap();
+        mesh.to_mesh().write_stl_file(&fname).unwrap();
     }
 
     #[test]
@@ -71,10 +71,12 @@ mod tests {
     fn cube_thing() {
         run_test(examples::cube_thing(), 3, "cube_thing3", false);
     }
+    */
 
     #[test]
     fn barbs() { run_test(examples::barbs(), 20, "barbs", false); }
 
+    /*
     #[test]
     fn twist() {
         run_test(examples::twist(1.0, 2), 200, "screw", false);

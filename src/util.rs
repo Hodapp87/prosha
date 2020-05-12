@@ -1,5 +1,5 @@
 use std::ops::Range;
-use crate::mesh::{Mesh, MeshTemplate, VertexUnion};
+use crate::mesh::{Mesh, MeshFunc, VertexUnion};
 use crate::xform::{Vertex};
 //use crate::rule::{Rule, Child};
 
@@ -17,6 +17,21 @@ macro_rules! vec_indexed {
         $( $($Index = v.len();)? v.push($Value); )*
         v
     }};
+}
+
+pub trait VecExt<T> {
+    fn append_indexed(&mut self, other: &mut Vec<T>) -> (usize, usize);
+}
+
+impl<T> VecExt<T> for Vec<T> {
+    // Like `append`, but returning `(a, b)` which give the range of
+    // elements just inserted.
+    fn append_indexed(&mut self, other: &mut Vec<T>) -> (usize, usize) {
+        let a = self.len();
+        self.append(other);
+        let b = self.len();
+        (a, b)
+    }
 }
 
 /// Linearly subdivides a list of points that are to be treated as a
@@ -60,8 +75,8 @@ pub fn parallel_zigzag_faces(r1: Range<usize>, r2: Range<usize>) -> Vec<usize> {
     }).flatten().collect()
 }
 
-pub fn zigzag_to_parent(verts: Vec<VertexUnion>, main: Range<usize>, parent: Range<usize>) -> MeshTemplate {
-    MeshTemplate {
+pub fn parallel_zigzag(verts: Vec<VertexUnion>, main: Range<usize>, parent: Range<usize>) -> MeshFunc {
+    MeshFunc {
         verts: verts,
         faces: parallel_zigzag_faces(main, parent),
     }

@@ -42,9 +42,9 @@ impl Mesh {
 
         // Turn every face into an stl_io::Triangle:
         for i in 0..num_faces {
-            let v0 = self.verts[3*i + 0].xyz();
-            let v1 = self.verts[3*i + 1].xyz();
-            let v2 = self.verts[3*i + 2].xyz();
+            let v0 = self.verts[self.faces[3*i + 0]].xyz();
+            let v1 = self.verts[self.faces[3*i + 1]].xyz();
+            let v2 = self.verts[self.faces[3*i + 2]].xyz();
 
             let normal = (v1-v0).cross(&(v2-v0));
 
@@ -62,8 +62,8 @@ impl Mesh {
         stl_io::write_stl(writer, triangles.iter())
     }
 
-    fn to_template(&self) -> MeshTemplate {
-        MeshTemplate {
+    fn to_meshfunc(&self) -> MeshFunc {
+        MeshFunc {
             faces: self.faces.clone(),
             verts: self.verts.iter().map(|v| VertexUnion::Vertex(*v)).collect(),
         }
@@ -72,10 +72,11 @@ impl Mesh {
 
 #[derive(Clone, Debug)]
 pub enum VertexUnion {
-    /// A concrete vertex
+    /// A concrete vertex.
     Vertex(Vertex),
-    /// An alias to some other vertex (by index)
-    Alias(usize),
+    /// An 'unbound' vertex - something like an argument to a function with
+    /// the given positional index.
+    Arg(usize),
 }
 
 /// A face-vertex mesh whose vertices can either be concrete values
@@ -84,7 +85,7 @@ pub enum VertexUnion {
 /// aliases are resolved to concrete vertices with a call like
 /// `connect()`.
 #[derive(Clone, Debug)]
-pub struct MeshTemplate {
+pub struct MeshFunc {
     //
     pub verts: Vec<VertexUnion>,
     /// Indices of triangles (taken as every 3 values).  Indices begin
@@ -95,11 +96,21 @@ pub struct MeshTemplate {
     pub faces: Vec<usize>,
 }
 
-impl MeshTemplate {
+impl MeshFunc {
 
-    /// Returns a new `MeshTemplate` whose concrete vertices have
+    pub fn to_mesh(&self) -> Mesh {
+        Mesh {
+            faces: self.faces.clone(),
+            verts: self.verts.iter().map(|v| match *v {
+                VertexUnion::Vertex(v) => v,
+                VertexUnion::Arg(_) => panic!("Mesh still has vertex arguments!"),
+            }).collect(),
+        }
+    }
+
+    /// Returns a new `MeshFunc` whose concrete vertices have
     /// been transformed. Note that alias vertices are left untouched.
-    pub fn transform(&self, xfm: &Transform) -> MeshTemplate {
+    pub fn transform(&self, xfm: &Transform) -> MeshFunc {
         let v = self.verts.iter().map(|v| {
             match v {
                 VertexUnion::Vertex(v) => VertexUnion::Vertex(xfm.mtx * v),
@@ -107,7 +118,7 @@ impl MeshTemplate {
             }
         });
 
-        MeshTemplate {
+        MeshFunc {
             verts: v.collect(),
             faces: self.faces.clone(),
         }
@@ -118,8 +129,8 @@ impl MeshTemplate {
     /// corresponding input mesh was shifted.  That is, for the i'th
     /// index in `meshes`, all of its triangle indices were shifted by
     /// the i'th offset in the resultant mesh.
-    pub fn append<T, U>(meshes: T) -> (MeshTemplate, Vec<usize>)
-        where U: Borrow<MeshTemplate>,
+    pub fn append<T, U>(meshes: T) -> (MeshFunc, Vec<usize>)
+        where U: Borrow<MeshFunc>,
               T: IntoIterator<Item = U>
     {
         let mut offsets: Vec<usize> = vec![];
@@ -139,7 +150,7 @@ impl MeshTemplate {
             f.extend(mesh.faces.iter().map(|n| n + offset));
         }
 
-        (MeshTemplate { verts: v, faces: f }, offsets)
+        (MeshFunc { verts: v, faces: f }, offsets)
     }
 
     /// Treat this mesh as a 'parent' mesh to connect with any number
@@ -151,8 +162,8 @@ impl MeshTemplate {
     /// That is, the vertices of 'children[i]' begin at vertex
     /// 'offset[i]' of the new mesh. This is needed in some cases for
     /// adjusting a parent vertex mapping, like 'vmap' of Rule::Child.
-    pub fn connect<T, U>(&self, children: T) -> (MeshTemplate, Vec<usize>)
-    where U: Borrow<MeshTemplate>,
+    pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<usize>)
+    where U: Borrow<MeshFunc>,
           T: IntoIterator<Item = (U, Vec<usize>)>
     //pub fn connect(&self, children: &Vec<(OpenMesh, Vec<usize>)>) -> (OpenMesh, Vec<usize>)
     {
@@ -178,7 +189,7 @@ impl MeshTemplate {
             verts.extend(child.verts.iter().filter_map(|v| {
                 match v {
                     VertexUnion::Vertex(_) => Some(v.clone()),
-                    VertexUnion::Alias(_) => None,
+                    VertexUnion::Arg(_) => None,
                 }
             }));
 
@@ -188,14 +199,14 @@ impl MeshTemplate {
             faces.extend(child.faces.iter().map(|n|
                 match child.verts[*n] {
                     VertexUnion::Vertex(_) => n + offset,
-                    VertexUnion::Alias(m) => mapping[m],
+                    VertexUnion::Arg(m) => mapping[m],
                 }
             ));
 
             offsets.push(offset);
         }
 
-        let m = MeshTemplate {
+        let m = MeshFunc {
             verts: verts,
             faces: faces,
         };
