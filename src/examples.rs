@@ -61,8 +61,14 @@ pub fn barbs() -> Rule<()> {
 
     let incr: Transform = Transform::new().
         translate(0.0, 0.0, 1.0).
-        rotate(&Vector3::z_axis(), 0.1).
+        rotate(&Vector3::z_axis(), 0.15).
+        rotate(&Vector3::x_axis(), 0.1).
         scale(0.95);
+
+    let incr2: Transform = Transform::new().
+        translate(0.0, 0.0, 1.5).
+        rotate(&Vector3::y_axis(), -0.2).
+        scale(0.8);
 
     let b = base_verts.clone();
     let barb = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
@@ -71,8 +77,7 @@ pub fn barbs() -> Rule<()> {
             &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
         );
 
-
-        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1, a0..a1);
+        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1+1, a0..a1);
         /*let (vc, faces) = util::connect_convex(&next_verts, true);
         let final_geom = Rc::new(OpenMesh {
             verts: vec![vc],
@@ -87,12 +92,14 @@ pub fn barbs() -> Rule<()> {
             children: vec![
                 Child {
                     rule: self_.clone(),
-                    xf: incr,
+                    xf: incr2,
                     vmap: (0..n).collect(),
                 }
             ]
         }
     };
+
+    let barb_ = Rc::new(barb);
 
     let b = base_verts.clone();
     let main = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
@@ -119,8 +126,16 @@ pub fn barbs() -> Rule<()> {
                     rule: self_.clone(),
                     xf: incr,
                     vmap: (0..n).collect(),
-                }
-            ]
+                },
+                Child {
+                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    xf: Transform::new().
+                        translate(0.0, 0.0, 1.4).
+                        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
+                        scale(0.9),
+                    vmap: vec![b0, b0 + 1, a0 + 1, a0],
+                },
+            ],
         }
     };
 

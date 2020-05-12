@@ -74,7 +74,7 @@ mod tests {
     */
 
     #[test]
-    fn barbs() { run_test(examples::barbs(), 20, "barbs", false); }
+    fn barbs() { run_test(examples::barbs(), 60, "barbs", false); }
 
     /*
     #[test]
