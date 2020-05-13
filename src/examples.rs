@@ -94,9 +94,12 @@ pub fn barbs() -> Rule<()> {
     };
     let barb_ = Rc::new(barb);
 
-    let main_barb_trans = Transform::new().
-        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
-        translate(0.5, 0.0, 0.5);
+    let main_barb_trans = |i| {
+        Transform::new().
+            rotate(&Vector3::z_axis(), -std::f32::consts::FRAC_PI_2 * (i as f32)).
+            rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
+            translate(0.5, 0.0, 0.5)
+    };
 
     let main_incr: Transform = Transform::new().
         translate(0.0, 0.0, 1.0).
@@ -110,8 +113,11 @@ pub fn barbs() -> Rule<()> {
             &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
         );
 
-        // TODO: Once I start doing the barbs this will go away
-        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1+1, a0..a1);
+        // This contributes no faces of its own - just vertices.
+        let geom = MeshFunc {
+            verts: next_verts.clone(),
+            faces: vec![],
+        };
         /*
         let (vc, faces) = util::connect_convex(&next_verts, true);
         let final_geom = Rc::new(MeshFunc {
@@ -121,7 +127,7 @@ pub fn barbs() -> Rule<()> {
          */
 
         RuleEval {
-            geom: Rc::new(geom.transform(&main_incr)),
+            geom: Rc::new(geom),
             final_geom: Rc::new(prim::empty_meshfunc()), // TODO
             children: vec![
                 Child {
@@ -131,9 +137,25 @@ pub fn barbs() -> Rule<()> {
                 },
                 Child {
                     rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: main_incr * main_barb_trans,
-                    vmap: vec![b0, b0 + 1, a0 + 1, a0],
+                    xf: main_barb_trans(0),
+                    vmap: vec![b0 + 0, b0 + 1, a0 + 1, a0 + 0],
                 },
+                Child {
+                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    xf: main_barb_trans(1),
+                    vmap: vec![b0 + 1, b0 + 2, a0 + 2, a0 + 1],
+                },
+                Child {
+                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    xf: main_barb_trans(2),
+                    vmap: vec![b0 + 2, b0 + 3, a0 + 3, a0 + 2],
+                },
+                Child {
+                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    xf: main_barb_trans(3),
+                    vmap: vec![b0 + 3, b0 + 0, a0 + 0, a0 + 3],
+                },
+                // TODO: Factor out repetition
             ],
         }
     };
@@ -148,6 +170,7 @@ pub fn barbs() -> Rule<()> {
                     b0, b0 + 2, b0 + 3,
                 ],
             }),
+            // TODO: This might be buggy and leave some vertices lying around
             final_geom: Rc::new(prim::empty_meshfunc()),
             children: vec![
                 Child {
