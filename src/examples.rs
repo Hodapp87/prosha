@@ -72,17 +72,14 @@ pub fn barbs() -> Rule<()> {
         );
 
         let geom = util::parallel_zigzag(next_verts.clone(), b0..b1+1, a0..a1);
-        /*let (vc, faces) = util::connect_convex(&next_verts, true);
-        let final_geom = Rc::new(OpenMesh {
-            verts: vec![vc],
-            alias_verts: vec![],
-            faces: faces,
-        });
-         */
+        let final_geom = MeshFunc {
+            verts: (0..4).map(|i| VertexUnion::Arg(i)).collect(),
+            faces: vec![ 0, 2, 1,   0, 3, 2 ],
+        };
 
         RuleEval {
             geom: Rc::new(geom.transform(&barb_incr)),
-            final_geom: Rc::new(prim::empty_meshfunc()), // TODO
+            final_geom: Rc::new(final_geom), // no transform needed (no vertices)
             children: vec![
                 Child {
                     rule: self_.clone(),
@@ -118,17 +115,14 @@ pub fn barbs() -> Rule<()> {
             verts: next_verts.clone(),
             faces: vec![],
         };
-        /*
-        let (vc, faces) = util::connect_convex(&next_verts, true);
-        let final_geom = Rc::new(MeshFunc {
-            verts: vec![vc],
-            faces: faces,
-        });
-         */
+        let final_geom = MeshFunc {
+            verts: (0..4).map(|i| VertexUnion::Arg(i)).collect(),
+            faces: vec![ 0, 2, 1,   0, 3, 2 ],
+        };
 
         RuleEval {
             geom: Rc::new(geom),
-            final_geom: Rc::new(prim::empty_meshfunc()), // TODO
+            final_geom: Rc::new(final_geom),
             children: vec![
                 Child {
                     rule: self_.clone(),
