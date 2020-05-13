@@ -74,8 +74,11 @@ impl Mesh {
 pub enum VertexUnion {
     /// A concrete vertex.
     Vertex(Vertex),
-    /// An 'unbound' vertex - something like an argument to a function with
+    /// A vertex argument - something like an argument to a function with
     /// the given positional index.
+    ///
+    /// The job of `MeshFunc.connect` is to bind these arguments to concrete
+    /// vertices.
     Arg(usize),
 }
 
@@ -155,13 +158,15 @@ impl MeshFunc {
 
     /// Treat this mesh as a 'parent' mesh to connect with any number
     /// of 'child' meshes, all of them paired with their respective
-    /// parent vertex mappings.  This returns a tuple of (new mesh,
-    /// offsets), where 'offsets' gives the offset of where child
-    /// meshes were shifted in the new mesh.
+    /// vertex argument values (i.e. `arg_vals` from `Child`).
+    /// This returns a tuple of (new mesh, offsets), where 'offsets'
+    /// gives the offset of where child meshes were shifted in the new
+    /// mesh.
     ///
     /// That is, the vertices of 'children[i]' begin at vertex
-    /// 'offset[i]' of the new mesh. This is needed in some cases for
-    /// adjusting a parent vertex mapping, like 'vmap' of Rule::Child.
+    /// 'offset[i]' of the new mesh. This is needed in order to adjust
+    /// references to vertices of a mesh in 'children' - such as
+    /// 'arg_vals' of `rule::Child`.
     pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<usize>)
     where U: Borrow<MeshFunc>,
           T: IntoIterator<Item = (U, Vec<usize>)>

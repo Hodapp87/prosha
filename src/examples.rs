@@ -39,7 +39,7 @@ pub fn cube_thing() -> Rule<()> {
             children: xforms.map(move |xf| Child {
                 rule: self_.clone(),
                 xf: xf,
-                vmap: vec![],
+                arg_vals: vec![],
             }).collect(),
         }
     };
@@ -85,7 +85,7 @@ pub fn barbs() -> Rule<()> {
                 Child {
                     rule: self_.clone(),
                     xf: barb_incr,
-                    vmap: (0..n).collect(),
+                    arg_vals: (0..n).collect(),
                 }
             ]
         }
@@ -128,27 +128,27 @@ pub fn barbs() -> Rule<()> {
                 Child {
                     rule: self_.clone(),
                     xf: main_incr,
-                    vmap: (0..n).collect(),
+                    arg_vals: (0..n).collect(),
                 },
                 Child {
-                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
                     xf: main_barb_trans(0),
-                    vmap: vec![b0 + 0, b0 + 1, a0 + 1, a0 + 0],
+                    arg_vals: vec![b0 + 0, b0 + 1, a0 + 1, a0 + 0],
                 },
                 Child {
-                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
                     xf: main_barb_trans(1),
-                    vmap: vec![b0 + 1, b0 + 2, a0 + 2, a0 + 1],
+                    arg_vals: vec![b0 + 1, b0 + 2, a0 + 2, a0 + 1],
                 },
                 Child {
-                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
                     xf: main_barb_trans(2),
-                    vmap: vec![b0 + 2, b0 + 3, a0 + 3, a0 + 2],
+                    arg_vals: vec![b0 + 2, b0 + 3, a0 + 3, a0 + 2],
                 },
                 Child {
-                    rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
+                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
                     xf: main_barb_trans(3),
-                    vmap: vec![b0 + 3, b0 + 0, a0 + 0, a0 + 3],
+                    arg_vals: vec![b0 + 3, b0 + 0, a0 + 0, a0 + 3],
                 },
                 // TODO: Factor out repetition
             ],
@@ -171,7 +171,7 @@ pub fn barbs() -> Rule<()> {
                 Child {
                     rule: Rc::new(Rule { eval: main_.clone(), ctxt: () }),
                     xf: Transform::new(),
-                    vmap: (0..n).collect(),
+                    arg_vals: (0..n).collect(),
                 },
             ],
         }
@@ -233,7 +233,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
                     Child {
                         rule: self_.clone(),
                         xf: incr,
-                        vmap: (0..n).collect(),
+                        arg_vals: (0..n).collect(),
                     },
                 ],
             }
@@ -254,7 +254,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
                 rule: Rc::new(Rule { eval: (recur.clone())(incr), ctxt: () }),
                 // TODO: Cleanliness fix - can macros clean up above?
                 xf: xform,
-                vmap: (0..(n+1)).collect(),
+                arg_vals: (0..(n+1)).collect(),
                 // N.B. n+1, not n. the +1 is for the centroid below.
             };
             let mut vs = xform.transform(&seed);
@@ -334,7 +334,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n2).collect(),
+                        arg_vals: (0..n2).collect(),
                     },
                 ],
             }
@@ -346,7 +346,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n).collect(),
+                        arg_vals: (0..n).collect(),
                     },
                 ],
             }
@@ -372,7 +372,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
                     },
                 }),
                 xf: Transform::new(),
-                vmap: vec![], // no parent vertices
+                arg_vals: vec![], // no parent vertices
             }
         };
 
@@ -463,7 +463,7 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n2).collect(),
+                        arg_vals: (0..n2).collect(),
                     },
                 ],
             }
@@ -475,7 +475,7 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n).collect(),
+                        arg_vals: (0..n).collect(),
                     },
                 ],
             }
@@ -538,7 +538,7 @@ pub fn twisty_torus_hardcode() -> Rule<()> {
                 Child {
                     rule: self_.clone(),
                     xf: incr,
-                    vmap: (0..n).collect(),
+                    arg_vals: (0..n).collect(),
                 },
             ],
         }
@@ -557,7 +557,7 @@ pub fn twisty_torus_hardcode() -> Rule<()> {
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: incr,
-                    vmap: (0..n2).collect(),
+                    arg_vals: (0..n2).collect(),
                 },
             ],
         }
@@ -633,7 +633,7 @@ pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n2).collect(),
+                        arg_vals: (0..n2).collect(),
                     },
                 ],
             }
@@ -645,7 +645,7 @@ pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: Transform::new(),
-                        vmap: (0..n).collect(),
+                        arg_vals: (0..n).collect(),
                     },
                 ],
             }
@@ -712,7 +712,7 @@ pub fn ramhorn() -> Rule<()> {
                 Child {
                     rule: self_.clone(),
                     xf: incr,
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
             ],
         }
@@ -779,22 +779,22 @@ pub fn ramhorn() -> Rule<()> {
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(0.0),
-                    vmap: vec![5,2,6,8],
+                    arg_vals: vec![5,2,6,8],
                 },
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(1.0),
-                    vmap: vec![4,1,5,8],
+                    arg_vals: vec![4,1,5,8],
                 },
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(2.0),
-                    vmap: vec![7,0,4,8],
+                    arg_vals: vec![7,0,4,8],
                 },
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
                     xf: opening_xform(3.0),
-                    vmap: vec![6,3,7,8],
+                    arg_vals: vec![6,3,7,8],
                 },
                 // TODO: These vertex mappings appear to be right.
                 // Explain *why* they are right.
@@ -893,22 +893,22 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(0.0),
-                vmap: vec![5,2,6,8],
+                arg_vals: vec![5,2,6,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(1.0),
-                vmap: vec![4,1,5,8],
+                arg_vals: vec![4,1,5,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(2.0),
-                vmap: vec![7,0,4,8],
+                arg_vals: vec![7,0,4,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(3.0),
-                vmap: vec![6,3,7,8],
+                arg_vals: vec![6,3,7,8],
             },
             // TODO: These vertex mappings appear to be right.
             // Explain *why* they are right.
@@ -940,7 +940,7 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: incr,
-                        vmap: vec![0,1,2,3],
+                        arg_vals: vec![0,1,2,3],
                     },
                 ],
             }
@@ -970,7 +970,7 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(trans.clone()), ctxt: self_.ctxt }),
                     xf: Transform::new(),
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
             ],
         }
@@ -1066,22 +1066,22 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(0.0),
-                vmap: vec![5,2,6,8],
+                arg_vals: vec![5,2,6,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(1.0),
-                vmap: vec![4,1,5,8],
+                arg_vals: vec![4,1,5,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(2.0),
-                vmap: vec![7,0,4,8],
+                arg_vals: vec![7,0,4,8],
             },
             Child {
                 rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
                 xf: opening_xform(3.0),
-                vmap: vec![6,3,7,8],
+                arg_vals: vec![6,3,7,8],
             },
             // TODO: These vertex mappings appear to be right.
             // Explain *why* they are right.
@@ -1114,7 +1114,7 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
                     Child {
                         rule: Rc::new(next_rule),
                         xf: incr,
-                        vmap: vec![0,1,2,3],
+                        arg_vals: vec![0,1,2,3],
                     },
                 ],
             }
@@ -1144,7 +1144,7 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
                 Child {
                     rule: Rc::new(Rule { eval: Rc::new(trans.clone()), ctxt: self_.ctxt }),
                     xf: Transform::new(),
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
             ],
         }
@@ -1178,7 +1178,7 @@ impl CurveHorn {
                 Child {
                     rule: Rule { eval: Rc::new(move || self.do_nothing()) },
                     xf: self.id_xform,
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
             ],
         }
@@ -1215,12 +1215,12 @@ impl CurveHorn {
                 Child {
                     rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.id_xform,
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
                 Child {
                     rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.flip180,
-                    vmap: vec![3,2,1,0],
+                    arg_vals: vec![3,2,1,0],
                 },
             ],
         }
@@ -1266,7 +1266,7 @@ impl CurveHorn {
                 Child {
                     rule: Rule { eval: Rc::new(move || self.recur()) },
                     xf: self.incr,
-                    vmap: vec![0,1,2,3],
+                    arg_vals: vec![0,1,2,3],
                 },
             ],
         }

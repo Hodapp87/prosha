@@ -46,6 +46,8 @@ pub struct RuleEval<S> {
     ///
     /// Parent vertex references will be resolved directly to `geom`
     /// with no mapping.
+    /// (TODO: Does this make sense? Nowhere else do I treat Arg(n) as
+    /// an index - it's always a positional argument.)
     pub final_geom: Rc<MeshFunc>,
 
     /// The child invocations (used if recursion continues).  The
@@ -67,12 +69,15 @@ pub struct Child<S> {
     /// as all sub-geometry produced recursively).
     pub xf: Transform,
 
-    /// The parent vertex mapping: a mapping to apply to turn a
-    /// Tag::Parent vertex reference into a vertex index of the parent
-    /// mesh.  That is, if `rule` produces a `MeshFunc` with a face
-    /// of `Tag::Parent(n)`, this will correspond to index `vmap[n]`
-    /// in the parent mesh.
-    pub vmap: Vec<usize>,
+    /// The 'argument values' to apply to vertex arguments of a `MeshFunc`
+    /// from `geom` and `final_geom` that `rule` produces when evaluated.
+    /// The values of this are treated as indices into the parent
+    /// `RuleEval` that produced this `Child`.
+    ///
+    /// In specific: if `arg_vals[i] = j` and `rule` produces some `geom` or
+    /// `final_geom`, then any vertex of `VertexUnion::Arg(i)` will be mapped
+    /// to `geom.verts[j]` in the *parent* geometry.
+    pub arg_vals: Vec<usize>,
 }
 
 impl<S> Rule<S> {
@@ -88,7 +93,7 @@ impl<S> Rule<S> {
         if iters_left <= 0 {
             return ((*rs.final_geom).clone(), 1);
             // TODO: This is probably wrong because of the way that
-            // sub.vmap is used below.  final_geom is not supposed to
+            // sub.arg_vals is used below.  final_geom is not supposed to
             // have any vertex mapping applied.
         }
 
@@ -103,7 +108,7 @@ impl<S> Rule<S> {
             
             let m2 = submesh.transform(&sub.xf);
             
-            (m2, sub.vmap.clone())
+            (m2, sub.arg_vals.clone())
                 // TODO: Fix clone?
         }).collect();
         
@@ -181,8 +186,8 @@ impl<S> Rule<S> {
                 // geometry properly:
                 let final_geom = eval.final_geom.transform(&xf);
                 // TODO: Fix the awful hack below.  I do this only to
-                // generate an identity mapping for vmap when I don't
-                // actually need vmap.
+                // generate an identity mapping for arg_vals when I don't
+                // actually need arg_vals.
                 let m = {
                     let mut m_ = 0;
                     for v in &final_geom.verts {
@@ -197,10 +202,10 @@ impl<S> Rule<S> {
                     }
                     m_ + 1
                 };
-                let vmap: Vec<usize> = (0..m).collect();
-                let (geom2, _) = new_geom.connect(vec![(final_geom, vmap)]);
+                let arg_vals: Vec<usize> = (0..m).collect();
+                let (geom2, _) = new_geom.connect(vec![(final_geom, arg_vals)]);
                 
-                geom = geom.connect(vec![(geom2, child.vmap.clone())]).0;
+                geom = geom.connect(vec![(geom2, child.arg_vals.clone())]).0;
                 // TODO: Fix clone?
 
                 // If we end recursion on one child, we must end it
@@ -216,23 +221,19 @@ impl<S> Rule<S> {
                 continue;
             }
 
-            let (g, offsets) = geom.connect(vec![(new_geom, child.vmap.clone())]);
+            let (g, offsets) = geom.connect(vec![(new_geom, child.arg_vals.clone())]);
             geom = g;
 
-            // 'new_geom' may itself be parent geometry for
-            // 'eval.children' (via Tag::Parent), and vmap is there to
-            // resolve Tag::Parent references to the right vertices in
-            // 'new_geom'.
-            //
-            // However, we connect() on the global geometry which we
-            // merged 'new_geom' into, not 'new_geom' directly.  To
-            // account for this, we must shift vmap by the offset that
-            // 'geom.connect' gave us:
+            // 'eval.children' may contain (via 'arg_vals') references to
+            // indices of 'new_geom'. However, we don't connect() to
+            // 'new_geom', but to the global geometry we just merged it
+            // into.  To account for this, we must shift 'arg_vals' by
+            // the offset that 'geom.connect' gave us.
             let off = offsets[0];
             // (We pass a one-element vector to geom.connect() above
             // so offsets always has just one element.)
             for child in eval.children.iter_mut() {
-                child.vmap = child.vmap.iter().map(|n| n + off).collect();
+                child.arg_vals = child.arg_vals.iter().map(|n| n + off).collect();
             }
 
             // We're done evaluating this rule, so increment 'next'.
@@ -263,7 +264,7 @@ impl<S> Rule<S> {
 
 impl<S> RuleEval<S> {
     /// Turn an iterator of (MeshFunc, Child) into a single RuleEval.
-    /// All meshes are merged, and the `vmap` in each child has the
+    /// All meshes are merged, and the `arg_vals` in each child has the
     /// correct offsets applied to account for this merge.
     ///
     /// (`final_geom` is passed through to the RuleEval unmodified.)
@@ -274,13 +275,13 @@ impl<S> RuleEval<S> {
         let (meshes, children): (Vec<_>, Vec<_>) = m.into_iter().unzip();
         let (mesh, offsets) = MeshFunc::append(meshes);
 
-        // Patch up vmap in each child, and copy everything else:
+        // Patch up arg_vals in each child, and copy everything else:
         let children2: Vec<Child<S>> = children.iter().zip(offsets.iter()).map(|(c,off)| {
             Child {
                 rule: c.rule.clone(),
                 xf: c.xf.clone(),
                 // simply add offset:
-                vmap: c.vmap.iter().map(|i| i + off).collect(),
+                arg_vals: c.arg_vals.iter().map(|i| i + off).collect(),
             }
         }).collect();
 

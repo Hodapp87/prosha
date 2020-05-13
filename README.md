@@ -6,18 +6,8 @@
   transformations so that I'm actually constructing things to be
   correct instead of just throwing shit at the wall.
   See my "Composing Transformations" link in log.org.
-- My "Barbs" example revealed another pesky limitation: a parent vertex
-  cannot refer to a parent vertex of the parent itself. This came up
-  because I had a rule inheriting 4 vertices (one side of a cube), and
-  creating 4 new vertices (the opposite side of a cube). I wanted its
-  child rules to be able to create faces that had 2 vertices of the
-  parent and 2 vertices that the parent inherited (basically grandparent
-  vertices) - think of one of the remaining 4 sides of the cube. I have
-  no way to do this and no easy workarounds I can see, given that the
-  rule does not have access to the exact vertex positions (so just making
-  new vertices that are 'close' and connecting them isn't an option).
 - Adaptive subdivision - which means having to generalize past some
-  `vmap` stuff.
+  `arg_vals` stuff.
 - Try some non-deterministic examples.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
