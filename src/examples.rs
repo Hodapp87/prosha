@@ -50,12 +50,13 @@ pub fn cube_thing() -> Rule<()> {
 
 pub fn barbs() -> Rule<()> {
 
-    let (b0, b1);
+    let (b0, bn);
     let base_verts: Vec<VertexUnion> = vec_indexed![
-        @b0: VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
-             VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
-             VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
-        @b1: VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
+        @b0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
+        VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
+        VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
+        VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
+        @bn,
     ];
     let n = base_verts.len();
 
@@ -71,7 +72,7 @@ pub fn barbs() -> Rule<()> {
             &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
         );
 
-        let geom = util::parallel_zigzag(next_verts.clone(), b0..b1+1, a0..a1);
+        let geom = util::parallel_zigzag(next_verts.clone(), b0..bn, a0..a1);
         let final_geom = MeshFunc {
             verts: (0..4).map(|i| VertexUnion::Arg(i)).collect(),
             faces: vec![ 0, 2, 1,   0, 3, 2 ],

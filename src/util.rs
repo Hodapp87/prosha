@@ -4,17 +4,21 @@ use crate::xform::{Vertex};
 //use crate::rule::{Rule, Child};
 
 /// This is like `vec!`, but it can handle elements that are given
-/// with `@var: element` rather than `element`, e.g. like
-/// `vec_indexed![foo, bar, @a: baz, quux]`. The variable (which must
+/// with `@var element` rather than `element`, e.g. like
+/// `vec_indexed![foo, bar, @a baz, quux]`. The variable (which must
 /// already be declared and a `usize`) is then assigned the index of the
-/// element it precedes.  This can be used any number of times with
+/// element it precedes (2).  This can be used any number of times with
 /// different elements and indices.
+///
+/// It can  also be used like `vec_indexed![foo, bar, baz, @b,]` in which
+/// case `b` is the index after 'baz' (3) rather than before. This still
+/// requires a trailing comma.
 #[macro_export]
 macro_rules! vec_indexed {
     // Thank you to GhostOfSteveJobs and Rantanen in the Rust discord.
-    ($( $(@ $Index:ident :)? $Value:expr,)*) => {{
+    ($( $(@ $Index:ident)? $($Value:expr)?,)*) => {{
         let mut v = Vec::new();
-        $( $($Index = v.len();)? v.push($Value); )*
+        $( $($Index = v.len();)? $(v.push($Value);)? )*
         v
     }};
 }
