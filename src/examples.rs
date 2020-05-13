@@ -59,14 +59,8 @@ pub fn barbs() -> Rule<()> {
     ];
     let n = base_verts.len();
 
-    let incr: Transform = Transform::new().
-        translate(0.0, 0.0, 1.0).
-        rotate(&Vector3::z_axis(), 0.15).
-        rotate(&Vector3::x_axis(), 0.1).
-        scale(0.95);
-
-    let incr2: Transform = Transform::new().
-        translate(0.0, 0.0, 1.5).
+    let barb_incr: Transform = Transform::new().
+        translate(0.0, 0.0, 0.5).
         rotate(&Vector3::y_axis(), -0.2).
         scale(0.8);
 
@@ -87,20 +81,28 @@ pub fn barbs() -> Rule<()> {
          */
 
         RuleEval {
-            geom: Rc::new(geom.transform(&incr)),
+            geom: Rc::new(geom.transform(&barb_incr)),
             final_geom: Rc::new(prim::empty_meshfunc()), // TODO
             children: vec![
                 Child {
                     rule: self_.clone(),
-                    xf: incr2,
+                    xf: barb_incr,
                     vmap: (0..n).collect(),
                 }
             ]
         }
     };
-
     let barb_ = Rc::new(barb);
 
+    let main_barb_trans = Transform::new().
+        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
+        translate(0.5, 0.0, 0.5);
+
+    let main_incr: Transform = Transform::new().
+        translate(0.0, 0.0, 1.0).
+        rotate(&Vector3::z_axis(), 0.15).
+        rotate(&Vector3::x_axis(), 0.1).
+        scale(0.95);
     let b = base_verts.clone();
     let main = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
         let mut next_verts = b.clone();
@@ -119,20 +121,17 @@ pub fn barbs() -> Rule<()> {
          */
 
         RuleEval {
-            geom: Rc::new(geom.transform(&incr)),
+            geom: Rc::new(geom.transform(&main_incr)),
             final_geom: Rc::new(prim::empty_meshfunc()), // TODO
             children: vec![
                 Child {
                     rule: self_.clone(),
-                    xf: incr,
+                    xf: main_incr,
                     vmap: (0..n).collect(),
                 },
                 Child {
                     rule:  Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: Transform::new().
-                        translate(0.0, 0.0, 1.4).
-                        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
-                        scale(0.9),
+                    xf: main_incr * main_barb_trans,
                     vmap: vec![b0, b0 + 1, a0 + 1, a0],
                 },
             ],
