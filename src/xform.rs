@@ -57,6 +57,11 @@ impl Mul for Transform {
     }
 }
 
+/// Convenience function for identity transformation
+pub fn id() -> Transform {
+    Transform::new()
+}
+
 /*
 impl<'a> Mul for &'a Transform {
     type Output = Self;

@@ -80,6 +80,50 @@ pub struct Child<S> {
     pub arg_vals: Vec<usize>,
 }
 
+#[macro_export]
+macro_rules! child {
+    ( $Rule:expr, $Xform:expr, $( $Arg:expr ),* ) => {
+        Child {
+            rule: /*std::rc::Rc::new*/($Rule),
+            xf: $Xform,
+            arg_vals: vec![$($Arg,)*],
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! child_iter {
+    ( $Rule:expr, $Xform:expr, $Args:expr ) => {
+        Child {
+            rule: /*std::rc::Rc::new*/($Rule),
+            xf: $Xform,
+            arg_vals: $Args.collect(), // does this even need a macro?
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! rule {
+    ( $RuleFn:expr, $Ctxt:expr ) => {
+        std::rc::Rc::new(Rule {
+            eval: $RuleFn.clone(),
+            ctxt: $Ctxt,
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! rule_fn {
+    ( $Ty:ty, $Self:ident => $Body:expr ) => {
+        std::rc::Rc::new(move |$Self: std::rc::Rc<Rule<$Ty>>| -> RuleEval<$Ty> {
+            let $Self = $Self.clone();
+            $Body
+        })
+    }
+}
+// TODO: Shouldn't I fully-qualify Rule & RuleEval?
+// TODO: Document all of the above macros
+
 impl<S> Rule<S> {
 
     /// Convert this `Rule` to mesh data, recursively (depth first).

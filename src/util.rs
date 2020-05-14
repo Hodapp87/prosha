@@ -24,15 +24,15 @@ macro_rules! vec_indexed {
 }
 
 pub trait VecExt<T> {
-    fn append_indexed(&mut self, other: &mut Vec<T>) -> (usize, usize);
+    fn append_indexed(&mut self, other: Vec<T>) -> (usize, usize);
 }
 
 impl<T> VecExt<T> for Vec<T> {
     // Like `append`, but returning `(a, b)` which give the range of
     // elements just inserted.
-    fn append_indexed(&mut self, other: &mut Vec<T>) -> (usize, usize) {
+    fn append_indexed(&mut self, mut other: Vec<T>) -> (usize, usize) {
         let a = self.len();
-        self.append(other);
+        self.append(&mut other);
         let b = self.len();
         (a, b)
     }

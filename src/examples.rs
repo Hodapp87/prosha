@@ -5,8 +5,8 @@ use rand::Rng;
 
 use crate::util;
 use crate::util::VecExt;
-use crate::mesh::{Mesh, MeshFunc, VertexUnion};
-use crate::xform::{Transform, Vertex, vertex, Mat4};
+use crate::mesh::{Mesh, MeshFunc, VertexUnion, vert_args};
+use crate::xform::{Transform, Vertex, vertex, Mat4, id};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 
@@ -58,66 +58,49 @@ pub fn barbs() -> Rule<()> {
         VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
         @bn,
     ];
-    let n = base_verts.len();
 
-    let barb_incr: Transform = Transform::new().
-        translate(0.0, 0.0, 0.5).
+    let barb_incr = id().translate(0.0, 0.0, 0.5).
         rotate(&Vector3::y_axis(), -0.2).
         scale(0.8);
 
     let b = base_verts.clone();
-    let barb = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+    let barb = rule_fn!((), self_ => {
         let mut next_verts = b.clone();
-        let (a0, a1) = next_verts.append_indexed(
-            &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
-        );
+        let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
 
         let geom = util::parallel_zigzag(next_verts.clone(), b0..bn, a0..a1);
         let final_geom = MeshFunc {
-            verts: (0..4).map(|i| VertexUnion::Arg(i)).collect(),
+            verts: vert_args(0..4),
             faces: vec![ 0, 2, 1,   0, 3, 2 ],
         };
 
         RuleEval {
             geom: Rc::new(geom.transform(&barb_incr)),
             final_geom: Rc::new(final_geom), // no transform needed (no vertices)
-            children: vec![
-                Child {
-                    rule: self_.clone(),
-                    xf: barb_incr,
-                    arg_vals: (0..n).collect(),
-                }
-            ]
+            children: vec![ child_iter!(self_, barb_incr, b0..bn) ],
         }
-    };
-    let barb_ = Rc::new(barb);
+    });
 
-    let main_barb_trans = |i| {
-        Transform::new().
-            rotate(&Vector3::z_axis(), -std::f32::consts::FRAC_PI_2 * (i as f32)).
-            rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
-            translate(0.5, 0.0, 0.5)
+    let main_barb_xf = |i| {
+        id().rotate(&Vector3::z_axis(), -std::f32::consts::FRAC_PI_2 * (i as f32)).
+        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
+        translate(0.5, 0.0, 0.5)
     };
-
-    let main_incr: Transform = Transform::new().
-        translate(0.0, 0.0, 1.0).
+    let main_incr = id().translate(0.0, 0.0, 1.0).
         rotate(&Vector3::z_axis(), 0.15).
         rotate(&Vector3::x_axis(), 0.1).
         scale(0.95);
+
     let b = base_verts.clone();
-    let main = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+    let main = rule_fn!((), self_ => {
         let mut next_verts = b.clone();
-        let (a0, a1) = next_verts.append_indexed(
-            &mut (0..4).map(|i| VertexUnion::Arg(i)).collect()
-        );
+        let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
 
         // This contributes no faces of its own - just vertices.
-        let geom = MeshFunc {
-            verts: next_verts.clone(),
-            faces: vec![],
-        };
+        let geom = MeshFunc { verts: next_verts.clone(), faces: vec![] };
+        // (unless recursion ends here, of course)
         let final_geom = MeshFunc {
-            verts: (0..4).map(|i| VertexUnion::Arg(i)).collect(),
+            verts: vert_args(0..4),
             faces: vec![ 0, 2, 1,   0, 3, 2 ],
         };
 
@@ -125,59 +108,30 @@ pub fn barbs() -> Rule<()> {
             geom: Rc::new(geom),
             final_geom: Rc::new(final_geom),
             children: vec![
-                Child {
-                    rule: self_.clone(),
-                    xf: main_incr,
-                    arg_vals: (0..n).collect(),
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: main_barb_trans(0),
-                    arg_vals: vec![b0 + 0, b0 + 1, a0 + 1, a0 + 0],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: main_barb_trans(1),
-                    arg_vals: vec![b0 + 1, b0 + 2, a0 + 2, a0 + 1],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: main_barb_trans(2),
-                    arg_vals: vec![b0 + 2, b0 + 3, a0 + 3, a0 + 2],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: barb_.clone(), ctxt: () }),
-                    xf: main_barb_trans(3),
-                    arg_vals: vec![b0 + 3, b0 + 0, a0 + 0, a0 + 3],
-                },
-                // TODO: Factor out repetition
+                child_iter!(self_, main_incr, b0..bn),
+                child!(rule!(barb, ()), main_barb_xf(0), b0 + 0, b0 + 1, a0 + 1, a0 + 0),
+                child!(rule!(barb, ()), main_barb_xf(1), b0 + 1, b0 + 2, a0 + 2, a0 + 1),
+                child!(rule!(barb, ()), main_barb_xf(2), b0 + 2, b0 + 3, a0 + 3, a0 + 2),
+                child!(rule!(barb, ()), main_barb_xf(3), b0 + 3, b0 + 0, a0 + 0, a0 + 3),
+                // TODO: Factor out repetition?
             ],
         }
-    };
+    });
 
-    let main_ = Rc::new(main);
-    let base = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+    let base = rule_fn!((), _s => {
         RuleEval {
             geom: Rc::new(MeshFunc {
                 verts: base_verts.clone(),
-                faces: vec![
-                    b0, b0 + 1, b0 + 2,
-                    b0, b0 + 2, b0 + 3,
-                ],
+                faces: vec![ b0, b0 + 1, b0 + 2,   b0, b0 + 2, b0 + 3 ],
             }),
             // TODO: This might be buggy and leave some vertices lying around
             final_geom: Rc::new(prim::empty_meshfunc()),
-            children: vec![
-                Child {
-                    rule: Rc::new(Rule { eval: main_.clone(), ctxt: () }),
-                    xf: Transform::new(),
-                    arg_vals: (0..n).collect(),
-                },
-            ],
+            children: vec![ child_iter!(rule!(main, ()), id(), b0..bn) ],
         }
-    };
+    });
 
-    Rule { eval: Rc::new(base), ctxt: () }
+    //rule!(Rc::new(base), ())
+    Rule { eval: base, ctxt: () }
 }
 
 /*

@@ -1,4 +1,5 @@
 pub mod mesh;
+#[macro_use]
 pub mod rule;
 pub mod prim;
 #[macro_use]

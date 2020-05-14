@@ -2,12 +2,9 @@
 
 ## Highest priority:
 
-- Make a series of guidelines for *exactly* how to order
-  transformations so that I'm actually constructing things to be
-  correct instead of just throwing shit at the wall.
-  See my "Composing Transformations" link in log.org.
-- Adaptive subdivision - which means having to generalize past some
-  `arg_vals` stuff.
+- Continue to refine the 'barbs' example, which broke some new ground.
+- Implement the continuous parametric transformations from 2020-05-07
+  in my notes.  This will require some new abstractions.
 - Try some non-deterministic examples.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
@@ -42,7 +39,9 @@
     method for recursive calls).
 - Docs on modules
 - Compute global scale factor, and perhaps pass it to a rule (to
-  eventually be used for, perhaps, adaptive subdivision)
+  eventually be used for, perhaps, adaptive subdivision).  Note that
+  one can find the scale factors by taking the length of the first 3
+  columns of the transform matrix (supposedly).
 - swept-isocontour stuff from
   `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`.  This
   will probably require that I figure out parametric curves
@@ -83,7 +82,7 @@
   things too - this relates to dynamical systems and eigenvalues.)
   Later note: I have a feeling I was dead wrong about a bunch of this.
 
-## Reflections
+## Reflections & Quick Notes
 
 - My old Python version composed rules in the opposite order and I
   think this made things more complicated.  I didn't realize that I
@@ -94,3 +93,6 @@
 - Generalizing to space curves moves this away from the "discrete
   automata" roots, but it still ends up needing the machinery I made
   for discrete automata.
+- If you *pre* multiply a transformation: you are transforming the
+  entire global space.  If you *post* multiply: you are transforming
+  the current local space. 

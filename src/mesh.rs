@@ -82,6 +82,10 @@ pub enum VertexUnion {
     Arg(usize),
 }
 
+pub fn vert_args<T: IntoIterator<Item = usize>>(v: T) -> Vec<VertexUnion> {
+    v.into_iter().map(|i| VertexUnion::Arg(i)).collect()
+}
+
 /// A face-vertex mesh whose vertices can either be concrete values
 /// (as in `Mesh`) or aliases (indices to other vertices of some
 /// hypothetical mesh).  This can be turned to `mesh` only if those
