@@ -114,15 +114,20 @@ macro_rules! rule {
 
 #[macro_export]
 macro_rules! rule_fn {
-    ( $Ty:ty, $Self:ident => $Body:expr ) => {
-        std::rc::Rc::new(move |$Self: std::rc::Rc<Rule<$Ty>>| -> RuleEval<$Ty> {
-            let $Self = $Self.clone();
-            $Body
-        })
+    ( $Ty:ty => |$Self:ident $(,$x:ident)*| $Body:expr ) => {
+        {
+            $(let $x = $x.clone();)*
+            std::rc::Rc::new(move |$Self: std::rc::Rc<Rule<$Ty>>| -> RuleEval<$Ty> {
+                $(let $x = $x.clone();)*
+                let $Self = $Self.clone();
+                $Body
+            })
+        }
     }
 }
 // TODO: Shouldn't I fully-qualify Rule & RuleEval?
 // TODO: Document all of the above macros
+// TODO: Why must I clone twice?
 
 impl<S> Rule<S> {
 

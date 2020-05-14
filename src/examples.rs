@@ -63,9 +63,8 @@ pub fn barbs() -> Rule<()> {
         rotate(&Vector3::y_axis(), -0.2).
         scale(0.8);
 
-    let b = base_verts.clone();
-    let barb = rule_fn!((), self_ => {
-        let mut next_verts = b.clone();
+    let barb = rule_fn!(() => |self_, base_verts| {
+        let mut next_verts = base_verts;
         let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
 
         let geom = util::parallel_zigzag(next_verts.clone(), b0..bn, a0..a1);
@@ -91,9 +90,8 @@ pub fn barbs() -> Rule<()> {
         rotate(&Vector3::x_axis(), 0.1).
         scale(0.95);
 
-    let b = base_verts.clone();
-    let main = rule_fn!((), self_ => {
-        let mut next_verts = b.clone();
+    let main = rule_fn!(() => |self_, base_verts| {
+        let mut next_verts = base_verts;
         let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
 
         // This contributes no faces of its own - just vertices.
@@ -118,10 +116,10 @@ pub fn barbs() -> Rule<()> {
         }
     });
 
-    let base = rule_fn!((), _s => {
+    let base = rule_fn!(() => |_s, base_verts| {
         RuleEval {
             geom: Rc::new(MeshFunc {
-                verts: base_verts.clone(),
+                verts: base_verts,
                 faces: vec![ b0, b0 + 1, b0 + 2,   b0, b0 + 2, b0 + 3 ],
             }),
             // TODO: This might be buggy and leave some vertices lying around
