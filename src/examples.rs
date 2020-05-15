@@ -67,7 +67,7 @@ pub fn barbs() -> Rule<()> {
         let mut next_verts = base_verts;
         let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
 
-        let geom = util::parallel_zigzag(next_verts.clone(), b0..bn, a0..a1);
+        let geom = util::parallel_zigzag(next_verts, b0..bn, a0..a1);
         let final_geom = MeshFunc {
             verts: vert_args(0..4),
             faces: vec![ 0, 2, 1,   0, 3, 2 ],
