@@ -75,8 +75,10 @@ mod tests {
     */
 
     #[test]
-    fn barbs() { run_test(examples::barbs(), 80, "barbs", false); }
+    fn barbs() { run_test(examples::barbs(false), 80, "barbs", false); }
 
+    #[test]
+    fn barbs_random() { run_test(examples::barbs(true), 80, "barbs_random", false); }
     /*
     #[test]
     fn twist() {

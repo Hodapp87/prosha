@@ -49,7 +49,7 @@ pub fn cube_thing() -> Rule<()> {
 }
 */
 
-pub fn barbs() -> Rule<()> {
+pub fn barbs(random: bool) -> Rule<()> {
 
     let (b0, bn);
     let base_verts: Vec<VertexUnion> = vec_indexed![
@@ -60,9 +60,24 @@ pub fn barbs() -> Rule<()> {
         @bn,
     ];
 
-    let barb_incr = id().translate(0.0, 0.0, 0.5).
-        rotate(&Vector3::y_axis(), -0.2).
-        scale(0.8);
+    let barb_incr = |random| {
+        if random {
+            let t = rand::thread_rng().gen_range(0.45, 0.55);
+            let s = rand::thread_rng().gen_range(0.7, 0.9);
+            let ry = rand::thread_rng().gen_range(-0.3, -0.1);
+            let rx = rand::thread_rng().gen_range(-0.04, 0.04);
+            let rz = rand::thread_rng().gen_range(-0.04, 0.04);
+            id().translate(0.0, 0.0, t).
+                rotate(&Vector3::y_axis(), ry).
+                rotate(&Vector3::x_axis(), rx).
+                rotate(&Vector3::z_axis(), rz).
+                scale(s)
+        } else {
+            id().translate(0.0, 0.0, 0.5).
+                rotate(&Vector3::y_axis(), -0.2).
+                scale(0.8)
+        }
+    };
 
     let barb = rule_fn!(() => |self_, base_verts| {
         let mut next_verts = base_verts;
@@ -74,10 +89,12 @@ pub fn barbs() -> Rule<()> {
             faces: vec![ 0, 2, 1,   0, 3, 2 ],
         };
 
+        let b = barb_incr(random);
+
         RuleEval {
-            geom: Rc::new(geom.transform(&barb_incr)),
+            geom: Rc::new(geom.transform(&b)),
             final_geom: Rc::new(final_geom), // no transform needed (no vertices)
-            children: vec![ child_iter!(self_, barb_incr, b0..bn) ],
+            children: vec![ child_iter!(self_, b, b0..bn) ],
         }
     });
 
@@ -86,10 +103,23 @@ pub fn barbs() -> Rule<()> {
         rotate(&Vector3::y_axis(), -FRAC_PI_2).
         translate(0.5, 0.0, 0.5)
     };
-    let main_incr = id().translate(0.0, 0.0, 1.0).
-        rotate(&Vector3::z_axis(), 0.15).
-        rotate(&Vector3::x_axis(), 0.1).
-        scale(0.95);
+    let main_incr = |random| {
+        if random {
+            let t = rand::thread_rng().gen_range(0.75, 1.25);
+            let s = rand::thread_rng().gen_range(0.85, 1.10);
+            let rz = rand::thread_rng().gen_range(0.05, 0.25);
+            let rx = rand::thread_rng().gen_range(0.08, 0.12);
+            id().translate(0.0, 0.0, 1.0).
+                rotate(&Vector3::z_axis(), rz).
+                rotate(&Vector3::x_axis(), rx).
+                scale(s)
+        } else {
+            id().translate(0.0, 0.0, 1.0).
+                rotate(&Vector3::z_axis(), 0.15).
+                rotate(&Vector3::x_axis(), 0.1).
+                scale(0.95)
+        }
+    };
 
     let main = rule_fn!(() => |self_, base_verts| {
         let mut next_verts = base_verts;
@@ -107,7 +137,7 @@ pub fn barbs() -> Rule<()> {
             geom: Rc::new(geom),
             final_geom: Rc::new(final_geom),
             children: vec![
-                child_iter!(self_, main_incr, b0..bn),
+                child_iter!(self_, main_incr(random), b0..bn),
                 child!(rule!(barb, ()), main_barb_xf(0), b0 + 0, b0 + 1, a0 + 1, a0 + 0),
                 child!(rule!(barb, ()), main_barb_xf(1), b0 + 1, b0 + 2, a0 + 2, a0 + 1),
                 child!(rule!(barb, ()), main_barb_xf(2), b0 + 2, b0 + 3, a0 + 3, a0 + 2),
