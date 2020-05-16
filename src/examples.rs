@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::f32::consts::{FRAC_PI_2, PI};
 
 use nalgebra::*;
 use rand::Rng;
@@ -14,7 +15,7 @@ use crate::prim;
 pub fn cube_thing() -> Rule<()> {
 
     // Quarter-turn in radians:
-    let qtr = std::f32::consts::FRAC_PI_2;
+    let qtr = FRAC_PI_2;
     //let x = &Vector3::x_axis();
     let y = &Vector3::y_axis();
     let z = &Vector3::z_axis();
@@ -81,8 +82,8 @@ pub fn barbs() -> Rule<()> {
     });
 
     let main_barb_xf = |i| {
-        id().rotate(&Vector3::z_axis(), -std::f32::consts::FRAC_PI_2 * (i as f32)).
-        rotate(&Vector3::y_axis(), -std::f32::consts::FRAC_PI_2).
+        id().rotate(&Vector3::z_axis(), -FRAC_PI_2 * (i as f32)).
+        rotate(&Vector3::y_axis(), -FRAC_PI_2).
         translate(0.5, 0.0, 0.5)
     };
     let main_incr = id().translate(0.0, 0.0, 1.0).
@@ -153,7 +154,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     let count: usize = 4;
     
     // Quarter-turn in radians:
-    let qtr = std::f32::consts::FRAC_PI_2;
+    let qtr = FRAC_PI_2;
     let y = Vector3::y_axis();
 
     let incr_inner = Transform::new().translate(-dx0, 0.0, 0.0).rotate(&y, ang).translate(dx0, dy, 0.0);
@@ -311,7 +312,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
     let start = move |self_: Rc<Rule<NestSpiral2Ctxt>>| -> RuleEval<NestSpiral2Ctxt> {
         let z = &Vector3::z_axis();
         let child = |i: usize| -> Child<NestSpiral2Ctxt> {
-            let ang = std::f32::consts::PI * 2.0 * (i as f32) / (count as f32);
+            let ang = PI * 2.0 * (i as f32) / (count as f32);
             Child {
                 rule: Rc::new(Rule {
                     eval: r.clone(),
@@ -671,7 +672,7 @@ pub fn ramhorn() -> Rule<()> {
     };
     
     let opening_xform = |i| {
-        let r = std::f32::consts::FRAC_PI_2 * i;
+        let r = FRAC_PI_2 * i;
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
             translate(0.25, 0.25, 1.0).
@@ -794,7 +795,7 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     });
 
     let opening_xform = |i| {
-        let r = std::f32::consts::FRAC_PI_2 * i;
+        let r = FRAC_PI_2 * i;
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
             translate(0.25, 0.25, 0.0).
@@ -967,7 +968,7 @@ pub fn ramhorn_branch_random(depth: usize, f: f32) -> Rule<RamHornCtxt2> {
     });
 
     let opening_xform = |i| {
-        let r = std::f32::consts::FRAC_PI_2 * i;
+        let r = FRAC_PI_2 * i;
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
             translate(0.25, 0.25, 0.0).
@@ -1148,7 +1149,7 @@ impl CurveHorn {
             id_xform: nalgebra::geometry::Transform3::identity().to_homogeneous(),
             flip180: nalgebra::geometry::Rotation3::from_axis_angle(
                 &nalgebra::Vector3::y_axis(),
-                std::f32::consts::PI).to_homogeneous(),
+                PI).to_homogeneous(),
             incr: geometry::Rotation3::from_axis_angle(y, 0.1).to_homogeneous() *
                 Matrix4::new_scaling(0.95) *
                 geometry::Translation3::new(0.0, 0.0, 0.2).to_homogeneous(),
