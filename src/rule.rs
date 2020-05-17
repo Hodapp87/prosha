@@ -364,11 +364,15 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         panic!("frame must have at least 3 vertices");
     }
 
+    #[derive(Clone, Debug)]
     struct frontierVert {
         vert: Vertex, // Vertex position
         t: f32, // Parameter value; f(t) should equal vert
-        frame_idx: usize, // Index of 'frame' this sits in the trajectory of
+        frame_vert: Vertex, // "Starting" vertex position, i.e. at f(t0).
+        // Always either a frame vertex, or a linear combination of two
+        // neighboring ones.
         mesh_idx: usize, // Index of this vertex in the mesh
+        // (If it's in 'frontier', the vertex is in the mesh).
         neighbor1: usize, // Index of 'frontier' of one neighbor
         neighbor2: usize, // Index of 'frontier' of other neighbor
     };
@@ -377,7 +381,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
     let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
         vert: *v,
         t: t0,
-        frame_idx: i,
+        frame_vert: *v,
         mesh_idx: i,
         neighbor1: (i - 1) % n,
         neighbor2: (i + 1) % n,
@@ -395,23 +399,32 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
     let mut verts: Vec<Vertex> = frame.clone();
     let mut faces: Vec<usize> = vec![];
 
+    let mut count = 0;
+
     while !frontier.is_empty() {
+
+        for (i,f) in frontier.iter().enumerate() {
+            println!("DEBUG: frontier[{}]: vert={},{},{} t={} mesh_idx={} neighbors={},{}", i, f.vert.x, f.vert.y, f.vert.z, f.t, f.mesh_idx, f.neighbor1, f.neighbor2);
+        }
 
         // Pick a vertex to advance.
         //
         // Heuristic for now: pick the 'furthest back' (lowest t)
-        let (i,v) = frontier.iter().enumerate().min_by(|(i,f), (j, g)|
-            f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+        let (i,v) = {
+            let (i,v) = frontier.iter().enumerate().min_by(|(i,f), (j, g)|
+                f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+            (i, v.clone())
+        };
         // TODO: Make this less ugly?
 
         if v.t >= t1 {
             break;
         }
 
-        println!("DEBUG: Moving vertex {}, {:?} (t={}, frame_idx={})", i, v.vert, v.t, v.frame_idx);
+        println!("DEBUG: Moving vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
 
         let mut dt = (t1 - t0) / 100.0;
-        let vf = frame[v.frame_idx];
+        let vf = v.frame_vert;
         for iter in 0..100 {
             // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
             // These two endpoints have zero error from the trajectory
@@ -424,20 +437,25 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             let traj_mid = f(v.t + dt/2.0).mtx * vf;
             let err = (edge_mid - traj_mid).norm();
 
-            println!("DEBUG iter {}: dt={}, edge_mid={:?}, traj_mid={:?}, err={}", iter, dt, edge_mid, traj_mid, err);
+            //println!("DEBUG iter {}: dt={}, edge_mid={:?}, traj_mid={:?}, err={}", iter, dt, edge_mid, traj_mid, err);
 
             let r = (err - max_err).abs() / max_err;
             if r < 0.10 {
-                println!("err close enough");
+                //println!("err close enough");
+                println!("Error under threshold in {} iters, dt={}", iter, dt);
                 break;
             } else if err > max_err {
                 dt = dt / 2.0;
-                println!("err > max_err, reducing dt to {}", dt);
+                //println!("err > max_err, reducing dt to {}", dt);
             } else {
                 dt = dt * 1.2;
-                println!("err < max_err, increasing dt to {}", dt);
+                //println!("err < max_err, increasing dt to {}", dt);
             }
         }
+        // (note that this is just a crappy numerical approximation of
+        // dt given a desired error and it would probably be possible
+        // to do this directly given an analytical form of the
+        // curvature of f at some starting point)
 
         let t = v.t + dt;
         let v_next = f(t).mtx * vf;
@@ -445,22 +463,100 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // Add this vertex to our mesh:
         let pos = verts.len();
         verts.push(v_next);
-        // There are 3 other vertices of interest: the one we started
-        // from (v) and its two neighbors. We make two edges - one on
-        // each side of the edge (v, v_next).
-        faces.append(&mut vec![
-            v.mesh_idx, pos, frontier[v.neighbor1].mesh_idx,
-            pos, v.mesh_idx, frontier[v.neighbor2].mesh_idx,
-        ]);
 
         // Replace this vertex in the frontier:
         frontier[i] = frontierVert {
             vert: v_next,
-            frame_idx: v.frame_idx,
+            frame_vert: vf,
             mesh_idx: pos,
             t: t,
             neighbor1: v.neighbor1,
             neighbor2: v.neighbor2,
+        };
+        // We might update neighbor1/neighbor2 below.
+
+        // The starting vertex (v.vert) is already in the mesh, but
+        // the two 'neighbor' vertices need to be considered:
+        let neighbors = [v.neighbor1, v.neighbor2];
+
+        // We can consider two faces - one on each side of the 'main'
+        // edge (v, v_next), going to vertex side1_idx or side2_idx.
+        // We may also need to subdivide one or both of these faces
+        // along the edge (v_next, side1_idx) or (v_next, side2_idx).
+        for (j,neighbor_idx) in neighbors.iter().enumerate() {
+            let neighbor = &frontier[*neighbor_idx];
+            let side_idx = neighbor.mesh_idx;
+            // To do so, we can consider the error on the edge
+            // (v_next, neighbor), using mostly the same 'midpoint' method
+            // as each iteration when computing dt.
+            // First, find edge midpoint:
+            let edge_mid = 0.5*(v_next + neighbor.vert);
+            // To find the 'interpolated' trajectory we need to interpolate
+            // back at the original frame (we may need this anyway for other
+            // computations later):
+            let frame_mid = 0.5*(vf + neighbor.frame_vert);
+            // ...then trace these to find 'trajectory' midpoint;
+            let t_mid = v.t + dt/2.0;
+            let xf = f(t_mid).mtx;
+            let traj_mid = xf * frame_mid;
+            // and finally, error:
+            let mid_err = (edge_mid - traj_mid).norm();
+            println!("DEBUG: j={} considering edge {},{}, edge_mid={:?} traj_mid={:?} mid_err={}", j, i, *neighbor_idx, edge_mid, traj_mid, mid_err);
+
+            // DEBUG: This is disabled until fixed
+            if false && mid_err > max_err {
+                println!("Error over threshold, splitting ({},{})", i, neighbor_idx);
+                // Error is high enough we should split.
+                let pos_new = verts.len();
+                verts.push(traj_mid);
+                let new_neighbor = frontier.len();
+                frontier.push(frontierVert {
+                    vert: traj_mid,
+                    frame_vert: frame_mid,
+                    mesh_idx: pos_new,
+                    t: t_mid,
+                    neighbor1: *neighbor_idx,
+                    neighbor2: i,
+                });
+                // We've put a new vertex in between (see neighbor1/2)
+                // so we have to update this information.
+                let mut patch_neighbor = |idx: usize, from: usize, to: usize| {
+                    println!("DEBUG: patch_neighbor of idx {} from {} to {}", idx, from, to);
+                    if frontier[idx].neighbor1 == from { frontier[idx].neighbor1 = to; }
+                    if frontier[idx].neighbor2 == from { frontier[idx].neighbor2 = to; }
+                };
+                patch_neighbor(i, *neighbor_idx, new_neighbor);
+                patch_neighbor(*neighbor_idx, i, new_neighbor);
+
+                let mut new_faces = if j % 2 == 0 {
+                    vec![
+                        v.mesh_idx, pos, pos_new,
+                        v.mesh_idx, pos_new, side_idx,
+                    ]
+                } else {
+                    vec![
+                        pos, v.mesh_idx, pos_new,
+                        pos_new, v.mesh_idx, side_idx,
+                    ]
+                };
+                faces.append(&mut new_faces);
+            } else {
+                // Error is within limit.  Just add one face.
+
+                let mut new_faces = if j % 2 == 0 {
+                    vec![v.mesh_idx, pos, side_idx]
+                } else {
+                    vec![pos, v.mesh_idx, side_idx]
+                };
+                faces.append(&mut new_faces);
+                // TODO: This is likely the wrong 'general' way to handle
+                // winding order but for n=2 it probably is fine
+            }
+        }
+
+        count += 1;
+        if count > 50 {
+            break;
         }
     }
 
