@@ -135,6 +135,11 @@ mod tests {
         run_test(examples::ramhorn_branch_random(24, 0.25), 32, "ram_horn_branch_random", false);
     }
      */
+
+    #[test]
+    fn test_parametric() {
+        examples::test_parametric().write_stl_file("test_parametric.stl");
+    }
 }
 // need this for now:
 // cargo test -- --nocapture

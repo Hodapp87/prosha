@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32;
 
 use nalgebra::*;
 use rand::Rng;
@@ -1256,3 +1257,23 @@ impl CurveHorn {
     }
 }
 */
+
+pub fn test_parametric() -> Mesh {
+
+    let base_verts: Vec<Vertex> = vec![
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+        vertex( 0.5, -0.5, 0.0),
+    ];
+
+    let t0 = 0.0;
+    let t1 = 16.0;
+    let xform = |t: f32| -> Transform {
+        id().translate(0.0, 0.0, t/5.0).
+            rotate(&Vector3::z_axis(), -t/2.0).
+            scale((0.8).powf(t))
+    };
+
+    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.0001)
+}

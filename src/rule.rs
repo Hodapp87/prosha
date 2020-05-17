@@ -1,8 +1,9 @@
-use crate::mesh::{MeshFunc, VertexUnion};
-use crate::xform::{Transform};
+use crate::mesh::{Mesh, MeshFunc, VertexUnion};
+use crate::xform::{Transform, Vertex};
 //use crate::prim;
 use std::borrow::Borrow;
 use std::rc::Rc;
+use std::f32;
 
 pub type RuleFn<S> = Rc<dyn Fn(Rc<Rule<S>>) -> RuleEval<S>>;
 
@@ -341,4 +342,155 @@ impl<S> RuleEval<S> {
         }
     }
 
+}
+
+/// Produce a mesh from a starting frame, and a function `f` which produces
+/// transformations that change continuously over its argument (the range
+/// of which is given by `t0` and `t1`).  By convention, `f(t0)` should
+/// always produce an identity transformation.
+///
+/// Facetization is guided by the given error, `max_err`, which is treated
+/// as a distance in 3D space.
+pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f32) -> Mesh
+    where F: Fn(f32) -> Transform
+{
+    let n = frame.len();
+
+    // Sanity checks:
+    if t1 <= t0 {
+        panic!("t1 must be greater than t0");
+    }
+    if n < 3 {
+        panic!("frame must have at least 3 vertices");
+    }
+
+    struct frontierVert {
+        vert: Vertex, // Vertex position
+        t: f32, // Parameter value; f(t) should equal vert
+        frame_idx: usize, // Index of 'frame' this sits in the trajectory of
+        mesh_idx: usize, // Index of this vertex in the mesh
+        neighbor1: usize, // Index of 'frontier' of one neighbor
+        neighbor2: usize, // Index of 'frontier' of other neighbor
+    };
+
+    // Init 'frontier' with each 'frame' vertex, and start it at t=t0.
+    let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
+        vert: *v,
+        t: t0,
+        frame_idx: i,
+        mesh_idx: i,
+        neighbor1: (i - 1) % n,
+        neighbor2: (i + 1) % n,
+    }).collect();
+    // Every vertex in 'frontier' has a trajectory it follows - which is
+    // simply the position as we transform the original vertex by f(t),
+    // and increment t through the range [t0, t1].
+    //
+    // The goal is to advance the vertices, one at a time, building up
+    // new triangles every time we advance one, until each vertex
+    // reaches t=t1 - in a way that forms the mesh we want.
+
+    // That mesh will be built up here, starting with frame vertices:
+    // (note initial value of mesh_idx)
+    let mut verts: Vec<Vertex> = frame.clone();
+    let mut faces: Vec<usize> = vec![];
+
+    while !frontier.is_empty() {
+
+        // Pick a vertex to advance.
+        //
+        // Heuristic for now: pick the 'furthest back' (lowest t)
+        let (i,v) = frontier.iter().enumerate().min_by(|(i,f), (j, g)|
+            f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+        // TODO: Make this less ugly?
+
+        if v.t >= t1 {
+            break;
+        }
+
+        println!("DEBUG: Moving vertex {}, {:?} (t={}, frame_idx={})", i, v.vert, v.t, v.frame_idx);
+
+        let mut dt = (t1 - t0) / 100.0;
+        let vf = frame[v.frame_idx];
+        for iter in 0..100 {
+            // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
+            // These two endpoints have zero error from the trajectory
+            // (because they are directly on it).
+            //
+            // If we assume some continuity in f, then we can guess that
+            // the worst error occurs at the midpoint of the edge:
+            let edge_mid = 0.5*(f(v.t).mtx + f(v.t + dt).mtx)*vf;
+            // ...relative to the trajectory midpoint:
+            let traj_mid = f(v.t + dt/2.0).mtx * vf;
+            let err = (edge_mid - traj_mid).norm();
+
+            println!("DEBUG iter {}: dt={}, edge_mid={:?}, traj_mid={:?}, err={}", iter, dt, edge_mid, traj_mid, err);
+
+            let r = (err - max_err).abs() / max_err;
+            if r < 0.10 {
+                println!("err close enough");
+                break;
+            } else if err > max_err {
+                dt = dt / 2.0;
+                println!("err > max_err, reducing dt to {}", dt);
+            } else {
+                dt = dt * 1.2;
+                println!("err < max_err, increasing dt to {}", dt);
+            }
+        }
+
+        let t = v.t + dt;
+        let v_next = f(t).mtx * vf;
+
+        // Add this vertex to our mesh:
+        let pos = verts.len();
+        verts.push(v_next);
+        // There are 3 other vertices of interest: the one we started
+        // from (v) and its two neighbors. We make two edges - one on
+        // each side of the edge (v, v_next).
+        faces.append(&mut vec![
+            v.mesh_idx, pos, frontier[v.neighbor1].mesh_idx,
+            pos, v.mesh_idx, frontier[v.neighbor2].mesh_idx,
+        ]);
+
+        // Replace this vertex in the frontier:
+        frontier[i] = frontierVert {
+            vert: v_next,
+            frame_idx: v.frame_idx,
+            mesh_idx: pos,
+            t: t,
+            neighbor1: v.neighbor1,
+            neighbor2: v.neighbor2,
+        }
+    }
+
+    // Move this vertex further along, i.e. t + dt.  (dt is set by
+    // the furthest we can go while remaining within 'err', i.e. when we
+    // make our connections we look at how far points on the *edges*
+    // diverge from the trajectory of the  continuous transformation).
+
+    // Add this vertex to the mesh, and connect it to: the vertex we
+    // started with, and the two neighbors of that vertex.
+
+    // Repeat at "Pick a vertex...".
+
+    // Don't move t + dt past t1.  Once a frontier vertex is placed at
+    // that value of t, remove it.
+
+
+    // Missing: Anything about when to subdivide an edge.
+    // If I assume a good criterion of "when" to subdivide an edge, the
+    // "how" is straightforward: find the edge's two neighbors in the
+    // frontier. Trace them back to their 'original' vertices at t=t0
+    // (these should just be stored alongside each frontier member),
+    // produce an interpolated vertex. Produce an interpolated t from
+    // respective t of the two neighbors in the frontier; use that t
+    // to move the 'interpolated' vertex along its trajectory.
+    //
+    // Add new vertex to mesh (and make the necessary connections)
+    // and to frontier.
+
+    // But still missing from that: When do I collapse a subdivision
+    // back down?
+    return Mesh { verts, faces };
 }
