@@ -1292,12 +1292,35 @@ pub fn test_dcel(fname: &str) {
     let f2 = mesh.add_face_twin1(mesh.faces[f1].halfedge, vertex(0.0, 0.0, 1.0));
     mesh.check();
 
-    let vl1 = mesh.face_to_verts(f1);
-    println!("verts = {:?}", vl1);
-    let vl2 = mesh.face_to_verts(f2);
-    println!("verts = {:?}", vl2);
+    // Find the shared edge:
+    let mut shared: Option<(usize, usize)> = None;
+    for e in mesh.face_to_halfedges(f1) {
+        let he = &mesh.halfedges[e];
+        if he.has_twin {
+            shared = Some((e, he.twin_halfedge));
+        }
+    }
+    let (edge, twin) = shared.unwrap();
+    println!("Shared edges = {},{}", edge, twin);
 
-    //let f3 = mesh.add_face_twin2();
+    let ep = mesh.halfedges[edge].prev_halfedge;
+    let en = mesh.halfedges[edge].next_halfedge;
+    let tp = mesh.halfedges[twin].prev_halfedge;
+    let tn = mesh.halfedges[twin].next_halfedge;
+    println!("Connecting halfedges: {} and {}, {} and {}", en, tp, tn, ep);
+
+    println!("DCEL mesh = {}", mesh);
+    // As we're making *twin* halfedges, we go against the edge
+    // direction:
+    let f3 = mesh.add_face_twin2(en, tp);
+    mesh.check();
+    let f4 = mesh.add_face_twin2(tn, ep);
+    mesh.check();
+
+    println!("f1 verts: {:?}", mesh.face_to_verts(f1));
+    println!("f2 verts: {:?}", mesh.face_to_verts(f2));
+    println!("f3 verts: {:?}", mesh.face_to_verts(f3));
+    println!("f4 verts: {:?}", mesh.face_to_verts(f4));
 
     println!("DCEL mesh = {}", mesh);
 

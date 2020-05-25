@@ -72,14 +72,14 @@ impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
         let v_strs: Vec<String> = self.verts.iter().enumerate().map(|(i,v)| {
-            format!("v{}=e{} {:?}", i, v.halfedge, v.v)
+            format!("V{}=e{} {:?}", i, v.halfedge, v.v)
         }).collect();
         let v_str = v_strs.join(",");
 
         let f_strs: Vec<String> = self.faces.iter().enumerate().map(|(i,f)| {
-            format!("f{}=e{}", i, f.halfedge)
+            format!("F{}=e{}", i, f.halfedge)
         }).collect();
-        let f_str = f_strs.join(",");
+        let f_str = f_strs.join(", ");
 
         let e_strs: Vec<String> = self.halfedges.iter().enumerate().map(|(i,h)| {
             let twin = if h.has_twin {
@@ -87,9 +87,9 @@ impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
             } else {
                 String::from("")
             };
-            format!("e{}=v{} f{}{} n{} p{}", i, h.vert, h.face, twin, h.next_halfedge, h.prev_halfedge)
+            format!("E{}=v{} f{}{} n{} p{}", i, h.vert, h.face, twin, h.next_halfedge, h.prev_halfedge)
         }).collect();
-        let e_str = e_strs.join(",");
+        let e_str = e_strs.join(", ");
 
         write!(f, "DCELMesh({} verts, {}; {} faces, {}; {} halfedges, {})",
                self.num_verts, v_str,
@@ -210,6 +210,15 @@ impl<V: Copy> DCELMesh<V> {
                     i, face.halfedge, face2);
                 pass = false;
             }
+
+            // TODO: Check that face never visits same vertex twice?
+            // This might belong in halfedge checking
+        }
+
+        if pass {
+            println!("Mesh OK")
+        } else {
+            println!("Mesh has errors!")
         }
 
         pass
@@ -336,8 +345,9 @@ impl<V: Copy> DCELMesh<V> {
     /// Twin half-edges should be given in counter-clockwise order; that
     /// is, for the resultant face, one half-edge's twin will be twin1, and
     /// the next half-edge's twin will be twin2.
-    /// Also: `self.halfedges[twin2].next_halfedge` must equal `twin1`.
-    pub fn add_face_twin2(&mut self, twin1: usize, twin2: usize) -> usize {
+    /// Also: halfedge `twin2_idx` must end at the vertex that starts
+    /// `twin1_idx`.
+    pub fn add_face_twin2(&mut self, twin1_idx: usize, twin2_idx: usize) -> usize {
         // The face will be at index f_n:
         let f_n = self.num_faces;
         // The half-edges will be at indices e_n, e_n+1, e_n+2:
@@ -345,40 +355,46 @@ impl<V: Copy> DCELMesh<V> {
 
         // The origin vertex is 'between' the two edges, but because their
         // order is reversed (as twins), this is twin1's origin:
-        let twin_halfedge = &self.halfedges[twin1];
-        let v1 = twin_halfedge.vert;
-        let v2 = self.halfedges[twin_halfedge.next_halfedge].vert;
+        let twin1 = &self.halfedges[twin1_idx];
+        let twin2 = &self.halfedges[twin2_idx];
+        let v1 = twin1.vert;
+        let v2 = self.halfedges[twin1.next_halfedge].vert;
         // Final vertex is back around to twin2's origin:
-        let v3 = self.halfedges[twin2].vert;
+        let v3 = twin2.vert;
+
+        if v1 != self.halfedges[twin2.next_halfedge].vert {
+            panic!(format!("twin2 ({}) must end where twin1 ({}) begins, but does not (vertex {} vs. {})",
+                twin2_idx, twin1_idx, self.halfedges[twin2.next_halfedge].vert, v1));
+        }
 
         self.halfedges.push(DCELHalfEdge {
             vert: v1,
             face: f_n,
             has_twin: true,
-            twin_halfedge: twin1,
+            twin_halfedge: twin1_idx,
             next_halfedge: e_n + 1,
             prev_halfedge: e_n + 2,
         }); // index e_n
-        self.halfedges[twin1].has_twin = true;
-        self.halfedges[twin1].twin_halfedge = e_n;
+        self.halfedges[twin1_idx].has_twin = true;
+        self.halfedges[twin1_idx].twin_halfedge = e_n;
+        self.halfedges.push(DCELHalfEdge {
+            vert: v3,
+            face: f_n,
+            has_twin: true,
+            twin_halfedge: twin2_idx,
+            next_halfedge: e_n + 2,
+            prev_halfedge: e_n,
+        }); // index e_n + 1
         self.halfedges.push(DCELHalfEdge {
             vert: v2,
             face: f_n,
             has_twin: false,
             twin_halfedge: 0,
-            next_halfedge: e_n + 2,
-            prev_halfedge: e_n,
-        }); // index e_n + 1
-        self.halfedges.push(DCELHalfEdge {
-            vert: v3,
-            face: f_n,
-            has_twin: true,
-            twin_halfedge: twin2,
             next_halfedge: e_n,
             prev_halfedge: e_n + 1,
         }); // index e_n + 2
-        self.halfedges[twin2].has_twin = true;
-        self.halfedges[twin2].twin_halfedge = e_n + 2;
+        self.halfedges[twin2_idx].has_twin = true;
+        self.halfedges[twin2_idx].twin_halfedge = e_n + 1;
         self.num_halfedges += 3;
 
         // Finally, add the face (any halfedge is fine):
