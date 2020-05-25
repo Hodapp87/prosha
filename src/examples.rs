@@ -11,6 +11,7 @@ use crate::mesh::{Mesh, MeshFunc, VertexUnion, vert_args};
 use crate::xform::{Transform, Vertex, vertex, Mat4, id};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
+use crate::dcel;
 
 /*
 pub fn cube_thing() -> Rule<()> {
@@ -1266,6 +1267,8 @@ pub fn test_parametric() -> Mesh {
         vertex( 0.5,  0.5, 0.0),
         vertex( 0.5, -0.5, 0.0),
     ];
+    //let base_verts = util::subdivide_cycle(&base_verts, 2);
+    //let base_verts = util::subdivide_cycle(&base_verts, 16);
 
     let t0 = 0.0;
     let t1 = 16.0;
@@ -1275,5 +1278,30 @@ pub fn test_parametric() -> Mesh {
             scale((0.8).powf(t))
     };
 
-    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.0001)
+    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.005)
+}
+
+pub fn test_dcel(fname: &str) {
+    let mut mesh: dcel::DCELMesh<Vertex> = dcel::DCELMesh::new();
+    let f1 = mesh.add_face([
+        vertex(-0.5, -0.5, 0.0),
+        vertex(-0.5,  0.5, 0.0),
+        vertex( 0.5,  0.5, 0.0),
+    ]);
+    let f2 = mesh.add_face_twin1(mesh.faces[f1].halfedge, vertex(0.0, 0.0, 1.0));
+
+    let vl1 = mesh.face_to_verts(f1);
+    println!("verts = {:?}", vl1);
+    let vl2 = mesh.face_to_verts(f2);
+    println!("verts = {:?}", vl2);
+
+    //let f3 = mesh.add_face_twin2();
+
+    println!("DCEL mesh = {}", mesh);
+
+    let mesh_conv = dcel::convert_mesh(&mesh);
+
+    println!("Mesh = {:?}", mesh_conv);
+
+    mesh_conv.write_stl_file(fname).unwrap();
 }

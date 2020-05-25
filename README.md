@@ -2,8 +2,12 @@
 
 ## Highest priority:
 
+- Work on my doubly-connected edge list so I can complete some other
+  things below!
 - Implement the continuous parametric transformations from 2020-05-07
   in my notes.  This will require some new abstractions.
+- Document `parametric_mesh` better. It is pretty hairy and could
+  also benefit from some modularity.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.
@@ -55,6 +59,10 @@
   'iterative' versions that still weave around?
 
 ## Research Areas
+
+- [Geometry and Algorithms for Computer Aided Design (Hartmann)](https://www2.mathematik.tu-darmstadt.de/~ehartmann/cdgen0104.pdf)
+- https://en.wikipedia.org/wiki/Surface_triangulation
+- https://www.cs.cmu.edu/~quake/triangle.html
 
 ## Reflections & Quick Notes
 

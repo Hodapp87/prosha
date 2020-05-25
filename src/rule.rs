@@ -373,9 +373,36 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // neighboring ones.
         mesh_idx: usize, // Index of this vertex in the mesh
         // (If it's in 'frontier', the vertex is in the mesh).
-        neighbor1: usize, // Index of 'frontier' of one neighbor
-        neighbor2: usize, // Index of 'frontier' of other neighbor
+        neighbor: [usize; 2], // Indices of 'frontier' of each neighbor
+        side_faces: [(usize,bool); 2], // The two faces (given as an index
+        // into 'faces' below) which contain the edge from this vertex to
+        // its neighbors. If the bool is false, there is no face.
     };
+
+    // A face that is still undergoing subdivision. This is used for a stack
+    // in the main loop.  'verts' gives the index of vertices of the face,
+    // and 'shared_faces' gives neighboring faces, i.e. those which share
+    // an edge with the face. This always refers to a face that is already
+    // in 'faces' - but this face may be replaced in the course of
+    // processing.
+    #[derive(Clone, Debug)]
+    struct tempFace {
+        // Indices into 'verts' below:
+        verts: [usize; 3],
+        // The parameter values corresponding to 'verts':
+        ts: [f32; 3],
+        // The 'frame' vertices (i.e. vertex at f(t0)) corresponding
+        // to 'verts':
+        frame_verts: [Vertex; 3],
+        // Index into 'faces' below for the starting vertex:
+        face: usize,
+        // If the bool is true, this gives an index into 'faces' below for
+        // a face that shares an edge with this face; if the bool is false,
+        // disregard (there is no neighbor here). This goes in a specific
+        // order: the face sharing edge (verts[0], verts[1]), then edge
+        // (verts[1], verts[2]), then edge (verts[2], verts[0]).
+        shared_faces: [(usize, bool); 3],
+    }
 
     // Init 'frontier' with each 'frame' vertex, and start it at t=t0.
     let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
@@ -383,8 +410,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         t: t0,
         frame_vert: *v,
         mesh_idx: i,
-        neighbor1: (i - 1) % n,
-        neighbor2: (i + 1) % n,
+        neighbor: [(i - 1) % n, (i + 1) % n],
+        side_faces: [(0, false); 2], // initial vertices have no faces
     }).collect();
     // Every vertex in 'frontier' has a trajectory it follows - which is
     // simply the position as we transform the original vertex by f(t),
@@ -399,19 +426,20 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
     let mut verts: Vec<Vertex> = frame.clone();
     let mut faces: Vec<usize> = vec![];
 
-    let mut count = 0;
+    // 'stack' is cleared at every iteration below, and contains faces that
+    // may still require subdivision.
+    let mut stack: Vec<tempFace> = vec![];
 
     while !frontier.is_empty() {
-
-        for (i,f) in frontier.iter().enumerate() {
-            println!("DEBUG: frontier[{}]: vert={},{},{} t={} mesh_idx={} neighbors={},{}", i, f.vert.x, f.vert.y, f.vert.z, f.t, f.mesh_idx, f.neighbor1, f.neighbor2);
+        for (i, f) in frontier.iter().enumerate() {
+            println!("DEBUG: frontier[{}]: vert={},{},{} t={} mesh_idx={} neighbor={:?}", i, f.vert.x, f.vert.y, f.vert.z, f.t, f.mesh_idx, f.neighbor);
         }
 
         // Pick a vertex to advance.
         //
         // Heuristic for now: pick the 'furthest back' (lowest t)
-        let (i,v) = {
-            let (i,v) = frontier.iter().enumerate().min_by(|(i,f), (j, g)|
+        let (i, v) = {
+            let (i, v) = frontier.iter().enumerate().min_by(|(i, f), (j, g)|
                 f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
             (i, v.clone())
         };
@@ -420,9 +448,15 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         if v.t >= t1 {
             break;
         }
+        // TODO: Fix boundary behavior here and make sure final topology
+        // is right.
 
         println!("DEBUG: Moving vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
 
+        // Move this vertex further along, i.e. t + dt.  (dt is set by
+        // the furthest we can go while remaining within 'err', i.e. when we
+        // make our connections we look at how far points on the *edges*
+        // diverge from the trajectory of the  continuous transformation).
         let mut dt = (t1 - t0) / 100.0;
         let vf = v.frame_vert;
         for iter in 0..100 {
@@ -432,9 +466,9 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             //
             // If we assume some continuity in f, then we can guess that
             // the worst error occurs at the midpoint of the edge:
-            let edge_mid = 0.5*(f(v.t).mtx + f(v.t + dt).mtx)*vf;
+            let edge_mid = 0.5 * (f(v.t).mtx + f(v.t + dt).mtx) * vf;
             // ...relative to the trajectory midpoint:
-            let traj_mid = f(v.t + dt/2.0).mtx * vf;
+            let traj_mid = f(v.t + dt / 2.0).mtx * vf;
             let err = (edge_mid - traj_mid).norm();
 
             //println!("DEBUG iter {}: dt={}, edge_mid={:?}, traj_mid={:?}, err={}", iter, dt, edge_mid, traj_mid, err);
@@ -460,133 +494,149 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         let t = v.t + dt;
         let v_next = f(t).mtx * vf;
 
+        // DEBUG
+        /*
+        let l1 = (v.vert - v_next).norm();
+        let l2 = (frontier[v.neighbor1].vert - v.vert).norm();
+        let l3 = (frontier[v.neighbor2].vert - v.vert).norm();
+        println!("l1={} l2={} l3={}", l1, l2, l3);
+         */
+
         // Add this vertex to our mesh:
-        let pos = verts.len();
+        let v_next_idx = verts.len();
         verts.push(v_next);
+        // and add two faces:
+        let face_idx = faces.len();
+        faces.append(&mut vec![
+            v_next_idx, v.mesh_idx, frontier[v.neighbor[0]].mesh_idx, // face_idx
+            v.mesh_idx, v_next_idx, frontier[v.neighbor[1]].mesh_idx, // face_idx + 1
+        ]);
 
         // Replace this vertex in the frontier:
         frontier[i] = frontierVert {
             vert: v_next,
             frame_vert: vf,
-            mesh_idx: pos,
+            mesh_idx: v_next_idx,
             t: t,
-            neighbor1: v.neighbor1,
-            neighbor2: v.neighbor2,
+            neighbor: v.neighbor,
+            side_faces: [(face_idx, true), (face_idx + 1, true)],
         };
-        // We might update neighbor1/neighbor2 below.
+        // Note above that we added two edges that include v_next_idx:
+        // (frontier[v.neighbor[0]].mesh_idx, v_next_idx)
+        // (frontier[v.neighbor[1]].mesh_idx, v_next_idx)
+        // hence, side_faces has the respective face for each.
 
-        // The starting vertex (v.vert) is already in the mesh, but
-        // the two 'neighbor' vertices need to be considered:
-        let neighbors = [v.neighbor1, v.neighbor2];
+        // Also add these faces to the stack of triangles to check for
+        // subdivision. They may be replaced.
+        let f0 = &frontier[v.neighbor[0]];
+        stack.push(tempFace {
+            verts:        [v_next_idx, v.mesh_idx, f0.mesh_idx],
+            ts:           [t,          v.t,        f0.t],
+            frame_verts:  [vf,         vf,         f0.frame_vert],
+            face:         face_idx,
+            shared_faces: [(face_idx + 1, true), (0, false), f0.side_faces[1]],
+        });
+        let f1 = &frontier[v.neighbor[1]];
+        stack.push(tempFace {
+            verts:        [v.mesh_idx, v_next_idx, f1.mesh_idx],
+            ts:           [v.t,        t,          f1.t],
+            frame_verts:  [vf,         vf,         f1.frame_vert],
+            face:         face_idx + 1,
+            shared_faces: [(face_idx, true), f1.side_faces[0], (0, false)],
+        });
+        // Note that vf appears several times in frame_verts because
+        // several vertices sit in the same trajectory (thus, same 'frame'
+        // vertex).
 
-        // We can consider two faces - one on each side of the 'main'
-        // edge (v, v_next), going to vertex side1_idx or side2_idx.
-        // We may also need to subdivide one or both of these faces
-        // along the edge (v_next, side1_idx) or (v_next, side2_idx).
-        for (j,neighbor_idx) in neighbors.iter().enumerate() {
-            let neighbor = &frontier[*neighbor_idx];
-            let side_idx = neighbor.mesh_idx;
-            // To do so, we can consider the error on the edge
-            // (v_next, neighbor), using mostly the same 'midpoint' method
-            // as each iteration when computing dt.
-            // First, find edge midpoint:
-            let edge_mid = 0.5*(v_next + neighbor.vert);
-            // To find the 'interpolated' trajectory we need to interpolate
-            // back at the original frame (we may need this anyway for other
-            // computations later):
-            let frame_mid = 0.5*(vf + neighbor.frame_vert);
-            // ...then trace these to find 'trajectory' midpoint;
-            let t_mid = v.t + dt/2.0;
-            let xf = f(t_mid).mtx;
-            let traj_mid = xf * frame_mid;
-            // and finally, error:
-            let mid_err = (edge_mid - traj_mid).norm();
-            println!("DEBUG: j={} considering edge {},{}, edge_mid={:?} traj_mid={:?} mid_err={}", j, i, *neighbor_idx, edge_mid, traj_mid, mid_err);
-
-            // DEBUG: This is disabled until fixed
-            if false && mid_err > max_err {
-                println!("Error over threshold, splitting ({},{})", i, neighbor_idx);
-                // Error is high enough we should split.
-                let pos_new = verts.len();
-                verts.push(traj_mid);
-                let new_neighbor = frontier.len();
-                frontier.push(frontierVert {
-                    vert: traj_mid,
-                    frame_vert: frame_mid,
-                    mesh_idx: pos_new,
-                    t: t_mid,
-                    neighbor1: *neighbor_idx,
-                    neighbor2: i,
-                });
-                // We've put a new vertex in between (see neighbor1/2)
-                // so we have to update this information.
-                let mut patch_neighbor = |idx: usize, from: usize, to: usize| {
-                    println!("DEBUG: patch_neighbor of idx {} from {} to {}", idx, from, to);
-                    if frontier[idx].neighbor1 == from { frontier[idx].neighbor1 = to; }
-                    if frontier[idx].neighbor2 == from { frontier[idx].neighbor2 = to; }
-                };
-                patch_neighbor(i, *neighbor_idx, new_neighbor);
-                patch_neighbor(*neighbor_idx, i, new_neighbor);
-
-                let mut new_faces = if j % 2 == 0 {
-                    vec![
-                        v.mesh_idx, pos, pos_new,
-                        v.mesh_idx, pos_new, side_idx,
-                    ]
-                } else {
-                    vec![
-                        pos, v.mesh_idx, pos_new,
-                        pos_new, v.mesh_idx, side_idx,
-                    ]
-                };
-                faces.append(&mut new_faces);
+        while !stack.is_empty() {
+            let face = stack.pop().unwrap();
+            println!("DEBUG: Examining face: {:?}", face);
+            let v0 = verts[face.verts[0]];
+            let v1 = verts[face.verts[1]];
+            let v2 = verts[face.verts[2]];
+            let d01 = (v0 - v1).norm();
+            let d02 = (v0 - v2).norm();
+            let d12 = (v1 - v2).norm();
+            // Law of cosines:
+            let cos0 = (d01*d01 + d02*d02 - d12*d12) / (2.0 * d01 * d02);
+            let cos1 = (d01*d01 + d12*d12 - d02*d02) / (2.0 * d01 * d12);
+            let cos2 = (d02*d02 + d12*d12 - d01*d01) / (2.0 * d02 * d12);
+            // TODO: Perhaps use https://en.wikipedia.org/wiki/Circumscribed_circle#Cartesian_coordinates
+            // to go by circumradius instead. Or - find it by law of sines?
+            println!("DEBUG: d01={} d02={} d12={} cos0={} cos1={} cos2={}", d01, d02, d12, cos0, cos1, cos2);
+            if (cos0 < 0.0 || cos0 > 0.7 ||
+                cos1 < 0.0 || cos1 > 0.7 ||
+                cos2 < 0.0 || cos2 > 0.7) {
+                println!("DEBUG: Angles out of range!");
             } else {
-                // Error is within limit.  Just add one face.
-
-                let mut new_faces = if j % 2 == 0 {
-                    vec![v.mesh_idx, pos, side_idx]
-                } else {
-                    vec![pos, v.mesh_idx, side_idx]
-                };
-                faces.append(&mut new_faces);
-                // TODO: This is likely the wrong 'general' way to handle
-                // winding order but for n=2 it probably is fine
+                println!("DEBUG: Angles OK");
             }
-        }
+            // TODO: Figure out how to subdivide in this case
 
-        count += 1;
-        if count > 50 {
-            break;
-        }
+            // The triangle forms a plane.  Get this plane's normal vector.
+            let a = (v0 - v1).xyz();
+            let b = (v0 - v2).xyz();
+            let normal = a.cross(&b).normalize();
+            // Make a new point that is on the surface, but roughly a
+            // midpoint in parameter space. Exact location isn't crucial.
+            let t_mid = (face.ts[0] + face.ts[1] + face.ts[2]) / 3.0;
+            let v_mid = (face.frame_verts[0] + face.frame_verts[1] + face.frame_verts[2]) / 3.0;
+            let p = f(t_mid).mtx * v_mid;
+
+            let d = p.xyz().dot(&normal);
+
+            println!("DEBUG: t_mid={} v_mid={},{},{} p={},{},{}", t_mid, v_mid.x, v_mid.y, v_mid.z, p.x, p.y, p.z);
+            println!("DEBUG: d={}", d);
+
+            // DEBUG
+            /*
+            let n = verts.len();
+            verts.push(p);
+            faces.push(face.verts[0]);
+            faces.push(face.verts[1]);
+            faces.push(n);
+             */
+            if (d <= max_err) {
+                // This triangle is already in the mesh, and already popped
+                // off of the stack. We're done.
+                continue;
+            }
+            println!("DEBUG: d > err, splitting this triangle");
+
+            // The face has 3 edges.  We split each of them (making a new
+            // vertex in the middle), and then make 3 new edges - one
+            // between each pair of new vertices - to replace the face
+            // with four smaller faces.
+
+            // This split is done in 'parameter' space:
+            let pairs = [(0,1), (1,2), (0,2)];
+            let mut mids = pairs.iter().map(|(i,j)| {
+                let t = (face.ts[*i] + face.ts[*j]) / 2.0;
+                let v = (face.frame_verts[*i] + face.frame_verts[*j]) / 2.0;
+                f(t).mtx * v
+            }).collect();
+
+            // DEBUG
+            let n = verts.len();
+            // Index n+0 is (0,1), n+1 is (1,2), n+2 is (0,2)
+            verts.append(&mut mids);
+            faces[face.face] = n + 0;
+            faces[face.face + 1] = n + 1;
+            faces[face.face + 2] = n + 2;
+            faces.extend_from_slice(&[
+                face.verts[0], n + 0, n + 2,
+                face.verts[1], n + 1, n + 0,
+                face.verts[2], n + 2, n + 1,
+                //n + 0,         n + 1, n + 2,
+            ]);
+
+            // TODO: Look at shared_faces because these must be split too.
+
+            // TODO: Do I have to correct *other* things in the stack too?
+            // If they refer to the same face I may be invalidating
+            // something here!
+       }
     }
 
-    // Move this vertex further along, i.e. t + dt.  (dt is set by
-    // the furthest we can go while remaining within 'err', i.e. when we
-    // make our connections we look at how far points on the *edges*
-    // diverge from the trajectory of the  continuous transformation).
-
-    // Add this vertex to the mesh, and connect it to: the vertex we
-    // started with, and the two neighbors of that vertex.
-
-    // Repeat at "Pick a vertex...".
-
-    // Don't move t + dt past t1.  Once a frontier vertex is placed at
-    // that value of t, remove it.
-
-
-    // Missing: Anything about when to subdivide an edge.
-    // If I assume a good criterion of "when" to subdivide an edge, the
-    // "how" is straightforward: find the edge's two neighbors in the
-    // frontier. Trace them back to their 'original' vertices at t=t0
-    // (these should just be stored alongside each frontier member),
-    // produce an interpolated vertex. Produce an interpolated t from
-    // respective t of the two neighbors in the frontier; use that t
-    // to move the 'interpolated' vertex along its trajectory.
-    //
-    // Add new vertex to mesh (and make the necessary connections)
-    // and to frontier.
-
-    // But still missing from that: When do I collapse a subdivision
-    // back down?
     return Mesh { verts, faces };
 }

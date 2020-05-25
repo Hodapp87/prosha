@@ -1,0 +1,313 @@
+use std::fmt;
+
+use crate::mesh::{Mesh};
+use crate::xform::{Vertex};
+
+/// Doubly-connected edge list mesh (or a half-edge mesh),
+/// parametrized over some vertex type.
+#[derive(Clone, Debug)]
+pub struct DCELMesh<V: Copy> {
+    pub verts: Vec<DCELVertex<V>>,
+    pub faces: Vec<DCELFace>,
+    pub halfedges: Vec<DCELHalfEdge>,
+
+    pub num_verts: usize,
+    pub num_faces: usize,
+    pub num_halfedges: usize,
+}
+
+/// A vertex of a mesh, combined with an arbitrary half-edge that has
+/// this vertex as its origin.  This is always relative to some parent
+/// Mesh<V>.
+#[derive(Clone, Debug)]
+pub struct DCELVertex<V> {
+    /// The vertex itself.
+    pub v: V,
+    /// A half-edge (given as an index into 'halfedges');
+    /// arbitrary, but `mesh.halfedges[halfedge] = v` must be true
+    pub halfedge: usize,
+}
+
+/// A face, given as a half-edge that lies on its boundary (and must
+/// traverse it counter-clockwise). This is always relative to some
+/// parent Mesh<V>, as in Vertex.
+#[derive(Clone, Debug)]
+pub struct DCELFace {
+    /// A boundary half-edge of this face (given as an index into
+    /// 'halfedges').
+    pub halfedge: usize,
+}
+
+/// A half-edge, given in terms of its origin vertex, the face that the
+/// half-edge lies on the boundary of, its optional "twin" half-edge that
+/// lies on an adjacent face, and previous and next half-edges (to
+/// traverse the boundaries of the face). This is always relative to
+/// some parent Mesh<V>, as in Vertex and Face.
+#[derive(Clone, Debug)]
+pub struct DCELHalfEdge {
+    /// Origin vertex (given as an index into 'verts')
+    pub vert: usize,
+    /// Face this half-edge lies on the boundary of (given as an index
+    /// into 'faces')
+    pub face: usize,
+    /// If false, ignore twin_halfedge.  (If this is true, then it must
+    /// also be true for the twin.)
+    pub has_twin: bool,
+    /// The twin half-edge (given as an index into 'halfedges').
+    /// The twin of the twin must point back to this HalfEdge.
+    pub twin_halfedge: usize,
+    /// The next half-edge on the boundary (given as an index into
+    /// 'halfedges').  'prev_halfedge' of this half-edge must point
+    /// back to this same HalfEdge.  Repeatedly following 'next_halfedge'
+    /// must also lead back to this same HalfEdge.
+    pub next_halfedge: usize,
+    /// The previous half-edge on the boundary (given as an index into
+    /// 'halfedges'). 'next_halfedge' of this half-edge must point
+    /// back to this HalfEdge.  Repeatedly following 'prev_halfedge'
+    /// must also lead back to this same HalfEdge.
+    pub prev_halfedge: usize,
+}
+
+impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+
+        let v_strs: Vec<String> = self.verts.iter().enumerate().map(|(i,v)| {
+            format!("v{}={:?}", i, v.v)
+        }).collect();
+        let v_str = v_strs.join(",");
+
+        let f_strs: Vec<String> = self.faces.iter().enumerate().map(|(i,f)| {
+            format!("f{}=e{}", i, f.halfedge)
+        }).collect();
+        let f_str = f_strs.join(",");
+
+        let e_strs: Vec<String> = self.halfedges.iter().enumerate().map(|(i,h)| {
+            let twin = if h.has_twin {
+                format!(" tw{}", h.twin_halfedge)
+            } else {
+                String::from("")
+            };
+            format!("e{}=v{} f{}{} n{} p{}", i, h.vert, h.face, twin, h.next_halfedge, h.prev_halfedge)
+        }).collect();
+        let e_str = e_strs.join(",");
+
+        write!(f, "DCELMesh({} verts, {}; {} faces, {}; {} halfedges, {})",
+               self.num_verts, v_str,
+               self.num_faces, f_str,
+               self.num_halfedges, e_str)
+    }
+}
+
+impl<V: Copy> DCELMesh<V> {
+
+    pub fn new() -> DCELMesh<V> {
+        DCELMesh {
+            verts: vec![],
+            faces: vec![],
+            halfedges: vec![],
+            num_verts: 0,
+            num_faces: 0,
+            num_halfedges: 0,
+        }
+    }
+
+    pub fn face_to_halfedges(&self, face_idx: usize) -> Vec<usize> {
+        let mut edges: Vec<usize> = vec![];
+        let start_idx = self.faces[face_idx].halfedge;
+        edges.push(start_idx);
+
+        let mut idx = self.halfedges[start_idx].next_halfedge;
+        while start_idx != idx {
+            edges.push(idx);
+            idx = self.halfedges[idx].next_halfedge;
+        }
+        return edges;
+    }
+
+    pub fn face_to_verts(&self, face_idx: usize) -> Vec<usize> {
+        self.face_to_halfedges(face_idx).iter().map(|e| {
+            self.halfedges[*e].vert
+        }).collect()
+    }
+
+    /// Add a face with no connections
+    pub fn add_face(&mut self, verts: [V; 3]) -> usize {
+        // Vertices will be at indices v_n, v_n+1, v_n+2:
+        let v_n = self.num_verts;
+        // The face will be at index f_n:
+        let f_n = self.num_faces;
+        // The half-edges will be at indices e_n, e_n+1, e_n+2:
+        let e_n = self.num_halfedges;
+
+        // Half-edges and vertices can be inserted both at once:
+        for i in 0..3 {
+            let n = (i + 1) % 3;
+            let p = (i + 2) % 3;
+            self.halfedges.push(DCELHalfEdge {
+                vert: v_n + i,
+                face: f_n,
+                has_twin: false,
+                twin_halfedge: 0,
+                next_halfedge: e_n + n,
+                prev_halfedge: e_n + p,
+            });
+            self.verts.push(DCELVertex {
+                v: verts[i],
+                halfedge: e_n + i,
+            });
+        }
+        self.num_halfedges += 3;
+        self.num_verts += 3;
+
+        // Finally, add the face (any halfedge is fine):
+        self.faces.push(DCELFace { halfedge: e_n });
+        self.num_faces += 1;
+
+        f_n
+    }
+
+    /// Add a face that lies on an existing boundary - i.e. one half-edge
+    /// has a twin half-edge already on the mesh.  As this gives two
+    /// vertices, only one other vertex needs specified.
+    pub fn add_face_twin1(&mut self, twin: usize, vert: V) -> usize {
+        // 'vert' will be at index v_n:
+        let v_n = self.num_verts;
+        // The face will be at index f_n:
+        let f_n = self.num_faces;
+        // The half-edges will be at indices e_n, e_n+1, e_n+2:
+        let e_n = self.num_halfedges;
+
+        // Note the reversal of direction
+        let twin_halfedge = &self.halfedges[twin];
+        let v1 = self.halfedges[twin_halfedge.next_halfedge].vert;
+        let v2 = twin_halfedge.vert;
+
+        // Insert 'twin' half-edge first:
+        self.halfedges.push(DCELHalfEdge {
+            vert: v1,
+            face: f_n,
+            has_twin: true,
+            twin_halfedge: twin,
+            next_halfedge: e_n + 1,
+            prev_halfedge: e_n + 2,
+        });
+        self.halfedges[twin].has_twin = true;
+        self.halfedges[twin].twin_halfedge = e_n;
+        self.halfedges.push(DCELHalfEdge {
+            vert: v2,
+            face: f_n,
+            has_twin: false,
+            twin_halfedge: 0,
+            next_halfedge: e_n + 2,
+            prev_halfedge: e_n,
+        });
+        self.halfedges.push(DCELHalfEdge {
+            vert: v_n,
+            face: f_n,
+            has_twin: false,
+            twin_halfedge: 0,
+            next_halfedge: e_n,
+            prev_halfedge: e_n + 1,
+        });
+
+        self.num_halfedges += 3;
+
+        // Since the 2nd halfedge we inserted (e_n + 1) has origin v_n:
+        self.verts.push(DCELVertex {
+            v: vert,
+            halfedge: e_n + 1,
+        });
+        self.num_verts += 1;
+
+        // Finally, add the face (any halfedge is fine):
+        self.faces.push(DCELFace { halfedge: e_n });
+        self.num_faces += 1;
+
+        f_n
+    }
+
+    /// Add a face that lies on two connected boundaries - i.e. two of its
+    /// half-edges have twins already on the mesh.
+    ///
+    /// Twin half-edges should be given in counter-clockwise order; that
+    /// is, for the resultant face, one half-edge's twin will be twin1, and
+    /// the next half-edge's twin will be twin2.
+    /// Also: `self.halfedges[twin2].next_halfedge` must equal `twin1`.
+    pub fn add_face_twin2(&mut self, twin1: usize, twin2: usize) -> usize {
+        // The face will be at index f_n:
+        let f_n = self.num_faces;
+        // The half-edges will be at indices e_n, e_n+1, e_n+2:
+        let e_n = self.num_halfedges;
+
+        // The origin vertex is 'between' the two edges, but because their
+        // order is reversed (as twins), this is twin1's origin:
+        let twin_halfedge = &self.halfedges[twin1];
+        let v1 = twin_halfedge.vert;
+        let v2 = self.halfedges[twin_halfedge.next_halfedge].vert;
+        // Final vertex is back around to twin2's origin:
+        let v3 = self.halfedges[twin2].vert;
+
+        self.halfedges.push(DCELHalfEdge {
+            vert: v1,
+            face: f_n,
+            has_twin: true,
+            twin_halfedge: twin1,
+            next_halfedge: e_n + 1,
+            prev_halfedge: e_n + 2,
+        }); // index e_n
+        self.halfedges[twin1].has_twin = true;
+        self.halfedges[twin1].twin_halfedge = e_n;
+        self.halfedges.push(DCELHalfEdge {
+            vert: v2,
+            face: f_n,
+            has_twin: false,
+            twin_halfedge: 0,
+            next_halfedge: e_n + 2,
+            prev_halfedge: e_n,
+        }); // index e_n + 1
+        self.halfedges.push(DCELHalfEdge {
+            vert: v3,
+            face: f_n,
+            has_twin: true,
+            twin_halfedge: twin2,
+            next_halfedge: e_n,
+            prev_halfedge: e_n + 1,
+        }); // index e_n + 2
+        self.halfedges[twin2].has_twin = true;
+        self.halfedges[twin2].twin_halfedge = e_n + 2;
+        self.num_halfedges += 3;
+
+        // Finally, add the face (any halfedge is fine):
+        self.faces.push(DCELFace { halfedge: e_n });
+        self.num_faces += 1;
+
+        f_n
+    }
+}
+
+pub fn convert_mesh(m: &DCELMesh<Vertex>) -> Mesh {
+    let n = m.faces.len();
+    let mut faces: Vec<usize> = vec![0; 3 * n];
+
+    for i in 0..n {
+
+        let e0 = m.faces[i].halfedge;
+        let h0 = &m.halfedges[e0];
+        faces[3*i + 0] = h0.vert;
+        let e1 = h0.next_halfedge;
+        let h1 = &m.halfedges[e1];
+        faces[3*i + 1] = h1.vert;
+        let e2 = h1.next_halfedge;
+        let h2 = &m.halfedges[e2];
+        faces[3*i + 2] = h2.vert;
+        if h2.next_halfedge != e0 {
+            panic!(format!("Face {}: half-edges {},{},{} return to {}, not {}",
+                i, e0, e1, e2, h2.next_halfedge, e0));
+        }
+    }
+
+    Mesh {
+        verts: m.verts.iter().map(|e| e.v).collect(),
+        faces: faces,
+    }
+}

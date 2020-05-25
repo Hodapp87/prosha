@@ -6,6 +6,7 @@ pub mod prim;
 pub mod util;
 pub mod xform;
 pub mod examples;
+pub mod dcel;
 
 //pub use crate::examples;
 //pub use crate::openmesh::test_thing;
@@ -138,7 +139,12 @@ mod tests {
 
     #[test]
     fn test_parametric() {
-        examples::test_parametric().write_stl_file("test_parametric.stl");
+        examples::test_parametric().write_stl_file("test_parametric.stl").unwrap();
+    }
+
+    #[test]
+    fn test_dcel() {
+        examples::test_dcel("test_dcel.stl");
     }
 }
 // need this for now:
