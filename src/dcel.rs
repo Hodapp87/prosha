@@ -72,7 +72,7 @@ impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
         let v_strs: Vec<String> = self.verts.iter().enumerate().map(|(i,v)| {
-            format!("v{}={:?}", i, v.v)
+            format!("v{}=e{} {:?}", i, v.halfedge, v.v)
         }).collect();
         let v_str = v_strs.join(",");
 
@@ -109,6 +109,110 @@ impl<V: Copy> DCELMesh<V> {
             num_faces: 0,
             num_halfedges: 0,
         }
+    }
+
+    /// Runs various checks on the mesh. This will return true if the mesh
+    /// looks okay, and otherwise false. It will print messages as it
+    /// runs.
+    pub fn check(&self) -> bool {
+        let mut pass = true;
+
+        if self.num_halfedges != self.halfedges.len() {
+            pass = false;
+            println!("self.num_halfedges={} != self.halfedges.len()={}",
+                     self.num_halfedges, self.halfedges.len());
+        } else {
+            println!("self.num_halfedges matches self.halfedges.len()");
+        }
+
+        if self.num_faces != self.faces.len() {
+            pass = false;
+            println!("self.faces={} != self.faces.len()={}",
+                     self.num_faces, self.faces.len());
+        } else {
+            println!("self.num_faces matches self.faces.len()");
+        }
+
+        if self.num_verts != self.verts.len() {
+            pass = false;
+            println!("self.verts={} != self.verts.len()={}",
+                     self.num_verts, self.verts.len());
+        } else {
+            println!("self.num_verts matches self.verts.len()");
+        }
+
+        for (i,v) in self.verts.iter().enumerate() {
+            if v.halfedge >= self.halfedges.len() {
+                println!("Vertex {}: halfedge index {} out of range",
+                    i, v.halfedge);
+                pass = false;
+            }
+            if self.halfedges[v.halfedge].vert != i {
+                println!("Vertex {} names halfedge {}, which has a different origin vertex ({})",
+                    i, v.halfedge, self.halfedges[v.halfedge].vert);
+            }
+        }
+
+        for (i,edge) in self.halfedges.iter().enumerate() {
+            if edge.vert >= self.verts.len() {
+                println!("Halfedge {}: vertex index {} out of range", i, edge.vert);
+                pass = false;
+            }
+            if edge.has_twin {
+                let twin = &self.halfedges[edge.twin_halfedge];
+                if !twin.has_twin {
+                    println!("Halfedge {}: twin {} says it has no twin",
+                        i, edge.twin_halfedge);
+                    pass = false;
+                }  else if i != twin.twin_halfedge {
+                    println!("Halfedge {} has twin {}, but reverse isn't true",
+                             i, edge.twin_halfedge);
+                    pass = false;
+                }
+            }
+            let p = edge.prev_halfedge;
+            if p >= self.halfedges.len() {
+                println!("Halfedge {}: previous halfedge index {} out of range",
+                    i, p);
+                pass = false;
+            }
+            let n = edge.next_halfedge;
+            if p >= self.halfedges.len() {
+                println!("Halfedge {}: next halfedge index {} out of range",
+                         i, n);
+                pass = false;
+            }
+            let pn = self.halfedges[p].next_halfedge;
+            if pn != i {
+                println!("Halfedge {}: previous halfedge {} has next halfedge of {}, not {}",
+                    i, p, pn, i);
+                pass = false;
+            }
+            let np = self.halfedges[n].prev_halfedge;
+            if np != i {
+                println!("Halfedge {}: next halfedge {} has previous halfedge of {}, not {}",
+                         i, n, np, i);
+                pass = false;
+            }
+            // TODO: Check that following prev always leads back to start
+            // likewise following next
+        }
+
+        for (i,face) in self.faces.iter().enumerate() {
+            if face.halfedge >= self.halfedges.len() {
+                println!("Face {}: halfedge index {} out of range",
+                         i, face.halfedge);
+                pass = false;
+            }
+            let face2 = self.halfedges[face.halfedge].face;
+            if i != face2 {
+                println!("Face {} gives boundary halfedge {}, which gives different face ({})",
+                    i, face.halfedge, face2);
+                pass = false;
+            }
+        }
+
+        pass
     }
 
     pub fn face_to_halfedges(&self, face_idx: usize) -> Vec<usize> {
@@ -212,10 +316,10 @@ impl<V: Copy> DCELMesh<V> {
 
         self.num_halfedges += 3;
 
-        // Since the 2nd halfedge we inserted (e_n + 1) has origin v_n:
+        // Since the 2nd halfedge we inserted (e_n + 2) has origin v_n:
         self.verts.push(DCELVertex {
             v: vert,
-            halfedge: e_n + 1,
+            halfedge: e_n + 2,
         });
         self.num_verts += 1;
 

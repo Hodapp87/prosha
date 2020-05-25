@@ -1288,7 +1288,9 @@ pub fn test_dcel(fname: &str) {
         vertex(-0.5,  0.5, 0.0),
         vertex( 0.5,  0.5, 0.0),
     ]);
+    mesh.check();
     let f2 = mesh.add_face_twin1(mesh.faces[f1].halfedge, vertex(0.0, 0.0, 1.0));
+    mesh.check();
 
     let vl1 = mesh.face_to_verts(f1);
     println!("verts = {:?}", vl1);
