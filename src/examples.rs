@@ -1272,7 +1272,7 @@ pub fn test_parametric() -> Mesh {
     //let base_verts = util::subdivide_cycle(&base_verts, 16);
 
     let t0 = 0.0;
-    let t1 = 1.0;
+    let t1 = 50.0;
     let xform = |t: f32| -> Transform {
         id().translate(0.0, 0.0, t/5.0)/*.
             rotate(&Vector3::z_axis(), -t/2.0).

@@ -344,6 +344,20 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
     pub fn add_face_twin1(&mut self, twin: usize, vert: V) -> (usize, [usize; 3]) {
         // 'vert' will be at index v_n:
         let v_n = self.num_verts;
+        // The half-edges will be at indices e_n, e_n+1, e_n+2:
+        let e_n = self.num_halfedges;
+
+        self.verts.push(DCELVertex {
+            v: vert,
+            halfedge: e_n + 2,
+        });
+        self.num_verts += 1;
+        self.add_face_twin1_ref(twin, v_n)
+    }
+
+    /// Like `add_face_twin1`, but for a vertex already present in the
+    /// mesh rather than a new one.  All else is identical.
+    pub fn add_face_twin1_ref(&mut self, twin: usize, vert_idx: usize) -> (usize, [usize; 3]) {
         // The face will be at index f_n:
         let f_n = self.num_faces;
         // The half-edges will be at indices e_n, e_n+1, e_n+2:
@@ -367,7 +381,7 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         // DEBUG
         if self.halfedges[twin].has_twin {
             panic!(format!("Trying to add twin to {}, which already has twin ({})",
-                twin, self.halfedges[twin].twin_halfedge));
+                           twin, self.halfedges[twin].twin_halfedge));
         }
         self.halfedges[twin].has_twin = true;
         self.halfedges[twin].twin_halfedge = e_n;
@@ -380,7 +394,7 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             prev_halfedge: e_n,
         });
         self.halfedges.push(DCELHalfEdge {
-            vert: v_n,
+            vert: vert_idx,
             face: f_n,
             has_twin: false,
             twin_halfedge: 0,
@@ -389,13 +403,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         });
 
         self.num_halfedges += 3;
-
-        // Since the 2nd halfedge we inserted (e_n + 2) has origin v_n:
-        self.verts.push(DCELVertex {
-            v: vert,
-            halfedge: e_n + 2,
-        });
-        self.num_verts += 1;
 
         // Finally, add the face (any halfedge is fine):
         self.faces.push(DCELFace { halfedge: e_n });
@@ -412,8 +419,12 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
     /// the next half-edge's twin will be twin2.
     /// Also: halfedge `twin2_idx` must end at the vertex that starts
     /// `twin1_idx`.
+    ///
+    /// Returns (face index, halfedge indices).  Halfedge indices begin
+    /// at the twin halfedge to twin1, then twin halfedge of
+    /// twin2, then the 'new' halfedge (which starts where twin2 starts,
+    /// and ends where twin1 ends).
     pub fn add_face_twin2(&mut self, twin1_idx: usize, twin2_idx: usize) -> (usize, [usize; 3]) {
-        println!("DEBUG: add_face_twin2({},{})", twin1_idx, twin2_idx);
         // The face will be at index f_n:
         let f_n = self.num_faces;
         // The half-edges will be at indices e_n, e_n+1, e_n+2:
@@ -456,6 +467,7 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         }); // index e_n + 1
         self.halfedges[twin2_idx].has_twin = true;
         self.halfedges[twin2_idx].twin_halfedge = e_n + 1;
+        // and final edge must be v3 -> v2:
         self.halfedges.push(DCELHalfEdge {
             vert: v3,
             face: f_n,
