@@ -432,7 +432,29 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
     while !frontier.is_empty() {
         for (i, f) in frontier.iter().enumerate() {
-            println!("DEBUG: frontier[{}]: vert={},{},{} t={} halfedges={:?}", i, f.vert.x, f.vert.y, f.vert.z, f.t, f.halfedges);
+            println!("DEBUG: frontier[{}]: vert={},{},{} vert_idx={:?} t={} halfedges={:?}", i, f.vert.x, f.vert.y, f.vert.z, f.vert_idx, f.t, f.halfedges);
+            match f.vert_idx {
+                Some(vert) => {
+                    match f.halfedges[1] {
+                        Some(idx) => {
+                            if mesh.halfedges[idx].vert != vert {
+                                println!("  Error: halfedge[1]={} starts at {}, should start at {}", idx, mesh.halfedges[idx].vert, vert);
+                            }
+                        },
+                        None => {},
+                    };
+                    match f.halfedges[0] {
+                        Some(idx) => {
+                            let v2 = mesh.halfedges[mesh.halfedges[idx].next_halfedge].vert;
+                            if v2 != vert {
+                                println!("  Error: halfedge[0]={} ends at {}, should start at {}", idx, v2, vert);
+                            }
+                        },
+                        None => {},
+                    };
+                },
+                None => {},
+            };
         }
 
         // Pick a vertex to advance.
@@ -457,7 +479,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // the furthest we can go while remaining within 'err', i.e. when we
         // make our connections we look at how far points on the *edges*
         // diverge from the trajectory of the  continuous transformation).
-        let mut dt = (t1 - t0) / 100.0;
+        //let mut dt = (t1 - t0) / 100.0;
+        let mut dt = (t1 - t0) / 10.0;
         let vf = v.frame_vert;
         for iter in 0..0 /*100*/ { // DEBUG: Re-enable
             // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
@@ -502,50 +525,54 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         println!("l1={} l2={} l3={}", l1, l2, l3);
          */
 
-        // Add two faces to our mesh. (They share two vertices, and thus
-        // the boundary in between those vertices.)
-        let (f1, edges1) = match v.halfedges[0] {
+        // Add two faces to our mesh. They share two vertices, and thus
+        // the boundary in between those vertices.
+
+        // First face: connect 'prior' frontier vertex to 'v' & 'v_next'.
+        // 'f1' is that face, 'edge1' connects prior vertex and 'v_next'.
+        // 'edge_v_next' connects 'v_next' and 'v' (in that order!)
+        let (f1, edge1, edge_v_next) = match v.halfedges[0] {
             // However, the way we add the face depends on whether we are
             // adding to an existing boundary or not:
             None => {
                 let neighbor = &frontier[(i + n - 1) % n];
                 println!("DEBUG: add_face()");
-                let (f1, edges1) = mesh.add_face([
-                    VertSpec::New(v_next),
+                let (f1, edges) = mesh.add_face([
+                    VertSpec::New(v_next), // edges[0]: v_next -> v
                     match v.vert_idx {
                         None => VertSpec::New(v.vert),
                         Some(idx) => VertSpec::Idx(idx),
-                    },
+                    }, // edges[1]: v -> neighbor
                     match neighbor.vert_idx {
                         None => VertSpec::New(neighbor.vert),
                         Some(idx) => VertSpec::Idx(idx),
-                    },
+                    }, // edges[2]: neighbor -> v_next
                 ]);
 
                 if neighbor.vert_idx.is_none() {
                     // If neighbor.vert_idx is None, then we had to
                     // add its vertex to the mesh for the face we just
                     // made - so mark it in the frontier:
-                    frontier[(i + n - 1) % n].vert_idx = Some(mesh.halfedges[edges1[2]].vert);
-                    // edges[2] is because this is the position of
-                    // neighbor.vert_idx in add_face.
+                    frontier[(i + n - 1) % n].vert_idx = Some(mesh.halfedges[edges[2]].vert);
                 }
 
-                (f1, edges1)
+                (f1, edges[2], edges[0])
             },
             Some(edge_idx) => {
                 println!("DEBUG: add_face_twin1({},{})", edge_idx, v_next);
-                mesh.add_face_twin1(edge_idx, v_next)
+                let (f1, edges) = mesh.add_face_twin1(edge_idx, v_next);
+                // Note the order of half-edges from add_face_twin1
+                (f1, edges[1], edges[2])
             },
         };
-        println!("DEBUG: edges1={:?}", edges1);
+        println!("DEBUG: edge1={} edge_v_next={}", edge1, edge_v_next);
 
         // DEBUG
         mesh.check();
         mesh.print();
 
-        // edge2 should be: the half-edge connecting the 'neighbor' frontier
-        // vertex to v_next
+        // edge2 should be: the half-edge connecting the 'next' frontier
+        // vertex to 'v_next'
         let (f2, edge2) = match v.halfedges[1] {
             // Likewise, the way we add the second face depends on
             // the same (but for the other side).  Regardless,
@@ -553,7 +580,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             // is edges1[0].
             None => {
                 let neighbor = &frontier[(i + 1) % n];
-                let (f2, edges) = mesh.add_face_twin1(edges1[0], neighbor.vert);
+                let (f2, edges) = mesh.add_face_twin1(edge_v_next, neighbor.vert);
 
                 if neighbor.vert_idx.is_none() {
                     // Reasoning here is identical to "If neighbor.vert_idx
@@ -564,8 +591,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 (f2, edges[1])
             },
             Some(edge_idx) => {
-                let (f2, edges) = mesh.add_face_twin2(edge_idx, edges1[2]);
-                // TODO: Why edges1[2]?
+                let (f2, edges) = mesh.add_face_twin2(edge_v_next, edge1);
                 (f2, edges[2])
             },
         };
@@ -591,11 +617,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             vert: v_next,
             frame_vert: vf,
             t: t,
-            halfedges: [Some(edges1[2]), Some(edge2)],
-            // Note that edges1[2] *starts* at the new vertex, and
-            // edge2 *ends* at it.
-            // DEBUG: The above comment is wrong, but why?
-            vert_idx: Some(mesh.halfedges[edges1[2]].vert),
+            halfedges: [Some(edge1), Some(edge2)],
+            vert_idx: Some(mesh.halfedges[edge_v_next].vert),
         };
 
         /*
@@ -713,5 +736,5 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
          */
     }
 
-    return Mesh { faces: vec![], verts: vec![] };
+    return dcel::convert_mesh(&mesh);
 }

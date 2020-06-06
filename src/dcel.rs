@@ -353,8 +353,9 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         let twin_halfedge = &self.halfedges[twin];
         let v1 = self.halfedges[twin_halfedge.next_halfedge].vert;
         let v2 = twin_halfedge.vert;
+        // twin is: v2 -> v1
 
-        // Insert 'twin' half-edge first:
+        // Insert *its* twin, v1 -> v2, first:
         self.halfedges.push(DCELHalfEdge {
             vert: v1,
             face: f_n,
@@ -363,6 +364,11 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             next_halfedge: e_n + 1,
             prev_halfedge: e_n + 2,
         });
+        // DEBUG
+        if self.halfedges[twin].has_twin {
+            panic!(format!("Trying to add twin to {}, which already has twin ({})",
+                twin, self.halfedges[twin].twin_halfedge));
+        }
         self.halfedges[twin].has_twin = true;
         self.halfedges[twin].twin_halfedge = e_n;
         self.halfedges.push(DCELHalfEdge {
@@ -429,7 +435,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
 
         // twin1 is: v1 -> v2, twin2 is: v3 -> v1.
         // so the twin of twin1 must be: v2 -> v1
-        // and the twin of twin2 must be: v1 -> v3
         self.halfedges.push(DCELHalfEdge {
             vert: v2,
             face: f_n,
@@ -440,24 +445,25 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         }); // index e_n
         self.halfedges[twin1_idx].has_twin = true;
         self.halfedges[twin1_idx].twin_halfedge = e_n;
+        // and the twin of twin2 must be: v1 -> v3
         self.halfedges.push(DCELHalfEdge {
-            vert: v3,
+            vert: v1,
             face: f_n,
             has_twin: true,
             twin_halfedge: twin2_idx,
             next_halfedge: e_n + 2,
             prev_halfedge: e_n,
         }); // index e_n + 1
+        self.halfedges[twin2_idx].has_twin = true;
+        self.halfedges[twin2_idx].twin_halfedge = e_n + 1;
         self.halfedges.push(DCELHalfEdge {
-            vert: v1,
+            vert: v3,
             face: f_n,
             has_twin: false,
             twin_halfedge: 0,
             next_halfedge: e_n,
             prev_halfedge: e_n + 1,
         }); // index e_n + 2
-        self.halfedges[twin2_idx].has_twin = true;
-        self.halfedges[twin2_idx].twin_halfedge = e_n + 1;
         self.num_halfedges += 3;
 
         // Finally, add the face (any halfedge is fine):
