@@ -68,6 +68,12 @@ pub struct DCELHalfEdge {
     pub prev_halfedge: usize,
 }
 
+#[derive(Debug)]
+pub enum VertSpec<V> {
+    New(V),
+    Idx(usize),
+}
+
 impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
@@ -98,7 +104,7 @@ impl<V: Copy + std::fmt::Debug> fmt::Display for DCELMesh<V> {
     }
 }
 
-impl<V: Copy> DCELMesh<V> {
+impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
 
     pub fn new() -> DCELMesh<V> {
         DCELMesh {
@@ -108,6 +114,32 @@ impl<V: Copy> DCELMesh<V> {
             num_verts: 0,
             num_faces: 0,
             num_halfedges: 0,
+        }
+    }
+
+    pub fn print(&self) {
+
+        println!("DCELMesh has {} verts, {} faces, {} halfedges:",
+               self.num_verts,
+               self.num_faces,
+               self.num_halfedges);
+
+        for (i,v) in self.verts.iter().enumerate() {
+            println!("Vert {}: halfedge {}, {:?}", i, v.halfedge, v.v);
+        }
+
+        for (i,f) in self.faces.iter().enumerate() {
+            println!("Face {}: halfedge {} (halfedges {:?}, verts {:?})",
+                     i, f.halfedge, self.face_to_halfedges(i), self.face_to_verts(i));
+        }
+
+        for (i,h) in self.halfedges.iter().enumerate() {
+            let twin = if h.has_twin {
+                format!(", twin half-edge {}", h.twin_halfedge)
+            } else {
+                String::from("")
+            };
+            println!("Halfedge {}: vert {}, face {}, prev: {}, next: {}{}", i, h.vert, h.face, h.prev_halfedge, h.next_halfedge, twin)
         }
     }
 
@@ -243,9 +275,12 @@ impl<V: Copy> DCELMesh<V> {
         }).collect()
     }
 
-    /// Add a face with no connections
-    pub fn add_face(&mut self, verts: [V; 3]) -> usize {
-        // Vertices will be at indices v_n, v_n+1, v_n+2:
+    /// Adds a face that shares no edges with anything else  in the mesh.
+    /// Returns (face index, half-edge indices); half-edge indices are
+    /// given in the order of the vertices (i.e. the first half-edge's
+    /// origin is verts[0], second is verts[1], third is verts[2]).
+    pub fn add_face(&mut self, verts: [VertSpec<V>; 3]) -> (usize, [usize; 3]) {
+        // *New* vertices will be at index v_n onward.
         let v_n = self.num_verts;
         // The face will be at index f_n:
         let f_n = self.num_faces;
@@ -253,36 +288,51 @@ impl<V: Copy> DCELMesh<V> {
         let e_n = self.num_halfedges;
 
         // Half-edges and vertices can be inserted both at once:
+        let mut new_verts: usize = 0;
         for i in 0..3 {
             let n = (i + 1) % 3;
             let p = (i + 2) % 3;
+            // Either insert a new vertex, or use an existing one.
+            // In both cases, 'v' is its index.
+            let v = match verts[i] {
+                VertSpec::New(v) => {
+                    self.verts.push(DCELVertex {
+                        v: v,
+                        halfedge: e_n + i,
+                    });
+                    let idx = v_n + new_verts;
+                    new_verts += 1;
+                    idx
+                },
+                VertSpec::Idx(v) => v,
+            };
+            // Note that its half-edge is e_n + i, which technically
+            // doesn't exist yet, but is inserted below:
             self.halfedges.push(DCELHalfEdge {
-                vert: v_n + i,
+                vert: v,
                 face: f_n,
                 has_twin: false,
                 twin_halfedge: 0,
                 next_halfedge: e_n + n,
                 prev_halfedge: e_n + p,
             });
-            self.verts.push(DCELVertex {
-                v: verts[i],
-                halfedge: e_n + i,
-            });
         }
         self.num_halfedges += 3;
-        self.num_verts += 3;
+        self.num_verts += new_verts;
 
         // Finally, add the face (any halfedge is fine):
         self.faces.push(DCELFace { halfedge: e_n });
         self.num_faces += 1;
 
-        f_n
+        (f_n, [e_n, e_n+1, e_n+2])
     }
 
     /// Add a face that lies on an existing boundary - i.e. one half-edge
     /// has a twin half-edge already on the mesh.  As this gives two
     /// vertices, only one other vertex needs specified.
-    pub fn add_face_twin1(&mut self, twin: usize, vert: V) -> usize {
+    /// Returns (face index, halfedge indices).  Halfedge indices begin
+    /// at the twin half-edge to the one specified.
+    pub fn add_face_twin1(&mut self, twin: usize, vert: V) -> (usize, [usize; 3]) {
         // 'vert' will be at index v_n:
         let v_n = self.num_verts;
         // The face will be at index f_n:
@@ -336,7 +386,7 @@ impl<V: Copy> DCELMesh<V> {
         self.faces.push(DCELFace { halfedge: e_n });
         self.num_faces += 1;
 
-        f_n
+        (f_n, [e_n, e_n+1, e_n+2])
     }
 
     /// Add a face that lies on two connected boundaries - i.e. two of its
@@ -347,7 +397,7 @@ impl<V: Copy> DCELMesh<V> {
     /// the next half-edge's twin will be twin2.
     /// Also: halfedge `twin2_idx` must end at the vertex that starts
     /// `twin1_idx`.
-    pub fn add_face_twin2(&mut self, twin1_idx: usize, twin2_idx: usize) -> usize {
+    pub fn add_face_twin2(&mut self, twin1_idx: usize, twin2_idx: usize) -> (usize, [usize; 3]) {
         // The face will be at index f_n:
         let f_n = self.num_faces;
         // The half-edges will be at indices e_n, e_n+1, e_n+2:
@@ -401,7 +451,7 @@ impl<V: Copy> DCELMesh<V> {
         self.faces.push(DCELFace { halfedge: e_n });
         self.num_faces += 1;
 
-        f_n
+        (f_n, [e_n, e_n+1, e_n+2])
     }
 }
 
