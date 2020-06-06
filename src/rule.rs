@@ -431,6 +431,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
     // reaches t=t1 - in a way that forms the mesh we want.
 
     while !frontier.is_empty() {
+        /*
         for (i, f) in frontier.iter().enumerate() {
             println!("DEBUG: frontier[{}]: vert={},{},{} vert_idx={:?} t={} halfedges={:?}", i, f.vert.x, f.vert.y, f.vert.z, f.vert_idx, f.t, f.halfedges);
             match f.vert_idx {
@@ -456,6 +457,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 None => {},
             };
         }
+         */
 
         // Pick a vertex to advance.
         //
@@ -477,16 +479,16 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         let i_prev = (i + n - 1) % n;
         let i_next = (i + 1) % n;
 
-        println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
+        //println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
 
         // Move this vertex further along, i.e. t + dt.  (dt is set by
         // the furthest we can go while remaining within 'err', i.e. when we
         // make our connections we look at how far points on the *edges*
         // diverge from the trajectory of the  continuous transformation).
-        //let mut dt = (t1 - t0) / 100.0;
-        let mut dt = (t1 - t0) / 10.0;
+        let mut dt = (t1 - t0) / 100.0;
+        //let mut dt = (t1 - t0) / 10.0;
         let vf = v.frame_vert;
-        for iter in 0..0 /*100*/ { // DEBUG: Re-enable
+        for iter in 0..100 {
             // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
             // These two endpoints have zero error from the trajectory
             // (because they are directly on it).
@@ -532,7 +534,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // Add two faces to our mesh. They share two vertices, and thus
         // the boundary in between those vertices.
 
-        println!("DEBUG: Adding 1st face");
+        //println!("DEBUG: Adding 1st face");
 
         // First face: connect prior frontier vertex to 'v' & 'v_next'.
         // f1 is that face,
@@ -543,7 +545,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             // adding to an existing boundary or not:
             None => {
                 let neighbor = &frontier[i_prev];
-                println!("DEBUG: add_face()");
+                //println!("DEBUG: add_face()");
                 let (f1, edges) = mesh.add_face([
                     VertSpec::New(v_next), // edges[0]: v_next -> v
                     match v.vert_idx {
@@ -567,7 +569,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             },
             Some(edge_idx) => {
                 // edge_idx is half-edge from prior frontier vertex to 'v'
-                println!("DEBUG: add_face_twin1({}, ({},{},{}))", edge_idx, v_next.x, v_next.y, v_next.z);
+                //println!("DEBUG: add_face_twin1({}, ({},{},{}))", edge_idx, v_next.x, v_next.y, v_next.z);
                 let (f1, edges) = mesh.add_face_twin1(edge_idx, v_next);
                 // edges[0] is twin of edge_idx, thus v -> neighbor
                 // edges[1] is neighbor -> v_next
@@ -575,13 +577,13 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 (f1, edges[1], edges[2])
             },
         };
-        println!("DEBUG: edge1={} edge_v_next={}", edge1, edge_v_next);
+        //println!("DEBUG: edge1={} edge_v_next={}", edge1, edge_v_next);
 
         // DEBUG
-        mesh.check();
-        mesh.print();
+        //mesh.check();
+        //mesh.print();
 
-        println!("DEBUG: Adding 2nd face");
+        //println!("DEBUG: Adding 2nd face");
         // Second face: connect next frontier vertex to 'v' & 'v_next'.
         // f2 is that face.
         // edge2 is: v_next -> next frontier vertex
@@ -617,21 +619,21 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 (f2, edges[1])
             },
             Some(edge_idx) => {
-                println!("DEBUG: add_face_twin2({}, {})", edge_idx, edge_v_next);
+                //println!("DEBUG: add_face_twin2({}, {})", edge_idx, edge_v_next);
                 let (f2, edges) = mesh.add_face_twin2(edge_idx, edge_v_next);
                 // edges[0] is twin of edge_idx, thus: neighbor -> v
                 // edges[1] is twin of edge_v_next, thus: v -> v_next
                 // edges[2] is: v_next -> neighbor
-                println!("DEBUG: add_face_twin2 returned {:?}", edges);
+                //println!("DEBUG: add_face_twin2 returned {:?}", edges);
                 (f2, edges[2])
             },
         };
-        println!("DEBUG: edge2={}", edge2);
+        //println!("DEBUG: edge2={}", edge2);
 
         // DEBUG
-        println!("DEBUG: Added 2nd face");
-        mesh.check();
-        mesh.print();
+        //println!("DEBUG: Added 2nd face");
+        //mesh.check();
+        //mesh.print();
 
         // The 'shared' half-edge should start at v.vert - hence edges[1].
 
@@ -651,6 +653,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             halfedges: [Some(edge1), Some(edge2)],
             vert_idx: Some(mesh.halfedges[edge_v_next].vert),
         };
+        // Since 'halfedges' forms more or less a doubly-linked list, we
+        // must go to previous & next vertices and update them:
         frontier[i_prev].halfedges[1] = Some(edge1);
         frontier[i_next].halfedges[0] = Some(edge2);
 

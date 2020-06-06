@@ -1266,20 +1266,21 @@ pub fn test_parametric() -> Mesh {
         vertex(-1.0, -1.0, 0.0),
         vertex(-1.0,  1.0, 0.0),
         vertex( 1.0,  1.0, 0.0),
-        //vertex( 1.0, -1.0, 0.0),
+        vertex( 1.0, -1.0, 0.0),
     ];
     //let base_verts = util::subdivide_cycle(&base_verts, 2);
-    //let base_verts = util::subdivide_cycle(&base_verts, 16);
+    let base_verts = util::subdivide_cycle(&base_verts, 16);
 
     let t0 = 0.0;
-    let t1 = 50.0;
+    let t1 = 15.0;
     let xform = |t: f32| -> Transform {
-        id().translate(0.0, 0.0, t/5.0)/*.
+        id().
+            translate(0.0, 0.0, t/5.0).
             rotate(&Vector3::z_axis(), -t/2.0).
-            scale((0.8).powf(t))*/
+            scale((0.8).powf(t))
     };
 
-    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.005)
+    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.001)
 }
 
 pub fn test_dcel(fname: &str) {

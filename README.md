@@ -6,13 +6,14 @@
   it's widely used.  Possibly rename too.
 - `dcel.rs` needs a helper method for subdivision.
 - Redo `examples::parametric_mesh` along the following lines:
-  - Make a crappy mesh (as a DCEL) like my 'early' method.
+  - DONE: Make a crappy mesh (as a DCEL) like my 'early' method.
   - Use my method from around 2020-05-21, and my pile of loose notes,
     to subdivide - with the help of DCEL.
 - Document `parametric_mesh` better. It is pretty hairy and could
   also benefit from some modularity.
 - parametric_mesh: My err/max_err code seems to sometimes give very high
   dt values, e.g. if I use just a translation as my transform
+- parametric_mesh: Fix ending behavior.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.
@@ -65,6 +66,8 @@
 
 ## Research Areas
 
+- Can I use automatic differentiation in any way here to avoid the
+  numerical annoyances?
 - [Geometry and Algorithms for Computer Aided Design (Hartmann)](https://www2.mathematik.tu-darmstadt.de/~ehartmann/cdgen0104.pdf)
 - https://en.wikipedia.org/wiki/Surface_triangulation
 - https://www.cs.cmu.edu/~quake/triangle.html
