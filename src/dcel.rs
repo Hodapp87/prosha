@@ -139,7 +139,12 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             } else {
                 String::from("")
             };
-            println!("Halfedge {}: vert {}, face {}, prev: {}, next: {}{}", i, h.vert, h.face, h.prev_halfedge, h.next_halfedge, twin)
+            let v1 = self.verts[h.vert].v;
+            let v2 = self.verts[self.halfedges[h.next_halfedge].vert].v;
+            println!("Halfedge {}: vert {} (to {}), face {}, prev: {}, next: {}{}, ({:?} to {:?})",
+                     i, h.vert, self.halfedges[h.next_halfedge].vert, h.face,
+                     h.prev_halfedge, h.next_halfedge, twin,
+                     v1, v2);
         }
     }
 
@@ -196,9 +201,13 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                     println!("Halfedge {}: twin {} says it has no twin",
                         i, edge.twin_halfedge);
                     pass = false;
-                }  else if i != twin.twin_halfedge {
+                } else if i != twin.twin_halfedge {
                     println!("Halfedge {} has twin {}, but reverse isn't true",
                              i, edge.twin_halfedge);
+                    pass = false;
+                } else if edge.vert != self.halfedges[twin.next_halfedge].vert {
+                    println!("Halfedge {} starts at vertex {} but twin {} ends at vertex {}",
+                             i, edge.vert, edge.twin_halfedge, self.halfedges[twin.next_halfedge].vert);
                     pass = false;
                 }
             }
@@ -398,6 +407,7 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
     /// Also: halfedge `twin2_idx` must end at the vertex that starts
     /// `twin1_idx`.
     pub fn add_face_twin2(&mut self, twin1_idx: usize, twin2_idx: usize) -> (usize, [usize; 3]) {
+        println!("DEBUG: add_face_twin2({},{})", twin1_idx, twin2_idx);
         // The face will be at index f_n:
         let f_n = self.num_faces;
         // The half-edges will be at indices e_n, e_n+1, e_n+2:
@@ -417,8 +427,11 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                 twin2_idx, twin1_idx, self.halfedges[twin2.next_halfedge].vert, v1));
         }
 
+        // twin1 is: v1 -> v2, twin2 is: v3 -> v1.
+        // so the twin of twin1 must be: v2 -> v1
+        // and the twin of twin2 must be: v1 -> v3
         self.halfedges.push(DCELHalfEdge {
-            vert: v1,
+            vert: v2,
             face: f_n,
             has_twin: true,
             twin_halfedge: twin1_idx,
@@ -436,7 +449,7 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             prev_halfedge: e_n,
         }); // index e_n + 1
         self.halfedges.push(DCELHalfEdge {
-            vert: v2,
+            vert: v1,
             face: f_n,
             has_twin: false,
             twin_halfedge: 0,

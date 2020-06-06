@@ -12,6 +12,7 @@ use crate::xform::{Transform, Vertex, vertex, Mat4, id};
 use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::dcel;
+use crate::dcel::{DCELMesh, VertSpec};
 
 /*
 pub fn cube_thing() -> Rule<()> {
@@ -1262,10 +1263,10 @@ impl CurveHorn {
 pub fn test_parametric() -> Mesh {
 
     let base_verts: Vec<Vertex> = vec![
-        vertex(-0.5, -0.5, 0.0),
-        vertex(-0.5,  0.5, 0.0),
-        vertex( 0.5,  0.5, 0.0),
-        vertex( 0.5, -0.5, 0.0),
+        vertex(-1.0, -1.0, 0.0),
+        vertex(-1.0,  1.0, 0.0),
+        vertex( 1.0,  1.0, 0.0),
+        //vertex( 1.0, -1.0, 0.0),
     ];
     //let base_verts = util::subdivide_cycle(&base_verts, 2);
     //let base_verts = util::subdivide_cycle(&base_verts, 16);
@@ -1273,9 +1274,9 @@ pub fn test_parametric() -> Mesh {
     let t0 = 0.0;
     let t1 = 16.0;
     let xform = |t: f32| -> Transform {
-        id().translate(0.0, 0.0, t/5.0).
+        id().translate(0.0, 0.0, t/5.0)/*.
             rotate(&Vector3::z_axis(), -t/2.0).
-            scale((0.8).powf(t))
+            scale((0.8).powf(t))*/
     };
 
     crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.005)
@@ -1283,24 +1284,25 @@ pub fn test_parametric() -> Mesh {
 
 pub fn test_dcel(fname: &str) {
     let mut mesh: dcel::DCELMesh<Vertex> = dcel::DCELMesh::new();
-    let f1 = mesh.add_face([
-        vertex(-0.5, -0.5, 0.0),
-        vertex(-0.5,  0.5, 0.0),
-        vertex( 0.5,  0.5, 0.0),
+    let (f1, _) = mesh.add_face([
+        VertSpec::New(vertex(-0.5, -0.5, 0.0)),
+        VertSpec::New(vertex(-0.5,  0.5, 0.0)),
+        VertSpec::New(vertex( 0.5,  0.5, 0.0)),
     ]);
     mesh.check();
-    let f2 = mesh.add_face_twin1(mesh.faces[f1].halfedge, vertex(0.0, 0.0, 1.0));
+    let (f2, edges) = mesh.add_face_twin1(mesh.faces[f1].halfedge, vertex(0.0, 0.0, 1.0));
     mesh.check();
 
-    // Find the shared edge:
-    let mut shared: Option<(usize, usize)> = None;
-    for e in mesh.face_to_halfedges(f1) {
-        let he = &mesh.halfedges[e];
+    // From add_face_twin1, edges[0] is always the 'shared' edge:
+    let edge = edges[0];
+    let twin = {
+        let he = &mesh.halfedges[edge];
         if he.has_twin {
-            shared = Some((e, he.twin_halfedge));
+            he.twin_halfedge
+        } else {
+            panic!("Can't find shared edge!");
         }
-    }
-    let (edge, twin) = shared.unwrap();
+    };
     println!("Shared edges = {},{}", edge, twin);
 
     let ep = mesh.halfedges[edge].prev_halfedge;
@@ -1312,9 +1314,9 @@ pub fn test_dcel(fname: &str) {
     println!("DCEL mesh = {}", mesh);
     // As we're making *twin* halfedges, we go against the edge
     // direction:
-    let f3 = mesh.add_face_twin2(en, tp);
+    let (f3, _) = mesh.add_face_twin2(en, tp);
     mesh.check();
-    let f4 = mesh.add_face_twin2(tn, ep);
+    let (f4, _) = mesh.add_face_twin2(tn, ep);
     mesh.check();
 
     println!("f1 verts: {:?}", mesh.face_to_verts(f1));

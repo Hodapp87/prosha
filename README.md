@@ -2,12 +2,17 @@
 
 ## Highest priority:
 
-- Work on my doubly-connected edge list so I can complete some other
-  things below!
-- Implement the continuous parametric transformations from 2020-05-07
-  in my notes.  This will require some new abstractions.
+- Add better docs and possibly abstraction to `dcel.rs`, *before*
+  it's widely used.  Possibly rename too.
+- `dcel.rs` needs a helper method for subdivision.
+- Redo `examples::parametric_mesh` along the following lines:
+  - Make a crappy mesh (as a DCEL) like my 'early' method.
+  - Use my method from around 2020-05-21, and my pile of loose notes,
+    to subdivide - with the help of DCEL.
 - Document `parametric_mesh` better. It is pretty hairy and could
   also benefit from some modularity.
+- parametric_mesh: My err/max_err code seems to sometimes give very high
+  dt values, e.g. if I use just a translation as my transform
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.
