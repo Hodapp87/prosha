@@ -13,7 +13,6 @@
   also benefit from some modularity.
 - parametric_mesh: My err/max_err code seems to sometimes give very high
   dt values, e.g. if I use just a translation as my transform
-- parametric_mesh: Fix ending behavior.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.

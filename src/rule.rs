@@ -389,31 +389,6 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         vert_idx: Option<usize>,
     };
 
-    // A face that is still undergoing subdivision. This is used for a stack
-    // in the main loop.  'verts' gives the index of vertices of the face,
-    // and 'shared_faces' gives neighboring faces, i.e. those which share
-    // an edge with the face. This always refers to a face that is already
-    // in 'faces' - but this face may be replaced in the course of
-    // processing.
-    #[derive(Clone, Debug)]
-    struct tempFace {
-        // Indices into 'verts' below:
-        verts: [usize; 3],
-        // The parameter values corresponding to 'verts':
-        ts: [f32; 3],
-        // The 'frame' vertices (i.e. vertex at f(t0)) corresponding
-        // to 'verts':
-        frame_verts: [Vertex; 3],
-        // Index into 'faces' below for the starting vertex:
-        face: usize,
-        // If the bool is true, this gives an index into 'faces' below for
-        // a face that shares an edge with this face; if the bool is false,
-        // disregard (there is no neighbor here). This goes in a specific
-        // order: the face sharing edge (verts[0], verts[1]), then edge
-        // (verts[1], verts[2]), then edge (verts[2], verts[0]).
-        shared_faces: [(usize, bool); 3],
-    }
-
     // Init 'frontier' with each 'frame' vertex, and start it at t=t0.
     let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
         vert: *v,
@@ -459,34 +434,42 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         }
          */
 
-        // Pick a vertex to advance.
-        //
-        // Heuristic for now: pick the 'furthest back' (lowest t)
+        // Pick a vertex to advance.  For now, this is an easy
+        // heuristic: pick the 'furthest back' one (lowest t value).
         let (i, v) = {
-            let (i, v) = frontier.iter().enumerate().min_by(|(i, f), (j, g)|
-                f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
-            (i, v.clone())
-        };
-        // TODO: Make this less ugly?
 
-        if v.t >= t1 {
-            break;
-        }
-        // TODO: Fix boundary behavior here and make sure final topology
-        // is right.
+            let mut t_min = t1;
+            let mut i_min = 0;
+            let mut all_done = true;
+
+            for (i, v) in frontier.iter().enumerate() {
+                if v.t < t_min {
+                    i_min = i;
+                    t_min = v.t;
+                }
+                all_done &= v.t >= t1;
+            }
+
+            // If no vertex can be advanced, we're done:
+            if all_done {
+                println!("All past t1");
+                break;
+            }
+            (i_min, frontier[i_min].clone())
+        };
 
         // Indices (into 'frontier') of previous and next:
         let i_prev = (i + n - 1) % n;
         let i_next = (i + 1) % n;
 
-        //println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
+        println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
 
         // Move this vertex further along, i.e. t + dt.  (dt is set by
         // the furthest we can go while remaining within 'err', i.e. when we
         // make our connections we look at how far points on the *edges*
         // diverge from the trajectory of the  continuous transformation).
-        let mut dt = (t1 - t0) / 100.0;
-        //let mut dt = (t1 - t0) / 10.0;
+        let dt_max = t1 - v.t;
+        let mut dt = ((t1 - t0) / 100.0).min(dt_max);
         let vf = v.frame_vert;
         for iter in 0..100 {
             // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
@@ -511,7 +494,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 dt = dt / 2.0;
                 //println!("err > max_err, reducing dt to {}", dt);
             } else {
-                dt = dt * 1.2;
+                dt = (dt * 1.2).min(dt_max);
                 //println!("err < max_err, increasing dt to {}", dt);
             }
         }
@@ -520,7 +503,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // to do this directly given an analytical form of the
         // curvature of f at some starting point)
 
-        let t = v.t + dt;
+        let t = (v.t + dt).min(t1);
         let v_next = f(t).mtx * vf;
 
         // DEBUG
@@ -657,121 +640,119 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // must go to previous & next vertices and update them:
         frontier[i_prev].halfedges[1] = Some(edge1);
         frontier[i_next].halfedges[0] = Some(edge2);
-
-        /*
-        // Also add these faces to the stack of triangles to check for
-        // subdivision. They may be replaced.
-        let f0 = &frontier[v.neighbor[0]];
-        stack.push(tempFace {
-            verts:        [v_next_idx, v.mesh_idx, f0.mesh_idx],
-            ts:           [t,          v.t,        f0.t],
-            frame_verts:  [vf,         vf,         f0.frame_vert],
-            face:         face_idx,
-            shared_faces: [(face_idx + 1, true), (0, false), f0.side_faces[1]],
-        });
-        let f1 = &frontier[v.neighbor[1]];
-        stack.push(tempFace {
-            verts:        [v.mesh_idx, v_next_idx, f1.mesh_idx],
-            ts:           [v.t,        t,          f1.t],
-            frame_verts:  [vf,         vf,         f1.frame_vert],
-            face:         face_idx + 1,
-            shared_faces: [(face_idx, true), f1.side_faces[0], (0, false)],
-        });
-        // Note that vf appears several times in frame_verts because
-        // several vertices sit in the same trajectory (thus, same 'frame'
-        // vertex).
-
-        // TODO: Move this logic elsewhere
-        while false && !stack.is_empty() {
-            let face = stack.pop().unwrap();
-            println!("DEBUG: Examining face: {:?}", face);
-            let v0 = verts[face.verts[0]];
-            let v1 = verts[face.verts[1]];
-            let v2 = verts[face.verts[2]];
-            let d01 = (v0 - v1).norm();
-            let d02 = (v0 - v2).norm();
-            let d12 = (v1 - v2).norm();
-            // Law of cosines:
-            let cos0 = (d01*d01 + d02*d02 - d12*d12) / (2.0 * d01 * d02);
-            let cos1 = (d01*d01 + d12*d12 - d02*d02) / (2.0 * d01 * d12);
-            let cos2 = (d02*d02 + d12*d12 - d01*d01) / (2.0 * d02 * d12);
-            // TODO: Perhaps use https://en.wikipedia.org/wiki/Circumscribed_circle#Cartesian_coordinates
-            // to go by circumradius instead. Or - find it by law of sines?
-            println!("DEBUG: d01={} d02={} d12={} cos0={} cos1={} cos2={}", d01, d02, d12, cos0, cos1, cos2);
-            if (cos0 < 0.0 || cos0 > 0.7 ||
-                cos1 < 0.0 || cos1 > 0.7 ||
-                cos2 < 0.0 || cos2 > 0.7) {
-                println!("DEBUG: Angles out of range!");
-            } else {
-                println!("DEBUG: Angles OK");
-            }
-            // TODO: Figure out how to subdivide in this case
-
-            // The triangle forms a plane.  Get this plane's normal vector.
-            let a = (v0 - v1).xyz();
-            let b = (v0 - v2).xyz();
-            let normal = a.cross(&b).normalize();
-            // Make a new point that is on the surface, but roughly a
-            // midpoint in parameter space. Exact location isn't crucial.
-            let t_mid = (face.ts[0] + face.ts[1] + face.ts[2]) / 3.0;
-            let v_mid = (face.frame_verts[0] + face.frame_verts[1] + face.frame_verts[2]) / 3.0;
-            let p = f(t_mid).mtx * v_mid;
-
-            let d = p.xyz().dot(&normal);
-
-            println!("DEBUG: t_mid={} v_mid={},{},{} p={},{},{}", t_mid, v_mid.x, v_mid.y, v_mid.z, p.x, p.y, p.z);
-            println!("DEBUG: d={}", d);
-
-            // DEBUG
-            /*
-            let n = verts.len();
-            verts.push(p);
-            faces.push(face.verts[0]);
-            faces.push(face.verts[1]);
-            faces.push(n);
-             */
-            if (d <= max_err) {
-                // This triangle is already in the mesh, and already popped
-                // off of the stack. We're done.
-                continue;
-            }
-            println!("DEBUG: d > err, splitting this triangle");
-
-            // The face has 3 edges.  We split each of them (making a new
-            // vertex in the middle), and then make 3 new edges - one
-            // between each pair of new vertices - to replace the face
-            // with four smaller faces.
-
-            // This split is done in 'parameter' space:
-            let pairs = [(0,1), (1,2), (0,2)];
-            let mut mids = pairs.iter().map(|(i,j)| {
-                let t = (face.ts[*i] + face.ts[*j]) / 2.0;
-                let v = (face.frame_verts[*i] + face.frame_verts[*j]) / 2.0;
-                f(t).mtx * v
-            }).collect();
-
-            // DEBUG
-            let n = verts.len();
-            // Index n+0 is (0,1), n+1 is (1,2), n+2 is (0,2)
-            verts.append(&mut mids);
-            faces[face.face] = n + 0;
-            faces[face.face + 1] = n + 1;
-            faces[face.face + 2] = n + 2;
-            faces.extend_from_slice(&[
-                face.verts[0], n + 0, n + 2,
-                face.verts[1], n + 1, n + 0,
-                face.verts[2], n + 2, n + 1,
-                //n + 0,         n + 1, n + 2,
-            ]);
-
-            // TODO: Look at shared_faces because these must be split too.
-
-            // TODO: Do I have to correct *other* things in the stack too?
-            // If they refer to the same face I may be invalidating
-            // something here!
-       }
-         */
     }
+
+    // A face that is still undergoing subdivision. This is used for a
+    // stack in the loop below.
+    #[derive(Clone, Debug)]
+    struct tempFace {
+        // The parameter values corresponding to 'verts':
+        ts: [f32; 3],
+        // The 'frame' vertices (i.e. vertex at f(t0)) corresponding
+        // to 'verts':
+        frame_verts: [Vertex; 3],
+        // Index into 'mesh.faces':
+        idx: usize,
+    }
+
+    /*
+    // A stack of face indices for faces in 'mesh' that are still
+    // undergoing subdivision
+    let mut stack: Vec<tempFace> = (0..mesh.num_faces).map(|i| tempFace {
+        idx: i,
+    }).collect();
+    // TODO: Must I populate in the main loop?
+
+    while !stack.is_empty() {
+        let face = stack.pop().unwrap();
+        println!("DEBUG: Examining face: {:?}", face.idx);
+
+        let v_idx = mesh.face_to_verts(face.idx);
+        if v_idx.len() != 3 {
+            panic!(format!("Face {} has {} vertices, not 3?", face.idx, v_idx.len()));
+        }
+        let v0 = mesh.verts[v_idx[0]].v;
+        let v1 = mesh.verts[v_idx[1]].v;
+        let v2 = mesh.verts[v_idx[2]].v;
+        let d01 = (v0 - v1).norm();
+        let d02 = (v0 - v2).norm();
+        let d12 = (v1 - v2).norm();
+        // Law of cosines:
+        let cos0 = (d01*d01 + d02*d02 - d12*d12) / (2.0 * d01 * d02);
+        let cos1 = (d01*d01 + d12*d12 - d02*d02) / (2.0 * d01 * d12);
+        let cos2 = (d02*d02 + d12*d12 - d01*d01) / (2.0 * d02 * d12);
+        // TODO: Perhaps use https://en.wikipedia.org/wiki/Circumscribed_circle#Cartesian_coordinates
+        // to go by circumradius instead. Or - find it by law of sines?
+        println!("DEBUG: d01={} d02={} d12={} cos0={} cos1={} cos2={}", d01, d02, d12, cos0, cos1, cos2);
+        if (cos0 < 0.0 || cos0 > 0.7 ||
+            cos1 < 0.0 || cos1 > 0.7 ||
+            cos2 < 0.0 || cos2 > 0.7) {
+            println!("DEBUG: Angles out of range!");
+        } else {
+            println!("DEBUG: Angles OK");
+        }
+        // TODO: Figure out how to subdivide in this case
+
+        // The triangle forms a plane.  Get this plane's normal vector.
+        let a = (v0 - v1).xyz();
+        let b = (v0 - v2).xyz();
+        let normal = a.cross(&b).normalize();
+        // Make a new point that is on the surface, but roughly a
+        // midpoint in parameter space. Exact location isn't crucial.
+        let t_mid = (face.ts[0] + face.ts[1] + face.ts[2]) / 3.0;
+        let v_mid = (face.frame_verts[0] + face.frame_verts[1] + face.frame_verts[2]) / 3.0;
+        let p = f(t_mid).mtx * v_mid;
+
+        let d = p.xyz().dot(&normal);
+
+        println!("DEBUG: t_mid={} v_mid={},{},{} p={},{},{}", t_mid, v_mid.x, v_mid.y, v_mid.z, p.x, p.y, p.z);
+        println!("DEBUG: d={}", d);
+
+        // DEBUG
+        /*
+        let n = verts.len();
+        verts.push(p);
+        faces.push(face.verts[0]);
+        faces.push(face.verts[1]);
+        faces.push(n);
+         */
+        if (d <= max_err) {
+            // This triangle is already in the mesh, and already popped
+            // off of the stack. We're done.
+            continue;
+        }
+        println!("DEBUG: d > err, splitting this triangle");
+
+        // The face has 3 edges.  We split each of them (making a new
+        // vertex in the middle), and then make 3 new edges - one
+        // between each pair of new vertices - to replace the face
+        // with four smaller faces.
+
+        // This split is done in 'parameter' space:
+        let pairs = [(0,1), (1,2), (0,2)];
+        let mut mids = pairs.iter().map(|(i,j)| {
+            let t = (face.ts[*i] + face.ts[*j]) / 2.0;
+            let v = (face.frame_verts[*i] + face.frame_verts[*j]) / 2.0;
+            f(t).mtx * v
+        }).collect();
+
+        // DEBUG
+        //let n = verts.len();
+        // Index n+0 is (0,1), n+1 is (1,2), n+2 is (0,2)
+        /*
+        verts.append(&mut mids);
+        faces[face.face] = n + 0;
+        faces[face.face + 1] = n + 1;
+        faces[face.face + 2] = n + 2;
+        faces.extend_from_slice(&[
+            face.verts[0], n + 0, n + 2,
+            face.verts[1], n + 1, n + 0,
+            face.verts[2], n + 2, n + 1,
+            //n + 0,         n + 1, n + 2,
+        ]);
+        */
+   }
+     */
 
     return dcel::convert_mesh(&mesh);
 }
