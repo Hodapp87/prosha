@@ -484,31 +484,33 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
 
         (f_n, [e_n, e_n+1, e_n+2])
     }
-}
 
-pub fn convert_mesh(m: &DCELMesh<Vertex>) -> Mesh {
-    let n = m.faces.len();
-    let mut faces: Vec<usize> = vec![0; 3 * n];
+    pub fn convert_mesh<F>(&self, f: F) -> Mesh
+        where F: Fn(V) -> Vertex,
+    {
+        let n = self.faces.len();
+        let mut faces: Vec<usize> = vec![0; 3 * n];
 
-    for i in 0..n {
+        for i in 0..n {
 
-        let e0 = m.faces[i].halfedge;
-        let h0 = &m.halfedges[e0];
-        faces[3*i + 0] = h0.vert;
-        let e1 = h0.next_halfedge;
-        let h1 = &m.halfedges[e1];
-        faces[3*i + 1] = h1.vert;
-        let e2 = h1.next_halfedge;
-        let h2 = &m.halfedges[e2];
-        faces[3*i + 2] = h2.vert;
-        if h2.next_halfedge != e0 {
-            panic!(format!("Face {}: half-edges {},{},{} return to {}, not {}",
-                i, e0, e1, e2, h2.next_halfedge, e0));
+            let e0 = self.faces[i].halfedge;
+            let h0 = &self.halfedges[e0];
+            faces[3*i + 0] = h0.vert;
+            let e1 = h0.next_halfedge;
+            let h1 = &self.halfedges[e1];
+            faces[3*i + 1] = h1.vert;
+            let e2 = h1.next_halfedge;
+            let h2 = &self.halfedges[e2];
+            faces[3*i + 2] = h2.vert;
+            if h2.next_halfedge != e0 {
+                panic!(format!("Face {}: half-edges {},{},{} return to {}, not {}",
+                               i, e0, e1, e2, h2.next_halfedge, e0));
+            }
         }
-    }
 
-    Mesh {
-        verts: m.verts.iter().map(|e| e.v).collect(),
-        faces: faces,
+        Mesh {
+            verts: self.verts.iter().map(|e| f(e.v)).collect(),
+            faces: faces,
+        }
     }
 }

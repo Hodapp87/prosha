@@ -366,10 +366,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         panic!("frame must have at least 3 vertices");
     }
 
-    let mut mesh: DCELMesh<Vertex> = DCELMesh::new();
-
-    #[derive(Clone, Debug)]
-    struct frontierVert {
+    #[derive(Copy, Clone, Debug)]
+    struct VertexTrajectory {
         // Vertex position
         vert: Vertex,
         // Parameter value; f(t) should equal vert
@@ -377,13 +375,20 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // "Starting" vertex position, i.e. at f(t0). Always either a frame
         // vertex, or a linear combination of two neighboring ones.
         frame_vert: Vertex,
+    };
+
+    let mut mesh: DCELMesh<VertexTrajectory> = DCELMesh::new();
+
+    #[derive(Clone, Debug)]
+    struct frontierVert {
+        traj: VertexTrajectory,
         // If the boundaries on either side of this vertex lie on a face
         // (which is the case for all vertices *except* the initial ones),
         // then this gives the halfedges of those boundaries. halfedges[0]
         // connects the 'prior' vertex on the frontier to this, and
         // halfedges[1] connect this to the 'next' vertex on the fronter.
         // (Direction matters. If halfedges[0] is given, it must *end* at
-        // 'vert'. If halfedges[1] is given, it must *begin* at 'vert'.)
+        // 'traj.vert'. If halfedges[1] is given, it must *begin* at 'traj.vert'.)
         halfedges: [Option<usize>; 2],
         // If this vertex is already in 'mesh', its vertex index there:
         vert_idx: Option<usize>,
@@ -391,9 +396,11 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
     // Init 'frontier' with each 'frame' vertex, and start it at t=t0.
     let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
-        vert: *v,
-        t: t0,
-        frame_vert: *v,
+        traj: VertexTrajectory {
+            vert: *v,
+            t: t0,
+            frame_vert: *v,
+        },
         halfedges: [None; 2],
         vert_idx: None,
     }).collect();
@@ -443,11 +450,11 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             let mut all_done = true;
 
             for (i, v) in frontier.iter().enumerate() {
-                if v.t < t_min {
+                if v.traj.t < t_min {
                     i_min = i;
-                    t_min = v.t;
+                    t_min = v.traj.t;
                 }
-                all_done &= v.t >= t1;
+                all_done &= v.traj.t >= t1;
             }
 
             // If no vertex can be advanced, we're done:
@@ -462,15 +469,16 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         let i_prev = (i + n - 1) % n;
         let i_next = (i + 1) % n;
 
-        println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.vert, v.t, v.frame_vert);
+        println!("DEBUG: Moving frontier vertex {}, {:?} (t={}, frame_vert={:?})", i, v.traj.vert, v.traj.t, v.traj.frame_vert);
 
         // Move this vertex further along, i.e. t + dt.  (dt is set by
         // the furthest we can go while remaining within 'err', i.e. when we
         // make our connections we look at how far points on the *edges*
         // diverge from the trajectory of the  continuous transformation).
-        let dt_max = t1 - v.t;
+        let vf = v.traj.frame_vert;
+        let vt = v.traj.t;
+        let dt_max = t1 - vt;
         let mut dt = ((t1 - t0) / 100.0).min(dt_max);
-        let vf = v.frame_vert;
         for iter in 0..100 {
             // Consider an edge from f(v.t)*vf to f(v.t + dt)*vf.
             // These two endpoints have zero error from the trajectory
@@ -478,9 +486,9 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
             //
             // If we assume some continuity in f, then we can guess that
             // the worst error occurs at the midpoint of the edge:
-            let edge_mid = 0.5 * (f(v.t).mtx + f(v.t + dt).mtx) * vf;
+            let edge_mid = 0.5 * (f(vt).mtx + f(vt + dt).mtx) * vf;
             // ...relative to the trajectory midpoint:
-            let traj_mid = f(v.t + dt / 2.0).mtx * vf;
+            let traj_mid = f(vt + dt / 2.0).mtx * vf;
             let err = (edge_mid - traj_mid).norm();
 
             //println!("DEBUG iter {}: dt={}, edge_mid={:?}, traj_mid={:?}, err={}", iter, dt, edge_mid, traj_mid, err);
@@ -503,8 +511,12 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // to do this directly given an analytical form of the
         // curvature of f at some starting point)
 
-        let t = (v.t + dt).min(t1);
-        let v_next = f(t).mtx * vf;
+        let t = (vt + dt).min(t1);
+        let v_next = VertexTrajectory {
+            vert: f(t).mtx * vf,
+            t: t,
+            frame_vert: vf,
+        };
 
         // DEBUG
         /*
@@ -532,11 +544,11 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                 let (f1, edges) = mesh.add_face([
                     VertSpec::New(v_next), // edges[0]: v_next -> v
                     match v.vert_idx {
-                        None => VertSpec::New(v.vert),
+                        None => VertSpec::New(v.traj),
                         Some(idx) => VertSpec::Idx(idx),
                     }, // edges[1]: v -> neighbor
                     match neighbor.vert_idx {
-                        None => VertSpec::New(neighbor.vert),
+                        None => VertSpec::New(neighbor.traj),
                         Some(idx) => VertSpec::Idx(idx),
                     }, // edges[2]: neighbor -> v_next
                 ]);
@@ -580,9 +592,9 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
                 let (f2, edges) = match neighbor.vert_idx {
                     None => {
-                        let v = neighbor.vert;
-                        println!("DEBUG: add_face_twin1({}, ({},{},{}))", edge_v_next, v.x, v.y, v.z);
-                        let (f2, edges) = mesh.add_face_twin1(edge_v_next, neighbor.vert);
+                        //let v = neighbor.traj.vert;
+                        //println!("DEBUG: add_face_twin1({}, ({},{},{}))", edge_v_next, v.x, v.y, v.z);
+                        let (f2, edges) = mesh.add_face_twin1(edge_v_next, neighbor.traj);
                         // Reasoning here is identical to "If neighbor.vert_idx
                         // is None..." above:
                         frontier[i_next].vert_idx = Some(mesh.halfedges[edges[2]].vert);
@@ -590,7 +602,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
                         (f2, edges)
                     },
                     Some(vert_idx) => {
-                        println!("DEBUG: add_face_twin1_ref({}, {})", edge_v_next, vert_idx);
+                        //println!("DEBUG: add_face_twin1_ref({}, {})", edge_v_next, vert_idx);
                         mesh.add_face_twin1_ref(edge_v_next, vert_idx)
                     }
                 };
@@ -630,9 +642,11 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
         // Replace this vertex in the frontier:
         frontier[i] = frontierVert {
-            vert: v_next,
-            frame_vert: vf,
-            t: t,
+            traj: VertexTrajectory {
+                vert: v_next.vert,
+                frame_vert: vf,
+                t: t,
+            },
             halfedges: [Some(edge1), Some(edge2)],
             vert_idx: Some(mesh.halfedges[edge_v_next].vert),
         };
@@ -642,38 +656,22 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         frontier[i_next].halfedges[0] = Some(edge2);
     }
 
-    // A face that is still undergoing subdivision. This is used for a
-    // stack in the loop below.
-    #[derive(Clone, Debug)]
-    struct tempFace {
-        // The parameter values corresponding to 'verts':
-        ts: [f32; 3],
-        // The 'frame' vertices (i.e. vertex at f(t0)) corresponding
-        // to 'verts':
-        frame_verts: [Vertex; 3],
-        // Index into 'mesh.faces':
-        idx: usize,
-    }
-
-    /*
     // A stack of face indices for faces in 'mesh' that are still
     // undergoing subdivision
-    let mut stack: Vec<tempFace> = (0..mesh.num_faces).map(|i| tempFace {
-        idx: i,
-    }).collect();
-    // TODO: Must I populate in the main loop?
+    let mut stack: Vec<usize> = (0..mesh.num_faces).collect();
 
     while !stack.is_empty() {
         let face = stack.pop().unwrap();
-        println!("DEBUG: Examining face: {:?}", face.idx);
+        println!("DEBUG: Examining face: {:?}", face);
 
-        let v_idx = mesh.face_to_verts(face.idx);
+        let v_idx = mesh.face_to_verts(face);
         if v_idx.len() != 3 {
-            panic!(format!("Face {} has {} vertices, not 3?", face.idx, v_idx.len()));
+            panic!(format!("Face {} has {} vertices, not 3?", face, v_idx.len()));
         }
-        let v0 = mesh.verts[v_idx[0]].v;
-        let v1 = mesh.verts[v_idx[1]].v;
-        let v2 = mesh.verts[v_idx[2]].v;
+        let tr = [mesh.verts[v_idx[0]].v,
+                         mesh.verts[v_idx[1]].v,
+                         mesh.verts[v_idx[2]].v];
+        let (v0, v1, v2) = (tr[0].vert, tr[1].vert, tr[2].vert);
         let d01 = (v0 - v1).norm();
         let d02 = (v0 - v2).norm();
         let d12 = (v1 - v2).norm();
@@ -699,8 +697,8 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         let normal = a.cross(&b).normalize();
         // Make a new point that is on the surface, but roughly a
         // midpoint in parameter space. Exact location isn't crucial.
-        let t_mid = (face.ts[0] + face.ts[1] + face.ts[2]) / 3.0;
-        let v_mid = (face.frame_verts[0] + face.frame_verts[1] + face.frame_verts[2]) / 3.0;
+        let t_mid = (tr[0].t + tr[1].t + tr[2].t) / 3.0;
+        let v_mid = (tr[0].frame_vert + tr[1].frame_vert + tr[2].frame_vert) / 3.0;
         let p = f(t_mid).mtx * v_mid;
 
         let d = p.xyz().dot(&normal);
@@ -730,9 +728,9 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
         // This split is done in 'parameter' space:
         let pairs = [(0,1), (1,2), (0,2)];
-        let mut mids = pairs.iter().map(|(i,j)| {
-            let t = (face.ts[*i] + face.ts[*j]) / 2.0;
-            let v = (face.frame_verts[*i] + face.frame_verts[*j]) / 2.0;
+        let mut mids: Vec<Vertex> = pairs.iter().map(|(i,j)| {
+            let t = (tr[*i].t + tr[*j].t) / 2.0;
+            let v = (tr[*i].frame_vert + tr[*j].frame_vert) / 2.0;
             f(t).mtx * v
         }).collect();
 
@@ -752,7 +750,6 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         ]);
         */
    }
-     */
 
-    return dcel::convert_mesh(&mesh);
+    return mesh.convert_mesh(|i| i.vert );
 }

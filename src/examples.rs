@@ -1327,7 +1327,7 @@ pub fn test_dcel(fname: &str) {
 
     println!("DCEL mesh = {}", mesh);
 
-    let mesh_conv = dcel::convert_mesh(&mesh);
+    let mesh_conv = mesh.convert_mesh(|i| i);
 
     println!("Mesh = {:?}", mesh_conv);
 
