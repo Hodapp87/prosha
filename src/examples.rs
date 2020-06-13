@@ -1325,7 +1325,18 @@ pub fn test_dcel(fname: &str) {
     println!("f3 verts: {:?}", mesh.face_to_verts(f3));
     println!("f4 verts: {:?}", mesh.face_to_verts(f4));
 
-    println!("DCEL mesh = {}", mesh);
+    println!("DCEL mesh: ");
+    mesh.print();
+
+    mesh.split_face(f1, vec![
+        vertex(-0.5, 0.0, 0.0),
+        vertex(0.0, 0.5, 0.0),
+        vertex(0.0, 0.0, 0.0),
+    ]);
+
+    println!("DCEL mesh after subdiv");
+    mesh.check();
+    mesh.print();
 
     let mesh_conv = mesh.convert_mesh(|i| i);
 

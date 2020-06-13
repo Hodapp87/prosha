@@ -666,7 +666,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
         let v_idx = mesh.face_to_verts(face);
         if v_idx.len() != 3 {
-            panic!(format!("Face {} has {} vertices, not 3?", face, v_idx.len()));
+            panic!("Face {} has {} vertices, not 3?", face, v_idx.len());
         }
         let tr = [mesh.verts[v_idx[0]].v,
                          mesh.verts[v_idx[1]].v,
