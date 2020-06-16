@@ -1268,11 +1268,11 @@ pub fn test_parametric() -> Mesh {
         vertex( 1.0,  1.0, 0.0),
         vertex( 1.0, -1.0, 0.0),
     ];
-    let base_verts = util::subdivide_cycle(&base_verts, 4);
+    let base_verts = util::subdivide_cycle(&base_verts, 2);
     //let base_verts = util::subdivide_cycle(&base_verts, 16);
 
     let t0 = 0.0;
-    let t1 = 15.0;
+    let t1 = 15;
     let xform = |t: f32| -> Transform {
         id().
             translate(0.0, 0.0, t/5.0).
@@ -1280,7 +1280,7 @@ pub fn test_parametric() -> Mesh {
             scale((0.8).powf(t))
     };
 
-    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.001)
+    crate::rule::parametric_mesh(base_verts, xform, t0, t1, 0.01)
 }
 
 pub fn test_dcel(fname: &str) {
@@ -1325,18 +1325,19 @@ pub fn test_dcel(fname: &str) {
     println!("f3 verts: {:?}", mesh.face_to_verts(f3));
     println!("f4 verts: {:?}", mesh.face_to_verts(f4));
 
-    println!("DCEL mesh: ");
-    mesh.print();
+    //println!("DCEL mesh: ");
+    //mesh.print();
 
-    mesh.split_face(f1, vec![
+    let faces = mesh.full_subdiv_face(f1, vec![
         vertex(-0.5, 0.0, 0.0),
         vertex(0.0, 0.5, 0.0),
         vertex(0.0, 0.0, 0.0),
     ]);
+    println!("full_subdiv_face returned: {:?}", faces);
 
-    println!("DCEL mesh after subdiv");
-    mesh.check();
-    mesh.print();
+    //println!("DCEL mesh after subdiv");
+    //mesh.check();
+    //mesh.print();
 
     let mesh_conv = mesh.convert_mesh(|i| i);
 

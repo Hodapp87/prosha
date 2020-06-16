@@ -134,10 +134,9 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         }
 
         for (i,h) in self.halfedges.iter().enumerate() {
-            let twin = if h.has_twin {
-                format!(", twin half-edge {}", h.twin_halfedge)
+            let twin = if h.has_twin {                format!(", twin half-edge {}", h.twin_halfedge)
             } else {
-                String::from("")
+                format!(", no twin")
             };
             let v1 = self.verts[h.vert].v;
             let v2 = self.verts[self.halfedges[h.next_halfedge].vert].v;
@@ -485,22 +484,43 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         (f_n, [e_n, e_n+1, e_n+2])
     }
 
-    pub fn split_face(&mut self, face: usize, verts: Vec<V>) {
+    /// Splits a face (assumed to be a triangle) in this mesh by splitting
+    /// its half-edges, in order, at the vertices given, and then creating
+    /// half-edges between each pair of them.
+    ///
+    /// This returns; (new face indices, updated face indices).  That is,
+    /// the first vector is new face indices that were created, and the
+    /// second is existing face indices that were reused (but the faces
+    /// were updated).
+    ///
+    /// This splits the given face into 4 smaller faces, and it splits the
+    /// three *bordering* faces each into 2 faces.  That is, this
+    /// increases the number of faces by 6 and the number of vertices
+    /// by 3.
+    ///
+    /// Right now, this requires that every halfedge of `face` has a twin.
+    /// If this is not the case, this returns `None` and does not subdivide.
+    /// This behavior will likely be changed in the future.
+    ///
+    /// Disclaimer: This code is completely awful; just don't use it.
+    pub fn full_subdiv_face(&mut self, face: usize, verts: Vec<V>) -> Option<(Vec<usize>, Vec<usize>)> {
         // 'verts' maps 1:1 to vertices for 'face' (i.e. face_to_verts).
 
         let mut edge_idx = self.faces[face].halfedge;
         let n = verts.len();
 
-        //
-        let new_edges: Vec<(usize, usize)> = verts.iter().map(|v| {
+        let mut faces_new = vec![];
+        let mut faces_upd = vec![];
 
-            println!("DEBUG: halfedge 3: {:?}", self.halfedges[3]);
-            println!("DEBUG: halfedge {}: {:?}", self.halfedges[3].next_halfedge, self.halfedges[self.halfedges[3].next_halfedge]);
+        let mut fail = false;
+        let new_edges: Vec<(usize, usize)> = verts.iter().map(|v| {
 
             // As we iterate over every vertex, we walk the half-edges:
             let mut edge = self.halfedges[edge_idx].clone();
             if !edge.has_twin {
-                panic!("Halfedge {} has no twin, and split_face (for now) requires twins", edge_idx);
+                println!("Halfedge {} has no twin, and split_face (for now) requires twins", edge_idx);
+                fail = true;
+                return (0,0);
             }
             // TODO: Remove the above limitation and just don't try to split
             // nonexistent twins. I think all logic works the same way.
@@ -516,10 +536,8 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             // Half of edge_idx is split into j_edge.
             // Half of twin_idx (its twin) is split into i_edge.
 
-            println!("DEBUG: edge_idx={} next_idx={} twin_idx={} i_edge={} j_edge={}", edge_idx, next_idx, twin_idx, i_edge, j_edge);
             // This is where the vertex will be inserted:
             let v_idx = self.num_verts;
-            println!("DEBUG: adding v_idx={}", v_idx);
             self.verts.push(DCELVertex {
                 v: *v,
                 halfedge: i_edge, // j_edge is also fine
@@ -531,7 +549,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
 
             twin.twin_halfedge = j_edge;
             let i_next = twin.next_halfedge;
-            println!("DEBUG: new twin of {} = {}; new twin of {} = {}", edge_idx, i_edge, twin_idx, j_edge);
 
             self.halfedges.push(DCELHalfEdge {
                 vert: v_idx,
@@ -541,8 +558,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                 next_halfedge: i_next,
                 prev_halfedge: twin_idx,
             }); // i_edge
-            println!("DEBUG: edge {}: vert {} twin {} next {} prev {} (ends at vertex {})", i_edge, v_idx, edge_idx, i_next, twin_idx, self.halfedges[self.halfedges[twin_idx].next_halfedge].vert);
-
             self.halfedges.push(DCELHalfEdge {
                 vert: v_idx,
                 face: 0, // This is set properly in the next loop
@@ -551,7 +566,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                 next_halfedge: j_next,
                 prev_halfedge: edge_idx,
             }); // j_edge
-            println!("DEBUG: edge {}: vert {} twin {} next {} prev {} (ends at vertex {})", j_edge, v_idx, twin_idx, j_next, edge_idx, self.halfedges[self.halfedges[edge_idx].next_halfedge].vert);
 
             self.num_halfedges += 2;
 
@@ -565,7 +579,9 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             r
         }).collect();
 
-        println!("DEBUG: {:?}", new_edges);
+        if fail {
+            return None;
+        }
 
         // We then must connect some edges up 'across' vertices
         // in order to form the smaller face at each vertex.
@@ -585,9 +601,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             // And the face here:
             let face_new = self.num_faces;
 
-            println!("DEBUG: i0={} i1={} ep_idx={} en_idx={} e_cross_idx={} e_twin_idx={} face_new={}",
-                i0, i1, ep_idx, en_idx, e_cross_idx, e_twin_idx, face_new);
-
             // So, the vertex for i0 had two halfedges (one pointing in,
             // one pointing out). We split both those half-edges earlier.
             // en_idx & ep_idx are the halves that are nearest the
@@ -604,7 +617,6 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                 next_halfedge: ep_idx,
                 prev_halfedge: en_idx,
             }); // e_cross_idx
-            println!("DEBUG: edge {}: vert {} twin {} next {} prev {} (ends at vertex {})", e_cross_idx, self.halfedges[en_idx].vert, e_twin_idx, ep_idx, en_idx, self.halfedges[self.halfedges[e_cross_idx].next_halfedge].vert);
 
             // It also requires a twin half-edge. These all form a single
             // central face with each edge sharing a boundary with the
@@ -617,24 +629,21 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
                 next_halfedge: 0, // TODO
                 prev_halfedge: 0, // TODO
             }); // e_twin_idx
-            println!("DEBUG: edge {}: vert {} twin {} next/prev incorrect", e_twin_idx, self.halfedges[ep_idx].vert, e_cross_idx);
-
             self.num_halfedges += 2;
 
             // en/ep also need directed to 'new' edges and each other
             self.halfedges[en_idx].prev_halfedge = ep_idx;
             self.halfedges[en_idx].next_halfedge = e_cross_idx;
-            println!("DEBUG: edge {}: now next {} prev {} ends at vert {}", en_idx, e_cross_idx, ep_idx, self.halfedges[self.halfedges[en_idx].next_halfedge].vert);
 
             self.halfedges[ep_idx].next_halfedge = en_idx;
             self.halfedges[ep_idx].prev_halfedge = e_cross_idx;
-            println!("DEBUG: edge {}: now next {} prev {} ends at vert {}", ep_idx, en_idx, e_cross_idx, self.halfedges[self.halfedges[ep_idx].next_halfedge].vert);
 
             self.halfedges[ep_idx].face = face_new;
 
             self.faces.push(DCELFace {
                 halfedge: e_cross_idx, // en_idx or ep_idx is fine too
-            });
+            }); // face_new
+            faces_new.push(face_new);
             self.num_faces += 1;
 
             // We also need to split the opposite side to make the two
@@ -674,8 +683,10 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             self.faces.push(DCELFace {
                 halfedge: outer2, // base2 or edge_side2 is fine too
             });
+            faces_new.push(self.num_faces);
             self.num_faces += 1;
             self.faces[face1].halfedge = outer1; // base1 or edge_side1 is fine too
+            faces_upd.push(face1);
 
             self.halfedges[outer1].next_halfedge = edge_side1;
             self.halfedges[outer1].prev_halfedge = base1;
@@ -691,12 +702,8 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
             self.halfedges[base2].prev_halfedge = outer2;
             self.halfedges[base2].next_halfedge = edge_side2;
 
-            println!("DEBUG: base1={} base2={} outer1={} outer2={} face1={} face2={} edge_side1={} edge_side2={}",
-                     base1, base2, outer1, outer2, face1, face2, edge_side1, edge_side2);
             e_twin_idx
         }).collect();
-
-        println!("DEBUG: cross_edges={:?}", twin_edges);
 
         for i0 in 0..n {
             let i1 = (i0 + 1) % n;
@@ -709,6 +716,9 @@ impl<V: Copy + std::fmt::Debug> DCELMesh<V> {
         // We need something at this index, and the other three already have
         // indices, so reuse it for the smaller central face:
         self.faces[face].halfedge = e_twin_idx;
+        faces_upd.push(face);
+
+        return Some((faces_new, faces_upd));
     }
 
     pub fn convert_mesh<F>(&self, f: F) -> Mesh

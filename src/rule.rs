@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::rc::Rc;
 use std::f32;
+use std::collections::HashMap;
 
 use crate::mesh::{Mesh, MeshFunc, VertexUnion};
 use crate::xform::{Transform, Vertex};
@@ -658,11 +659,25 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
     // A stack of face indices for faces in 'mesh' that are still
     // undergoing subdivision
-    let mut stack: Vec<usize> = (0..mesh.num_faces).collect();
 
-    while !stack.is_empty() {
-        let face = stack.pop().unwrap();
-        println!("DEBUG: Examining face: {:?}", face);
+    let mut stack: HashMap<usize, usize> = (0..mesh.num_faces).map(|i| (i, 0)).collect();
+
+    let max_subdiv = 1;
+
+    // This is masked off because it's just horrible:
+    while false && !stack.is_empty() {
+
+        let (face, count) = match stack.iter().next() {
+            None => break,
+            Some((f, c)) => (*f, *c),
+        };
+        stack.remove(&face);
+
+        println!("DEBUG: Examining face: {:?} ({} subdivs)", face, count);
+
+        if count >= max_subdiv {
+            continue;
+        }
 
         let v_idx = mesh.face_to_verts(face);
         if v_idx.len() != 3 {
@@ -703,17 +718,18 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
         let d = p.xyz().dot(&normal);
 
+        if d.is_nan() {
+            println!("DEBUG: p={:?} normal={:?}", p, normal);
+            println!("DEBUG: a={:?} b={:?}", a, b);
+            println!("DEBUG: v0={:?} v1={:?} v2={:?}", v0, v1, v2);
+            //panic!("Distance is NaN?");
+            println!("DEBUG: distance is NaN?");
+            continue;
+        }
+
         println!("DEBUG: t_mid={} v_mid={},{},{} p={},{},{}", t_mid, v_mid.x, v_mid.y, v_mid.z, p.x, p.y, p.z);
         println!("DEBUG: d={}", d);
 
-        // DEBUG
-        /*
-        let n = verts.len();
-        verts.push(p);
-        faces.push(face.verts[0]);
-        faces.push(face.verts[1]);
-        faces.push(n);
-         */
         if (d <= max_err) {
             // This triangle is already in the mesh, and already popped
             // off of the stack. We're done.
@@ -728,28 +744,35 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
 
         // This split is done in 'parameter' space:
         let pairs = [(0,1), (1,2), (0,2)];
-        let mut mids: Vec<Vertex> = pairs.iter().map(|(i,j)| {
+        let mut mids: Vec<VertexTrajectory> = pairs.iter().map(|(i,j)| {
             let t = (tr[*i].t + tr[*j].t) / 2.0;
             let v = (tr[*i].frame_vert + tr[*j].frame_vert) / 2.0;
-            f(t).mtx * v
+            VertexTrajectory {
+                vert: f(t).mtx * v,
+                frame_vert: v,
+                t: t,
+            }
         }).collect();
 
-        // DEBUG
-        //let n = verts.len();
-        // Index n+0 is (0,1), n+1 is (1,2), n+2 is (0,2)
-        /*
-        verts.append(&mut mids);
-        faces[face.face] = n + 0;
-        faces[face.face + 1] = n + 1;
-        faces[face.face + 2] = n + 2;
-        faces.extend_from_slice(&[
-            face.verts[0], n + 0, n + 2,
-            face.verts[1], n + 1, n + 0,
-            face.verts[2], n + 2, n + 1,
-            //n + 0,         n + 1, n + 2,
-        ]);
-        */
+        // TODO: Get indices of added faces and put these on the stack too
+        match mesh.full_subdiv_face(face, mids) {
+            None => {},
+            Some((new, upd)) => {
+
+                // The 'updated' faces can remain on the stack if they
+                // already were there.  If they were taken off of the stack
+                // because they were too small, they are now even smaller,
+                // so it is fine to leave them off.
+                stack.extend(new.iter().map(|i| (*i, count + 1)));
+                stack.extend(upd.iter().map(|i| (*i, count + 1)));
+                // TODO: Why does the resultant mesh have holes if I do this
+                // and then increase max_subdiv?
+            },
+        }
+
    }
+
+    //mesh.print();
 
     return mesh.convert_mesh(|i| i.vert );
 }

@@ -2,17 +2,10 @@
 
 ## Highest priority:
 
-- Add better docs and possibly abstraction to `dcel.rs`, *before*
-  it's widely used.  Possibly rename too.
-- `dcel.rs` needs a helper method for subdivision.
-- Redo `examples::parametric_mesh` along the following lines:
-  - DONE: Make a crappy mesh (as a DCEL) like my 'early' method.
-  - Use my method from around 2020-05-21, and my pile of loose notes,
-    to subdivide - with the help of DCEL.
-- Document `parametric_mesh` better. It is pretty hairy and could
-  also benefit from some modularity.
-- parametric_mesh: My err/max_err code seems to sometimes give very high
-  dt values, e.g. if I use just a translation as my transform
+- Just scrap `parametric_mesh` as much as possible and use existing
+  tools (e.g. OpenSubdiv) because this DCEL method is just painful for
+  what it is and I have some questions on how it can even work
+  theoretically.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.
