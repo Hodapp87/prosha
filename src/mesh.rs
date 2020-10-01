@@ -62,7 +62,7 @@ impl Mesh {
         stl_io::write_stl(writer, triangles.iter())
     }
 
-    fn to_meshfunc(&self) -> MeshFunc {
+    pub fn to_meshfunc(&self) -> MeshFunc {
         MeshFunc {
             faces: self.faces.clone(),
             verts: self.verts.iter().map(|v| VertexUnion::Vertex(*v)).collect(),

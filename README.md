@@ -2,10 +2,13 @@
 
 ## Highest priority:
 
+- Fix the commented-out tests in `examples.rs`.
 - Just scrap `parametric_mesh` as much as possible and use existing
   tools (e.g. OpenSubdiv) because this DCEL method is just painful for
   what it is and I have some questions on how it can even work
   theoretically.
+- Connect up the `parametric_mesh` stuff that remains, and worry about
+  perfect meshes later.
 - Get identical or near-identical meshes to `ramhorn_branch` from
   Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.

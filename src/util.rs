@@ -1,7 +1,6 @@
 use std::ops::Range;
-use crate::mesh::{Mesh, MeshFunc, VertexUnion};
+use crate::mesh::{MeshFunc, VertexUnion};
 use crate::xform::{Vertex};
-//use crate::rule::{Rule, Child};
 
 /// This is like `vec!`, but it can handle elements that are given
 /// with `@var element` rather than `element`, e.g. like

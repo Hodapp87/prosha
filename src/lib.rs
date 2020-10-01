@@ -66,20 +66,21 @@ mod tests {
         geom.transform(&xf1).write_stl_file("xform_trans_rot.stl").unwrap();
     }
 
-    /*
     // TODO: These tests don't test any conditions, so this is useful
     // short-hand to run, but not very meaningful as a test.
     #[test]
     fn cube_thing() {
         run_test(examples::cube_thing(), 3, "cube_thing3", false);
     }
-    */
 
     #[test]
     fn barbs() { run_test(examples::barbs(false), 80, "barbs", false); }
 
     #[test]
     fn barbs_random() { run_test(examples::barbs(true), 80, "barbs_random", false); }
+
+    #[test]
+    fn pyramid() { run_test(examples::pyramid(), 3, "pyramid", false); }
     /*
     #[test]
     fn twist() {

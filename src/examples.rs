@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_6, PI};
 use std::f32;
 
 use nalgebra::*;
@@ -14,7 +14,6 @@ use crate::prim;
 use crate::dcel;
 use crate::dcel::{DCELMesh, VertSpec};
 
-/*
 pub fn cube_thing() -> Rule<()> {
 
     // Quarter-turn in radians:
@@ -38,8 +37,8 @@ pub fn cube_thing() -> Rule<()> {
 
         let xforms = turns.iter().map(|xf| xf.scale(0.5).translate(6.0, 0.0, 0.0));
         RuleEval {
-            geom: Rc::new(prim::cube()),
-            final_geom: Rc::new(prim::empty_mesh()),
+            geom: Rc::new(prim::cube().to_meshfunc()),
+            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
             children: xforms.map(move |xf| Child {
                 rule: self_.clone(),
                 xf: xf,
@@ -50,7 +49,6 @@ pub fn cube_thing() -> Rule<()> {
 
     Rule { eval: Rc::new(rec), ctxt: () }
 }
-*/
 
 pub fn barbs(random: bool) -> Rule<()> {
 
@@ -166,6 +164,68 @@ pub fn barbs(random: bool) -> Rule<()> {
     Rule { eval: base, ctxt: () }
 }
 
+pub fn pyramid() -> Rule<()> {
+
+    // base_verts are for a triangle in the XY plane, centered at
+    // (0,0,0), with unit sidelength:
+    let (b0, bn);
+    let rt3 = (3.0).sqrt();
+    let rt6 = (6.0).sqrt();
+    let base_verts: Vec<VertexUnion> = vec_indexed![
+    @b0 VertexUnion::Vertex(vertex( rt3/3.0,      0.0,     0.0)),
+    VertexUnion::Vertex(vertex(    -rt3/6.0, -1.0/2.0,     0.0)),
+    VertexUnion::Vertex(vertex(    -rt3/6.0,  1.0/2.0,     0.0)),
+    VertexUnion::Vertex(vertex(         0.0,      0.0, rt6/3.0)),
+    @bn,
+    ];
+
+    let test = rule_fn!(() => |_s, base_verts| {
+        RuleEval {
+            geom: Rc::new(MeshFunc {
+                verts: base_verts,
+                faces: vec![ 0, 1, 2 ], //,  0, 3, 1,  2, 3, 0,  1, 3, 2],
+            }),
+            final_geom: Rc::new(MeshFunc {
+                verts: vec![],
+                faces: vec![],
+            }),
+            children: vec![],
+        }
+    });
+
+    let base_to_side = |i| {
+        let rt3 = (3.0).sqrt();
+        let rt6 = (6.0).sqrt();
+        let v01 = Unit::new_normalize(Vector3::new(rt3/2.0, 1.0/2.0, 0.0));
+        let axis = 2.0 * (rt3 / 3.0).asin();
+        let angle = 2.0 * FRAC_PI_3 * (i as f32);
+        id().
+            rotate(&Vector3::z_axis(), angle).
+            translate(rt3/18.0, -1.0/6.0, rt6/9.0).
+            rotate(&v01, axis)
+    };
+
+    let base = rule_fn!(() => |_s, base_verts| {
+        RuleEval {
+            geom: Rc::new(MeshFunc {
+                verts: base_verts,
+                faces: vec![ 0, 1, 2,  0, 3, 1,  2, 3, 0,  1, 3, 2],
+            }),
+            final_geom: Rc::new(MeshFunc {
+                verts: vec![],
+                faces: vec![],
+            }),
+            children: vec![
+                child!(rule!(test, ()), base_to_side(0),),
+                child!(rule!(test, ()), base_to_side(1),),
+                child!(rule!(test, ()), base_to_side(2),),
+            ],
+        }
+    });
+
+    Rule { eval: base, ctxt: () }
+}
+
 /*
 // Meant to be a copy of twist_from_gen from Python &
 // automata_scratch, but has since acquired a sort of life of its own
@@ -202,14 +262,14 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
 
         let seed_next = incr.transform(&seed2);
 
-        let geom = Rc::new(util::zigzag_to_parent(seed_next.clone(), n));
-        // TODO: Cleanliness fix - why not just make these return meshes?
-        let (vc, faces) = util::connect_convex(&seed_next, true);
-        let final_geom = Rc::new(OpenMesh {
-            verts: vec![vc],
-            alias_verts: vec![],
-            faces: faces,
-        });
+        //let vc = util::centroid(&seed_next);
+        //let faces = util::connect_convex(0..n, n, true);
+        let geom = util::parallel_zigzag(seed_next, 0..n, 0..n);
+        let final_geom = MeshFunc {
+            verts: vec![],
+            faces: vec![],
+            // TODO: get actual verts here
+        };
         
         let c = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
             RuleEval {
@@ -231,7 +291,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     
     let start = move |_| -> RuleEval<()> {
         
-        let child = |incr, dx, i, ang0, div| -> (OpenMesh, Child<()>) {
+        let child = |incr, dx, i, ang0, div| -> (MeshFunc, Child<()>) {
             let xform = Transform::new().
                 rotate(&y, ang0 + (qtr / div * (i as f32))).
                 translate(dx, 0.0, 0.0);
@@ -247,7 +307,7 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
             // and in the process, generate faces for these seeds:
             let (centroid, f) = util::connect_convex(&vs, false);
             vs.push(centroid);
-            (OpenMesh { verts: vs, faces: f, alias_verts: vec![] }, c)
+            (MeshFunc { verts: vs, faces: f }, c)
         };
         
         // Generate 'count' children, shifted/rotated differently:
@@ -260,7 +320,9 @@ pub fn twist(f: f32, subdiv: usize) -> Rule<()> {
     
     Rule { eval: Rc::new(start), ctxt: () }
 }
+*/
 
+/*
 #[derive(Copy, Clone)]
 pub struct NestSpiral2Ctxt {
     init: bool,
@@ -380,7 +442,7 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
         },
     }
 }
-
+*/
 
 #[derive(Copy, Clone)]
 pub struct TorusCtxt {
@@ -389,6 +451,7 @@ pub struct TorusCtxt {
     stack: [Transform; 3],
 }
 
+/*
 pub fn twisty_torus() -> Rule<TorusCtxt> {
     let subdiv = 8;
     let seed = vec![
@@ -399,8 +462,10 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
     ];
     let xf = Transform::new().rotate(&Vector3::x_axis(), -0.9);
     let seed = util::subdivide_cycle(&xf.transform(&seed), subdiv);
-    
+
     let n = seed.len();
+    let geom = util::parallel_zigzag(seed, 0..n, n..(2*n));
+    // TODO: where are parent Args?
     let geom = Rc::new(util::zigzag_to_parent(seed.clone(), n));
     let (vc, faces) = util::connect_convex(&seed, true);
     let final_geom = Rc::new(OpenMesh {
@@ -481,7 +546,9 @@ pub fn twisty_torus() -> Rule<TorusCtxt> {
         },
     }
 }
+ */
 
+/*
 pub fn twisty_torus_hardcode() -> Rule<()> {
     let subdiv = 8;
     let seed = vec![
@@ -1272,7 +1339,7 @@ pub fn test_parametric() -> Mesh {
     //let base_verts = util::subdivide_cycle(&base_verts, 16);
 
     let t0 = 0.0;
-    let t1 = 15;
+    let t1 = 15.0;
     let xform = |t: f32| -> Transform {
         id().
             translate(0.0, 0.0, t/5.0).
