@@ -182,7 +182,7 @@ pub fn pyramid() -> Rule<()> {
     let test = rule_fn!(() => |_s, base_verts| {
         RuleEval {
             geom: Rc::new(MeshFunc {
-                verts: base_verts,
+                verts: vert_args(0..3),
                 faces: vec![ 0, 1, 2 ], //,  0, 3, 1,  2, 3, 0,  1, 3, 2],
             }),
             final_geom: Rc::new(MeshFunc {
@@ -209,16 +209,16 @@ pub fn pyramid() -> Rule<()> {
         RuleEval {
             geom: Rc::new(MeshFunc {
                 verts: base_verts,
-                faces: vec![ 0, 1, 2,  0, 3, 1,  2, 3, 0,  1, 3, 2],
+                faces: vec![ 0, 1, 2 ],
             }),
             final_geom: Rc::new(MeshFunc {
                 verts: vec![],
                 faces: vec![],
             }),
             children: vec![
-                child!(rule!(test, ()), base_to_side(0),),
-                child!(rule!(test, ()), base_to_side(1),),
-                child!(rule!(test, ()), base_to_side(2),),
+                child!(rule!(test, ()), base_to_side(0), 1, 0, 3),
+                child!(rule!(test, ()), base_to_side(1), 0, 2, 3),
+                child!(rule!(test, ()), base_to_side(2), 2, 1, 3),
             ],
         }
     });
