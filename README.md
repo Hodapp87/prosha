@@ -1,8 +1,44 @@
 # This needs a title
 
+This work was started as an attempt to make meshes in a more
+"generative" style, described by recursive grammars and
+replacement rules.  One goal was to make it easy to produce
+manifold meshes by following certain rules, and do so in a
+"correct-by-construction" manner rather than by having to
+patch up or subdivide the meshes in post-processing.
+
+These grammars by their nature worked in discrete steps,
+but at one point I tried (unsuccessfully) to extend this
+system to working in a more continuous and parametric
+way.
+
+I also ran into problems anytime I wanted to produce
+meshes in a way that was more "refining" than "generative".
+They're not completely distinct. However, the specific issue
+I ran into is that the rules were explicitly designed around
+'child' rules never being able to modify topology of geometry
+from a 'parent' rule, besides being able to connect to its
+vertices - and sometimes the "refining" part of things
+required this in order to work right.
+
+Also, I did this in order to learn the Rust language, and I
+repeatedly kept bumping into the conclusion that Rust was
+just not the right language for this. I was in need of things
+like closures and first-class functions and I neglected to
+consider how much those assume the presence of garbage
+collection. Really, I wanted a Lisp, and then the presence of
+a REPL would have been another bonus.
+
+If I actually understood my goals enough to put better
+constraints on my model, Rust probably would have been fine.
+As it stands now, the lack of clarity in both my theory
+and in my implementation is a far bigger issue than anything
+related to Rust.
+
 ## Highest priority:
 
-- Fix the commented-out tests in `examples.rs`.
+- Figure out the crash bug in `vec_indexed!` if I put a Vertex
+  *after* an Arg.
 - Just scrap `parametric_mesh` as much as possible and use existing
   tools (e.g. OpenSubdiv) because this DCEL method is just painful for
   what it is and I have some questions on how it can even work
