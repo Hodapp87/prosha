@@ -172,18 +172,30 @@ pub fn pyramid() -> Rule<()> {
     let rt3 = (3.0).sqrt();
     let rt6 = (6.0).sqrt();
     let base_verts: Vec<VertexUnion> = vec_indexed![
-    @b0 VertexUnion::Vertex(vertex( rt3/3.0,      0.0,     0.0)),
-    VertexUnion::Vertex(vertex(    -rt3/6.0, -1.0/2.0,     0.0)),
-    VertexUnion::Vertex(vertex(    -rt3/6.0,  1.0/2.0,     0.0)),
-    VertexUnion::Vertex(vertex(         0.0,      0.0, rt6/3.0)),
-    @bn,
+        @b0 VertexUnion::Vertex(vertex( rt3/3.0,      0.0,     0.0)),
+        VertexUnion::Vertex(vertex(    -rt3/6.0, -1.0/2.0,     0.0)),
+        VertexUnion::Vertex(vertex(    -rt3/6.0,  1.0/2.0,     0.0)),
+        VertexUnion::Vertex(vertex(         0.0,      0.0, rt6/3.0)),
+        @bn,
     ];
 
     let test = rule_fn!(() => |_s, base_verts| {
+        let rt3 = (3.0).sqrt();
+        let (a0, a1, a2);
+        let next_verts: Vec<VertexUnion> = vec_indexed![
+            VertexUnion::Vertex(vertex( rt3/12.0,  -1.0/4.0,  0.0)),
+            VertexUnion::Vertex(vertex( rt3/12.0,   1.0/4.0,  0.0)),
+            VertexUnion::Vertex(vertex(-rt3/6.0,        0.0,  0.0)),
+            @a0 VertexUnion::Arg(0),
+            @a1 VertexUnion::Arg(1),
+            @a2 VertexUnion::Arg(2),
+            // TODO: Why do I have index-out-of-range crashes if I move
+            // the ::Vertex(...) to the end?
+        ];
         RuleEval {
             geom: Rc::new(MeshFunc {
-                verts: vert_args(0..3),
-                faces: vec![ 0, 1, 2 ], //,  0, 3, 1,  2, 3, 0,  1, 3, 2],
+                verts: next_verts,
+                faces: vec![ a0, 0, 2, a1, 1, 0,  a2, 2, 1,  0, 1, 2 ],
             }),
             final_geom: Rc::new(MeshFunc {
                 verts: vec![],
@@ -191,6 +203,9 @@ pub fn pyramid() -> Rule<()> {
             }),
             children: vec![],
         }
+        // TODO: The 'mid' vertices still don't connect together - probably
+        // because each child repeats them?
+        // I'd have to have 'base' produce them and pass them as args.
     });
 
     let base_to_side = |i| {
