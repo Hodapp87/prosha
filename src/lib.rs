@@ -80,7 +80,7 @@ mod tests {
     fn barbs_random() { run_test(examples::barbs(true), 80, "barbs_random", false); }
 
     #[test]
-    fn pyramid() { run_test(examples::pyramid2(), 3, "pyramid2", false); }
+    fn sierpinski() { run_test(examples::sierpinski(), 6, "sierpinski", false); }
     /*
     #[test]
     fn twist() {

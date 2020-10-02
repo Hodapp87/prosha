@@ -10,7 +10,7 @@ patch up or subdivide the meshes in post-processing.
 These grammars by their nature worked in discrete steps,
 but at one point I tried (unsuccessfully) to extend this
 system to working in a more continuous and parametric
-way.
+way.  (See `parametric_mesh` and any DCEL code.)
 
 I also ran into problems anytime I wanted to produce
 meshes in a way that was more "refining" than "generative".
@@ -20,6 +20,16 @@ I ran into is that the rules were explicitly designed around
 from a 'parent' rule, besides being able to connect to its
 vertices - and sometimes the "refining" part of things
 required this in order to work right.
+
+The problems with the parametric/continuous, and the
+aforementioned "refining", were related. The issue is that
+in order to get good meshes, I needed to be able to minimize
+approximation error with the triangles and avoid triangles
+with extreme angles, and there was seemingly no good way to
+do this by incremental construction (like I was trying to
+use elsewhere in my model) - and so its seems I just ended up
+reinventing, badly, a lot of existing work with subdivision
+and meshing.
 
 I've also disliked how much my model felt like it tied me
 down to the "triangle mesh" representation. I haven't
@@ -36,6 +46,18 @@ consider how much those assume the presence of garbage
 collection. Really, I wanted a Lisp, and then the presence of
 a REPL would have been another bonus.
 
+On top of this, my implementation is pretty slow when it is
+using a large number of rules each producing small geometry
+(which is almost literally the only way it *can* be used
+if you want to produce a fairly complex mesh). I did some
+profiling some months ago that showed I was spending the
+vast majority of my time in `extend()` and `clone()` for
+`Vec` - and so I could probably see some huge performance
+gains if I could simply pre-allocate vectors and share geometry
+more. Also, I'm pretty sure this code does some very task-parallel
+elements (e.g. anytime a rule branches), and multithreading should
+be able to exploit this if I care.
+
 If I actually understood my goals enough to put better
 constraints on my model, Rust probably would have been fine.
 As it stands now, the lack of clarity in both my theory
@@ -44,16 +66,11 @@ related to Rust.
 
 ## Highest priority:
 
+- Fix `ramhorn_branch`.
+- Once I've fixed that, see about a refactor that respects the
+  same model, but involves much less ceremony and boilerplate.
 - Figure out the crash bug in `vec_indexed!` if I put a Vertex
   *after* an Arg.
-- Just scrap `parametric_mesh` as much as possible and use existing
-  tools (e.g. OpenSubdiv) because this DCEL method is just painful for
-  what it is and I have some questions on how it can even work
-  theoretically.
-- Connect up the `parametric_mesh` stuff that remains, and worry about
-  perfect meshes later.
-- Get identical or near-identical meshes to `ramhorn_branch` from
-  Python.  (Should just be a matter of tweaking parameters.)
 - Look at performance.
   - Start at `to_mesh_iter()`. The cost of small appends/connects
     seems to be killing performance.
@@ -62,13 +79,6 @@ related to Rust.
     like I should be able to share geometry with the `Rc` (like noted
     above), defer copying until actually needed, and pre-allocate the
     vector to its size (which should be easy to compute).
-- See `automata_scratch/examples.py` and implement some of the tougher
-  examples.
-  - `twisty_torus`, `spiral_nested_2`, & `spiral_nested_3` are all
-    that remain.  To do them, I need to compose transformations (not
-    in the matrix sense), but I also probably need to produce
-    RuleEvals which always have `xf` of identity transformation since
-    the Python code does not 'inherit' transforms unless I tell it to.
 
 ## Important but less critical:
 
@@ -85,7 +95,8 @@ related to Rust.
 
 - Catch-alls:
   - Grep for all TODOs in code, really.
-  - Look at everything in `README.md` in `automata_scratch`.
+  - Look at everything in `README.md` in `automata_scratch`,
+    my old Python code from around 2019-09.
 
 ## If I'm bored:
 
@@ -96,9 +107,6 @@ related to Rust.
 - Would being able to name a rule node (perhaps conditionally under
   some compile-time flag) help for debugging?
 - Use an actual logging framework.
-- Take a square.  Wrap it around to a torus. Now add a twist (about
-  the axis that is normal to the square). This is simple, but it looks
-  pretty cool.
 - How can I take tangled things like the cinquefoil and produce more
   'iterative' versions that still weave around?
 
@@ -118,3 +126,4 @@ related to Rust.
 - If you *pre* multiply a transformation: you are transforming the
   entire global space.  If you *post* multiply: you are transforming
   the current local space. 
+- Don't reinvent subdivision surfaces.

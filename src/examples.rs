@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_6, PI};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_3};
 use std::f32;
 
 use nalgebra::*;
@@ -8,11 +8,11 @@ use rand::Rng;
 use crate::util;
 use crate::util::VecExt;
 use crate::mesh::{Mesh, MeshFunc, VertexUnion, vert_args};
-use crate::xform::{Transform, Vertex, vertex, Mat4, id};
-use crate::rule::{Rule, RuleFn, RuleEval, Child};
+use crate::xform::{Transform, Vertex, vertex, id};
+use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::dcel;
-use crate::dcel::{DCELMesh, VertSpec};
+use crate::dcel::{VertSpec};
 
 pub fn cube_thing() -> Rule<()> {
 
@@ -106,7 +106,7 @@ pub fn barbs(random: bool) -> Rule<()> {
     };
     let main_incr = |random| {
         if random {
-            let t = rand::thread_rng().gen_range(0.75, 1.25);
+            //let t = rand::thread_rng().gen_range(0.75, 1.25);
             let s = rand::thread_rng().gen_range(0.85, 1.10);
             let rz = rand::thread_rng().gen_range(0.05, 0.25);
             let rx = rand::thread_rng().gen_range(0.08, 0.12);
@@ -124,7 +124,7 @@ pub fn barbs(random: bool) -> Rule<()> {
 
     let main = rule_fn!(() => |self_, base_verts| {
         let mut next_verts = base_verts;
-        let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
+        let (a0, _) = next_verts.append_indexed(vert_args(0..4));
 
         // This contributes no faces of its own - just vertices.
         let geom = MeshFunc { verts: next_verts.clone(), faces: vec![] };
@@ -164,17 +164,22 @@ pub fn barbs(random: bool) -> Rule<()> {
     Rule { eval: base, ctxt: () }
 }
 
-pub fn pyramid() -> Rule<()> {
+pub fn sierpinski() -> Rule<()> {
+
+    // Initial height step:
+    let dz = 0.10;
+    // 'Extra' z rotation (0.0 for normal Sierpinski)
+    let dr = 0.1;
+    // Scale factor (0.5 for normal Sierpinski)
+    let s = 0.51;
 
     let rt3 = (3.0).sqrt();
-
-    let dz = 0.10;
 
     // Indices:
     // b+0,b+1,b+2 = base vertices
     // t+0,t+1,t+2 = 'top' vertices above base
     // tm01, tm12, tm20 = midpoints of (t0,t1), (t1,t2), (t2,t0).
-    let (b, t, tm01, tm12, tm20);
+    let (b, t, tm01, tm12, tm20, n);
     let base_verts: Vec<VertexUnion> = {
         let v0 = vertex(rt3/3.0, 0.0, 0.0);
         let v1 = vertex(-rt3/6.0, 1.0/2.0, 0.0);
@@ -192,24 +197,24 @@ pub fn pyramid() -> Rule<()> {
             @tm01 VertexUnion::Vertex((v0b+v1b)/2.0),
             @tm12 VertexUnion::Vertex((v1b+v2b)/2.0),
             @tm20 VertexUnion::Vertex((v2b+v0b)/2.0),
+            @n,
         ]
     };
 
     let tri_split = move |i| {
         let rt3 = (3.0).sqrt();
-        let angle = 2.0 * FRAC_PI_3 * (i as f32);
+        let angle = 2.0 * FRAC_PI_3 * (i as f32) + dr;
         id().
             rotate(&Vector3::z_axis(), angle).
             translate(rt3/12.0, 0.0, 0.0).
-            scale(0.49).
+            scale(s).
             translate(0.0, 0.0, dz)
     };
 
     let split = rule_fn!(() => |_s, base_verts| {
 
         let mut next_verts = base_verts.clone();
-        let mut final_verts = base_verts;
-        let (a0, a1) = next_verts.append_indexed(vert_args(0..3));
+        let (a0, _) = next_verts.append_indexed(vert_args(0..3));
 
         RuleEval {
             geom: Rc::new(MeshFunc {
@@ -231,8 +236,12 @@ pub fn pyramid() -> Rule<()> {
                 ],
             }),
             final_geom: Rc::new(MeshFunc {
-                verts: vert_args(t..(t+3)),
-                faces: vec![ 0, 1, 2 ],
+                verts: vert_args(0..n), // just duplicate same verts
+                faces: vec![
+                    t+0, tm01, tm20,
+                    t+1, tm12, tm01,
+                    t+2, tm20, tm12,
+                ],
             }),
             children: vec![
                 child!(_s, tri_split(0), t+0, tm01, tm20),
@@ -494,7 +503,6 @@ pub fn nest_spiral_2() -> Rule<NestSpiral2Ctxt> {
         },
     }
 }
-*/
 
 #[derive(Copy, Clone)]
 pub struct TorusCtxt {
@@ -503,7 +511,6 @@ pub struct TorusCtxt {
     stack: [Transform; 3],
 }
 
-/*
 pub fn twisty_torus() -> Rule<TorusCtxt> {
     let subdiv = 8;
     let seed = vec![

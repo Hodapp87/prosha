@@ -96,7 +96,7 @@ macro_rules! child {
 macro_rules! child_iter {
     ( $Rule:expr, $Xform:expr, $Args:expr ) => {
         Child {
-            rule: /*std::rc::Rc::new*/($Rule),
+            rule: /*std::rc::Rc::new*/($Rule).clone(),
             xf: $Xform,
             arg_vals: $Args.collect(), // does this even need a macro?
         }
@@ -366,7 +366,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         panic!("frame must have at least 3 vertices");
     }
 
-    struct frontierVert {
+    struct FrontierVert {
         vert: Vertex, // Vertex position
         t: f32, // Parameter value; f(t) should equal vert
         frame_idx: usize, // Index of 'frame' this sits in the trajectory of
@@ -376,7 +376,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
     };
 
     // Init 'frontier' with each 'frame' vertex, and start it at t=t0.
-    let mut frontier: Vec<frontierVert> = frame.iter().enumerate().map(|(i,v)| frontierVert {
+    let mut frontier: Vec<FrontierVert> = frame.iter().enumerate().map(|(i,v)| FrontierVert {
         vert: *v,
         t: t0,
         frame_idx: i,
@@ -402,7 +402,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         // Pick a vertex to advance.
         //
         // Heuristic for now: pick the 'furthest back' (lowest t)
-        let (i,v) = frontier.iter().enumerate().min_by(|(i,f), (j, g)|
+        let (i,v) = frontier.iter().enumerate().min_by(|(_,f), (_, g)|
             f.t.partial_cmp(&g.t).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
         // TODO: Make this less ugly?
 
@@ -456,7 +456,7 @@ pub fn parametric_mesh<F>(frame: Vec<Vertex>, f: F, t0: f32, t1: f32, max_err: f
         ]);
 
         // Replace this vertex in the frontier:
-        frontier[i] = frontierVert {
+        frontier[i] = FrontierVert {
             vert: v_next,
             frame_idx: v.frame_idx,
             mesh_idx: pos,
