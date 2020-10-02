@@ -21,6 +21,13 @@ from a 'parent' rule, besides being able to connect to its
 vertices - and sometimes the "refining" part of things
 required this in order to work right.
 
+I've also disliked how much my model felt like it tied me
+down to the "triangle mesh" representation. I haven't
+found a good way to build up higher-level representations
+to modularise and compose - but haven't given up yet on
+this.  In some sense it is a conflict of goals because
+the aim was correct-by-construction triangle meshes.
+
 Also, I did this in order to learn the Rust language, and I
 repeatedly kept bumping into the conclusion that Rust was
 just not the right language for this. I was in need of things

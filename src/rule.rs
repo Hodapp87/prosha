@@ -85,7 +85,7 @@ pub struct Child<S> {
 macro_rules! child {
     ( $Rule:expr, $Xform:expr, $( $Arg:expr ),* ) => {
         Child {
-            rule: /*std::rc::Rc::new*/($Rule),
+            rule: /*std::rc::Rc::new*/($Rule).clone(),
             xf: $Xform,
             arg_vals: vec![$($Arg,)*],
         }
