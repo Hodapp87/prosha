@@ -121,12 +121,14 @@ mod tests {
         let f = 40;
         run_test(examples::twist(f as f32, 128), 100*f, "screw_full", false);
     }
+    */
     
     #[test]
     fn ramhorn() {
         run_test(examples::ramhorn(), 100, "ram_horn3", false);
     }
 
+    /*
     #[test]
     fn ramhorn_branch() {
         run_test(examples::ramhorn_branch(24, 0.25), 32, "ram_horn_branch", false);

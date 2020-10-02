@@ -777,6 +777,7 @@ pub fn wind_chime_mistake_thing() -> Rule<WindChimeCtxt> {
         },
     }
 }
+*/
 
 pub fn ramhorn() -> Rule<()> {
 
@@ -786,52 +787,52 @@ pub fn ramhorn() -> Rule<()> {
         rotate(&v, 0.3).
         scale(0.9);
 
-    let seed = vec![
-        vertex(-0.5, -0.5, 1.0),
-        vertex(-0.5,  0.5, 1.0),
-        vertex( 0.5,  0.5, 1.0),
-        vertex( 0.5, -0.5, 1.0),
+    let (a0, a1, a2, a3, s4, s5, s6, s7);
+    let seed = vec_indexed![
+        @s4 VertexUnion::Vertex(vertex(-0.5, -0.5, 1.0)),
+        @s5 VertexUnion::Vertex(vertex(-0.5,  0.5, 1.0)),
+        @s6 VertexUnion::Vertex(vertex( 0.5,  0.5, 1.0)),
+        @s7 VertexUnion::Vertex(vertex( 0.5, -0.5, 1.0)),
+        @a0 VertexUnion::Arg(0),
+        @a1 VertexUnion::Arg(1),
+        @a2 VertexUnion::Arg(2),
+        @a3 VertexUnion::Arg(3),
     ];
-    let next = incr.transform(&seed);
-    let geom = Rc::new(OpenMesh {
-        alias_verts: vec![0, 1, 2, 3],
-        verts: next,
+    let geom = MeshFunc {
+        verts: seed,
         faces: vec![
-            5, 0, 4,
-            1, 0, 5,
-            6, 1, 5,
-            2, 1, 6,
-            7, 2, 6,
-            3, 2, 7,
-            4, 3, 7,
-            0, 3, 4,
+            s5, a0, s4,
+            a1, a0, s5,
+            s6, a1, s5,
+            a2, a1, s6,
+            s7, a2, s6,
+            a3, a2, s7,
+            s4, a3, s7,
+            a0, a3, s4,
         ],
-    });
-    let final_geom = Rc::new(OpenMesh {
-        verts: vec![],
-        alias_verts: vec![0, 1, 2, 3],
+    };
+    let final_geom = MeshFunc {
+        verts: vert_args(0..4),
         faces: vec![
             0, 2, 1,
             0, 3, 2,
         ],
-    });
-    
-    let recur = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
+    };
+
+    let geom2 = Rc::new(geom.transform(&incr));
+    let fgeom2 = Rc::new(final_geom);
+    let recur = rule_fn!(() => |self_, geom2, fgeom2| {
         RuleEval {
-            geom: geom.clone(),
-            final_geom: final_geom.clone(),
+            geom: geom2,
+            final_geom: fgeom2,
             children: vec![
-                Child {
-                    rule: self_.clone(),
-                    xf: incr,
-                    arg_vals: vec![0,1,2,3],
-                },
+                child!(self_, incr, s4, s5, s6, s7),
             ],
         }
-    };
+    });
     
     let opening_xform = |i| {
-        let r = FRAC_PI_2 * i;
+        let r = FRAC_PI_2 * (i as f32);
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
             translate(0.25, 0.25, 1.0).
@@ -842,27 +843,26 @@ pub fn ramhorn() -> Rule<()> {
     let start = move |_| -> RuleEval<()> {
 
         RuleEval {
-            geom: Rc::new(OpenMesh {
+            geom: Rc::new(MeshFunc {
                 verts: vec![
                     // 'Top' vertices:
-                    vertex(-0.5, -0.5, 1.0),  //  0 (above 9)
-                    vertex(-0.5,  0.5, 1.0),  //  1 (above 10)
-                    vertex( 0.5,  0.5, 1.0),  //  2 (above 11)
-                    vertex( 0.5, -0.5, 1.0),  //  3 (above 12)
+                    VertexUnion::Vertex(vertex(-0.5, -0.5, 1.0)),  //  0 (above 9)
+                    VertexUnion::Vertex(vertex(-0.5,  0.5, 1.0)),  //  1 (above 10)
+                    VertexUnion::Vertex(vertex( 0.5,  0.5, 1.0)),  //  2 (above 11)
+                    VertexUnion::Vertex(vertex( 0.5, -0.5, 1.0)),  //  3 (above 12)
                     // Top edge midpoints:
-                    vertex(-0.5,  0.0, 1.0),  //  4 (connects 0-1)
-                    vertex( 0.0,  0.5, 1.0),  //  5 (connects 1-2)
-                    vertex( 0.5,  0.0, 1.0),  //  6 (connects 2-3)
-                    vertex( 0.0, -0.5, 1.0),  //  7 (connects 3-0)
+                    VertexUnion::Vertex(vertex(-0.5,  0.0, 1.0)),  //  4 (connects 0-1)
+                    VertexUnion::Vertex(vertex( 0.0,  0.5, 1.0)),  //  5 (connects 1-2)
+                    VertexUnion::Vertex(vertex( 0.5,  0.0, 1.0)),  //  6 (connects 2-3)
+                    VertexUnion::Vertex(vertex( 0.0, -0.5, 1.0)),  //  7 (connects 3-0)
                     // Top middle:
-                    vertex( 0.0,  0.0, 1.0),  //  8
+                    VertexUnion::Vertex(vertex( 0.0,  0.0, 1.0)),  //  8
                     // 'Bottom' vertices:
-                    vertex(-0.5, -0.5, 0.0),  //  9
-                    vertex(-0.5,  0.5, 0.0),  // 10
-                    vertex( 0.5,  0.5, 0.0),  // 11
-                    vertex( 0.5, -0.5, 0.0),  // 12
+                    VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),  //  9
+                    VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),  // 10
+                    VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),  // 11
+                    VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),  // 12
                 ],
-                alias_verts: vec![],
                 faces: vec![
                     // bottom face:
                     9, 10, 11,
@@ -879,44 +879,29 @@ pub fn ramhorn() -> Rule<()> {
                     // two faces straddling edge from vertex 3:
                     12, 3, 7,
                     12, 6, 3,
-                    // four faces from edge (0,1, (1,2, (2,3, (3,0):
+                    // four faces from edge (0,1), (1,2), (2,3), (3,0):
                     9, 4, 10,
                     10, 5, 11,
                     11, 6, 12,
                     12, 7, 9,
                 ],
             }),
-            final_geom: Rc::new(prim::empty_mesh()),
+            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
             children: vec![
-                Child {
-                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
-                    xf: opening_xform(0.0),
-                    arg_vals: vec![5,2,6,8],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
-                    xf: opening_xform(1.0),
-                    arg_vals: vec![4,1,5,8],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
-                    xf: opening_xform(2.0),
-                    arg_vals: vec![7,0,4,8],
-                },
-                Child {
-                    rule: Rc::new(Rule { eval: Rc::new(recur.clone()), ctxt: () }),
-                    xf: opening_xform(3.0),
-                    arg_vals: vec![6,3,7,8],
-                },
+                child!(rule!(recur, ()), opening_xform(0), 5, 2, 6, 8),
+                child!(rule!(recur, ()), opening_xform(1), 4, 1, 5, 8),
+                child!(rule!(recur, ()), opening_xform(2), 7, 0, 4, 8),
+                child!(rule!(recur, ()), opening_xform(3), 6, 3, 7, 8),
                 // TODO: These vertex mappings appear to be right.
                 // Explain *why* they are right.
-                // TODO: Factor out the repetition here.
             ],
         }
     };
 
     Rule { eval: Rc::new(start), ctxt: () }
 }
+
+/*
 
 #[derive(Copy, Clone)]
 pub struct RamHornCtxt {
