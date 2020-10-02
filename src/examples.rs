@@ -167,111 +167,12 @@ pub fn barbs(random: bool) -> Rule<()> {
 pub fn pyramid() -> Rule<()> {
 
     let rt3 = (3.0).sqrt();
-    let rt6 = (6.0).sqrt();
 
-    // base_verts are for a unit-sidelength tetrahedron and its midpoints.
-    // Its *base* sits in the XY plane, centered at (0,0,0).
-    // Indices:
-    // b0,b1,b2 = base vertices; t = 'top' vertex.
-    // m01, m12, m20 = midpoints of (b0,b1), (b1,b2), (b2,b0).
-    // bm0, bm1, bm2 = midpoints of (b0,t), (b1,t), (b2,t).
-    let (b0, b1, b2, t, m01, m12, m20, bm0, bm1, bm2);
-    let base_verts: Vec<VertexUnion> = {
-        let v0 = vertex(rt3/3.0, 0.0, 0.0);
-        let v1 = vertex(-rt3/6.0, -1.0/2.0, 0.0);
-        let v2 = vertex(-rt3/6.0, 1.0/2.0, 0.0);
-        let vt = vertex(0.0, 0.0, rt6/3.0);
-        vec_indexed![
-            @b0  VertexUnion::Vertex(v0),
-            @b1  VertexUnion::Vertex(v1),
-            @b2  VertexUnion::Vertex(v2),
-            @t   VertexUnion::Vertex(vt),
-            @m01 VertexUnion::Vertex((v0+v1)/2.0),
-            @m12 VertexUnion::Vertex((v1+v2)/2.0),
-            @m20 VertexUnion::Vertex((v2+v0)/2.0),
-            @bm0 VertexUnion::Vertex((v0+vt)/2.0),
-            @bm1 VertexUnion::Vertex((v1+vt)/2.0),
-            @bm2 VertexUnion::Vertex((v2+vt)/2.0),
-        ]
-    };
-
-    let test = rule_fn!(() => |_s, base_verts| {
-        // Mnemonics for args:
-        let b0  = 0; // Base
-        let b1  = 1; // Adjacent base
-        let t   = 2; // 'Top'
-        let m01 = 3; // Midpoint between b0 & b1
-        let bm0 = 4; // Midpoint between b0 & t
-        let bm1 = 5; // Midpoint between b1 & t
-        RuleEval {
-            geom: Rc::new(MeshFunc {
-                verts: vert_args(0..6),
-                faces: vec![
-                    b0,  m01, bm0,
-                    b1,  bm1, m01,
-                    t,   bm0, bm1,
-                    m01, bm1, bm0, // middle
-                ],
-            }),
-            final_geom: Rc::new(MeshFunc {
-                verts: vec![],
-                faces: vec![],
-            }),
-            children: vec![],
-        }
-        // TODO: The 'mid' vertices still don't connect together - probably
-        // because each child repeats them?
-        // I'd have to have 'base' produce them and pass them as args.
-    });
-
-    let base_to_side = |i| {
-        let rt3 = (3.0).sqrt();
-        let rt6 = (6.0).sqrt();
-        let v01 = Unit::new_normalize(Vector3::new(rt3/2.0, 1.0/2.0, 0.0));
-        let axis = 2.0 * (rt3 / 3.0).asin();
-        let angle = 2.0 * FRAC_PI_3 * (i as f32);
-        id().
-            rotate(&Vector3::z_axis(), angle).
-            translate(rt3/18.0, -1.0/6.0, rt6/9.0).
-            rotate(&v01, axis)
-    };
-
-    let base = rule_fn!(() => |_s, base_verts| {
-        RuleEval {
-            geom: Rc::new(MeshFunc {
-                verts: base_verts,
-                faces: vec![
-                    b0,  m01, m20,
-                    b1,  m12, m01,
-                    b2,  m20, m12,
-                    m12, m20, m01,
-                ],
-            }),
-            final_geom: Rc::new(MeshFunc {
-                verts: vec![],
-                faces: vec![],
-            }),
-            children: vec![
-                child!(rule!(test, ()), base_to_side(0), b1, b0, t, m01, bm1, bm0),
-                child!(rule!(test, ()), base_to_side(1), b0, b2, t, m20, bm0, bm2),
-                child!(rule!(test, ()), base_to_side(2), b2, b1, t, m12, bm2, bm1),
-            ],
-        }
-    });
-
-    Rule { eval: base, ctxt: () }
-}
-
-pub fn pyramid2() -> Rule<()> {
-
-    let rt3 = (3.0).sqrt();
-
-    let dz = 0.05;
+    let dz = 0.10;
 
     // Indices:
     // b+0,b+1,b+2 = base vertices
     // t+0,t+1,t+2 = 'top' vertices above base
-    // bm01, bm12, bm20 = midpoints of (b0,b1), (b1,b2), (b2,b0).
     // tm01, tm12, tm20 = midpoints of (t0,t1), (t1,t2), (t2,t0).
     let (b, t, tm01, tm12, tm20);
     let base_verts: Vec<VertexUnion> = {
@@ -300,13 +201,14 @@ pub fn pyramid2() -> Rule<()> {
         id().
             rotate(&Vector3::z_axis(), angle).
             translate(rt3/12.0, 0.0, 0.0).
-            scale(0.5).
+            scale(0.49).
             translate(0.0, 0.0, dz)
     };
 
-    let test = rule_fn!(() => |_s, base_verts| {
+    let split = rule_fn!(() => |_s, base_verts| {
 
-        let mut next_verts = base_verts;
+        let mut next_verts = base_verts.clone();
+        let mut final_verts = base_verts;
         let (a0, a1) = next_verts.append_indexed(vert_args(0..3));
 
         RuleEval {
@@ -326,13 +228,11 @@ pub fn pyramid2() -> Rule<()> {
                     tm20, a0+2,  a0+0,
                     // Inner:
                     tm01, tm12, tm20,
-                    // Bottom:
-                    //b+2, b+1, b+0,
                 ],
             }),
             final_geom: Rc::new(MeshFunc {
-                verts: vec![],
-                faces: vec![],
+                verts: vert_args(t..(t+3)),
+                faces: vec![ 0, 1, 2 ],
             }),
             children: vec![
                 child!(_s, tri_split(0), t+0, tm01, tm20),
@@ -368,9 +268,9 @@ pub fn pyramid2() -> Rule<()> {
                 faces: vec![],
             }),
             children: vec![
-                child!(rule!(test, ()), tri_split(0), t+0, tm01, tm20),
-                child!(rule!(test, ()), tri_split(1), t+1, tm12, tm01),
-                child!(rule!(test, ()), tri_split(2), t+2, tm20, tm12),
+                child!(rule!(split, ()), tri_split(0), t+0, tm01, tm20),
+                child!(rule!(split, ()), tri_split(1), t+1, tm12, tm01),
+                child!(rule!(split, ()), tri_split(2), t+2, tm20, tm12),
             ],
         }
     });
