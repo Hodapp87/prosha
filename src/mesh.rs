@@ -86,25 +86,17 @@ pub fn vert_args<T: IntoIterator<Item = usize>>(v: T) -> Vec<VertexUnion> {
     v.into_iter().map(|i| VertexUnion::Arg(i)).collect()
 }
 
-/// A face-vertex mesh whose vertices can either be concrete values
-/// (as in `Mesh`) or aliases (indices to other vertices of some
-/// hypothetical mesh).  This can be turned to `mesh` only if those
-/// aliases are resolved to concrete vertices with a call like
-/// `connect()`.
+/// A face-vertex mesh, some of whose vertices may be 'vertex arguments'
+/// rather than concrete vertices. The job of `connect()` is to resolve
+/// these.
 #[derive(Clone, Debug)]
 pub struct MeshFunc {
-    //
     pub verts: Vec<VertexUnion>,
-    /// Indices of triangles (taken as every 3 values).  Indices begin
-    /// with `alias_verts`, and then continue into `verts` - that is,
-    /// from `0..alias_verts.len()` they refer to `alias_verts`, and from
-    /// `alias_verts.len()..(alias_verts.len()+verts.len())` they refer to
-    /// `verts`.
+    /// Indices of triangles (taken as every 3 values).
     pub faces: Vec<usize>,
 }
 
 impl MeshFunc {
-
     pub fn to_mesh(&self) -> Mesh {
         Mesh {
             faces: self.faces.clone(),
@@ -121,7 +113,7 @@ impl MeshFunc {
         let v = self.verts.iter().map(|v| {
             match v {
                 VertexUnion::Vertex(v) => VertexUnion::Vertex(xfm.mtx * v),
-                a@_ => a.clone(),
+                a @ _ => a.clone(),
             }
         });
 
@@ -138,7 +130,7 @@ impl MeshFunc {
     /// the i'th offset in the resultant mesh.
     pub fn append<T, U>(meshes: T) -> (MeshFunc, Vec<usize>)
         where U: Borrow<MeshFunc>,
-              T: IntoIterator<Item = U>
+              T: IntoIterator<Item=U>
     {
         let mut offsets: Vec<usize> = vec![];
         let mut v: Vec<VertexUnion> = vec![];
@@ -172,9 +164,8 @@ impl MeshFunc {
     /// references to vertices of a mesh in 'children' - such as
     /// 'arg_vals' of `rule::Child`.
     pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<usize>)
-    where U: Borrow<MeshFunc>,
-          T: IntoIterator<Item = (U, Vec<usize>)>
-    //pub fn connect(&self, children: &Vec<(OpenMesh, Vec<usize>)>) -> (OpenMesh, Vec<usize>)
+        where U: Borrow<MeshFunc>,
+              T: IntoIterator<Item=(U, Vec<usize>)>
     {
         // TODO: Clean up this description a bit
         // TODO: Clean up Vec<usize> stuff
@@ -184,33 +175,67 @@ impl MeshFunc {
         let mut faces = self.faces.clone();
 
         let mut offsets: Vec<usize> = vec![];
-        
-        for (child_,mapping) in children {
 
+        println!("DEBUG: start verts={:?}", verts);
+
+        for (child_, mapping) in children {
             let child = child_.borrow();
-            
+
             // offset corresponds to the position in 'verts' at
             // which we're appending everything in 'child.verts' -
             // thus, the offset we shift all indices in 'children' by.
             let offset = verts.len();
 
+            let mut remap = vec![0; child.verts.len()];
+            let mut j = 0;
+
             // Concrete vertices in 'child.verts' need to be copied:
-            verts.extend(child.verts.iter().filter_map(|v| {
+            verts.extend(child.verts.iter().enumerate().filter_map(|(i,v)| {
                 match v {
-                    VertexUnion::Vertex(_) => Some(v.clone()),
+                    VertexUnion::Vertex(_) => {
+                        remap[i] = j;
+                        j += 1;
+                        Some(v.clone())
+                    },
                     VertexUnion::Arg(_) => None,
                 }
             }));
 
+            // DEBUG:
+            // The value of 'n' is an index into the array of vertices.
+            // That includes both Vertex and Arg.
+            // The bug is that when 'n' refers to a Vertex, we treat it as
+            // an index into just the Vertex parts of this (note that we
+            // copy only those, not the Arg).
+            //
+            // If all Vertex appear *before* all Arg in the array, then
+            // these are equivalent (there are m Vertex elements, and they
+            // occupy positions 0..m, and 'n' will also be 0..m... and the
+            // i'th index is always the i'th Vertex) - and the bug doesn't
+            // manifest.
+            // As soon as the i'th index is *not* the i'th Vertex, i.e. there
+            // is an Arg before it, the bug appears.
+
+            println!("DEBUG: now have {} verts", verts.len());
+            println!("DEBUG: verts={:?}", verts);
+
+            println!("DEBUG: offset={} mapping={:?}", offset, mapping);
+            println!("DEBUG: remap={:?}", remap);
+
             // All faces need copied, but if if the index was to
             // a concrete vertex, then it needs shifted by 'offset';
-            // if an alias, it needs remapped.
-            faces.extend(child.faces.iter().map(|n|
-                match child.verts[*n] {
-                    VertexUnion::Vertex(_) => n + offset,
+            // if an argument, it needs remapped.
+            faces.extend(child.faces.iter().enumerate().map(|(i,n)| {
+                let f = match child.verts[*n] {
+                    VertexUnion::Vertex(_) => remap[*n] + offset,
                     VertexUnion::Arg(m) => mapping[m],
+                };
+                println!("face at i={} (n={}): new f={}, {} verts; vert={:?}", i, n, f, verts.len(), child.verts[*n]);
+                if f >= verts.len() {
+                    panic!("face >= num_verts")
                 }
-            ));
+                f
+            }));
 
             offsets.push(offset);
         }
