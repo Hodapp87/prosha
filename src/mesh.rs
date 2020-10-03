@@ -155,15 +155,11 @@ impl MeshFunc {
     /// Treat this mesh as a 'parent' mesh to connect with any number
     /// of 'child' meshes, all of them paired with their respective
     /// vertex argument values (i.e. `arg_vals` from `Child`).
-    /// This returns a tuple of (new mesh, offsets), where 'offsets'
-    /// gives the offset of where child meshes were shifted in the new
-    /// mesh.
-    ///
-    /// That is, the vertices of 'children[i]' begin at vertex
-    /// 'offset[i]' of the new mesh. This is needed in order to adjust
-    /// references to vertices of a mesh in 'children' - such as
-    /// 'arg_vals' of `rule::Child`.
-    pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<usize>)
+    /// This returns a tuple of (new mesh, new `arg_vals`), where
+    /// `arg_vals[i]` gives the remapped value of `children[i].arg_vals`
+    /// which accounts for where the referenced vertices were moved to.
+    /// (TODO: That definition is wrong; explain it right.)
+    pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<Vec<usize>>)
         where U: Borrow<MeshFunc>,
               T: IntoIterator<Item=(U, Vec<usize>)>
     {
@@ -174,7 +170,7 @@ impl MeshFunc {
         let mut verts: Vec<VertexUnion> = self.verts.clone();
         let mut faces = self.faces.clone();
 
-        let mut offsets: Vec<usize> = vec![];
+        let mut offsets: Vec<Vec<usize>> = vec![];
 
         println!("DEBUG: start verts={:?}", verts);
 
@@ -193,6 +189,7 @@ impl MeshFunc {
             verts.extend(child.verts.iter().enumerate().filter_map(|(i,v)| {
                 match v {
                     VertexUnion::Vertex(_) => {
+                        println!("placing child vert {} at {}", i, offset + j);
                         remap[i] = j;
                         j += 1;
                         Some(v.clone())
@@ -222,7 +219,7 @@ impl MeshFunc {
             println!("DEBUG: offset={} mapping={:?}", offset, mapping);
             println!("DEBUG: remap={:?}", remap);
 
-            // All faces need copied, but if if the index was to
+            // All faces need copied, but if the index was to
             // a concrete vertex, then it needs shifted by 'offset';
             // if an argument, it needs remapped.
             faces.extend(child.faces.iter().enumerate().map(|(i,n)| {
@@ -230,14 +227,15 @@ impl MeshFunc {
                     VertexUnion::Vertex(_) => remap[*n] + offset,
                     VertexUnion::Arg(m) => mapping[m],
                 };
-                println!("face at i={} (n={}): new f={}, {} verts; vert={:?}", i, n, f, verts.len(), child.verts[*n]);
+                println!("face at i={} (n={}): new f={}, {} verts; vert={:?} -> {:?}", i, n, f, verts.len(), child.verts[*n], verts[f]);
                 if f >= verts.len() {
                     panic!("face >= num_verts")
                 }
                 f
             }));
 
-            offsets.push(offset);
+            let o2 = remap.iter().map(|n| n + offset).collect();
+            offsets.push(o2);
         }
 
         let m = MeshFunc {

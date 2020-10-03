@@ -271,19 +271,21 @@ impl<S> Rule<S> {
                 continue;
             }
 
-            let (g, offsets) = geom.connect(vec![(new_geom, child.arg_vals.clone())]);
+            let (g, remaps) = geom.connect(vec![(new_geom, child.arg_vals.clone())]);
             geom = g;
 
             // 'eval.children' may contain (via 'arg_vals') references to
             // indices of 'new_geom'. However, we don't connect() to
             // 'new_geom', but to the global geometry we just merged it
-            // into.  To account for this, we must shift 'arg_vals' by
-            // the offset that 'geom.connect' gave us.
-            let off = offsets[0];
+            // into.  To account for this, we must remap 'arg_vals' by the
+            // mapping connect() gave us:
+            let remap = &remaps[0];
             // (We pass a one-element vector to geom.connect() above
-            // so offsets always has just one element.)
+            // so remaps always has just one element.)
             for child in eval.children.iter_mut() {
-                child.arg_vals = child.arg_vals.iter().map(|n| n + off).collect();
+                println!("DEBUG: got shifting child.arg_vals={:?}", child.arg_vals);
+                child.arg_vals = child.arg_vals.iter().map(|n| remap[*n]).collect();
+                println!("DEBUG: new child.arg_vals={:?}", child.arg_vals);
             }
 
             // We're done evaluating this rule, so increment 'next'.
