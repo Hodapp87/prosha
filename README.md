@@ -69,8 +69,6 @@ related to Rust.
 - Fix `ramhorn_branch`.
 - Once I've fixed that, see about a refactor that respects the
   same model, but involves much less ceremony and boilerplate.
-- Figure out the crash bug in `vec_indexed!` if I put a Vertex
-  *after* an Arg.  See my DEBUG notes in `connect()`.
 - Look at performance.
   - Start at `to_mesh_iter()`. The cost of small appends/connects
     seems to be killing performance.

@@ -283,9 +283,7 @@ impl<S> Rule<S> {
             // (We pass a one-element vector to geom.connect() above
             // so remaps always has just one element.)
             for child in eval.children.iter_mut() {
-                println!("DEBUG: got shifting child.arg_vals={:?}", child.arg_vals);
                 child.arg_vals = child.arg_vals.iter().map(|n| remap[*n]).collect();
-                println!("DEBUG: new child.arg_vals={:?}", child.arg_vals);
             }
 
             // We're done evaluating this rule, so increment 'next'.

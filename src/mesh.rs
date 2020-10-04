@@ -155,10 +155,10 @@ impl MeshFunc {
     /// Treat this mesh as a 'parent' mesh to connect with any number
     /// of 'child' meshes, all of them paired with their respective
     /// vertex argument values (i.e. `arg_vals` from `Child`).
-    /// This returns a tuple of (new mesh, new `arg_vals`), where
-    /// `arg_vals[i]` gives the remapped value of `children[i].arg_vals`
-    /// which accounts for where the referenced vertices were moved to.
-    /// (TODO: That definition is wrong; explain it right.)
+    ///
+    /// This returns a tuple of (new `MeshFunc`, new `arg_vals`), where
+    /// `arg_vals[i]` is the new index of `self.verts[i]` in the
+    /// returned `MeshFunc`.
     pub fn connect<T, U>(&self, children: T) -> (MeshFunc, Vec<Vec<usize>>)
         where U: Borrow<MeshFunc>,
               T: IntoIterator<Item=(U, Vec<usize>)>
@@ -170,78 +170,71 @@ impl MeshFunc {
         let mut verts: Vec<VertexUnion> = self.verts.clone();
         let mut faces = self.faces.clone();
 
-        let mut offsets: Vec<Vec<usize>> = vec![];
+        let mut remaps: Vec<Vec<usize>> = vec![];
 
-        println!("DEBUG: start verts={:?}", verts);
-
-        for (child_, mapping) in children {
+        for (child_, arg_vals) in children {
             let child = child_.borrow();
 
-            // offset corresponds to the position in 'verts' at
-            // which we're appending everything in 'child.verts' -
-            // thus, the offset we shift all indices in 'children' by.
+            // 'offset' corresponds to the position in 'verts' at
+            // which we begin appending everything in 'child.verts'.
             let offset = verts.len();
 
+            // 'remap[i]' - if 'child.verts[i]' is a Vertex, not an Arg -
+            // will contain the index in 'verts' that this vertex was
+            // copied to.  (This is needed because below we copy only
+            // the Vertex elements, not the Arg ones.)
             let mut remap = vec![0; child.verts.len()];
             let mut j = 0;
 
-            // Concrete vertices in 'child.verts' need to be copied:
+            // Like mentioned, copy just the Vertex in 'child.verts':
             verts.extend(child.verts.iter().enumerate().filter_map(|(i,v)| {
                 match v {
                     VertexUnion::Vertex(_) => {
-                        println!("placing child vert {} at {}", i, offset + j);
-                        remap[i] = j;
+                        // TODO: A less-side-effectful way?
+                        remap[i] = offset + j;
                         j += 1;
                         Some(v.clone())
                     },
                     VertexUnion::Arg(_) => None,
                 }
             }));
+            // So, note that:
+            // 1st Vertex in 'child.verts' went to 'verts[offset + 0]'.
+            // 2nd Vertex in 'child.verts' went to 'verts[offset + 1]'.
+            // 3rd Vertex in 'child.verts' went to 'verts[offset + 2]'.
+            // and so forth.
+            // Since this skips Arg elements, we used 'remap' to
+            // store the mapping: 'child.verts[i]' was copied to
+            // 'verts[remap[i]].'
 
-            // DEBUG:
-            // The value of 'n' is an index into the array of vertices.
-            // That includes both Vertex and Arg.
-            // The bug is that when 'n' refers to a Vertex, we treat it as
-            // an index into just the Vertex parts of this (note that we
-            // copy only those, not the Arg).
+            // We then use 'remap' below to update the indices in
+            // 'child.faces' to vertices in the returned mesh.
             //
-            // If all Vertex appear *before* all Arg in the array, then
-            // these are equivalent (there are m Vertex elements, and they
-            // occupy positions 0..m, and 'n' will also be 0..m... and the
-            // i'th index is always the i'th Vertex) - and the bug doesn't
-            // manifest.
-            // As soon as the i'th index is *not* the i'th Vertex, i.e. there
-            // is an Arg before it, the bug appears.
-
-            println!("DEBUG: now have {} verts", verts.len());
-            println!("DEBUG: verts={:?}", verts);
-
-            println!("DEBUG: offset={} mapping={:?}", offset, mapping);
-            println!("DEBUG: remap={:?}", remap);
-
-            // All faces need copied, but if the index was to
-            // a concrete vertex, then it needs shifted by 'offset';
-            // if an argument, it needs remapped.
-            faces.extend(child.faces.iter().enumerate().map(|(i,n)| {
+            // Also, we didn't copy Arg elements from 'child.verts', but
+            // we do use them below - if 'child.faces' makes a
+            // reference to this Arg, we resolve it with the help of
+            // 'arg_vals', passed in by the caller.
+            faces.extend(child.faces.iter().map(|n| {
                 let f = match child.verts[*n] {
-                    VertexUnion::Vertex(_) => remap[*n] + offset,
-                    VertexUnion::Arg(m) => mapping[m],
+                    VertexUnion::Vertex(_) => remap[*n],
+                    VertexUnion::Arg(m) => arg_vals[m],
                 };
-                println!("face at i={} (n={}): new f={}, {} verts; vert={:?} -> {:?}", i, n, f, verts.len(), child.verts[*n], verts[f]);
                 if f >= verts.len() {
                     panic!("face >= num_verts")
                 }
                 f
             }));
 
-            let o2 = remap.iter().map(|n| n + offset).collect();
-            offsets.push(o2);
+            // Since the caller might need this same remapping (there
+            // could be an Arg that referred to these vertices), we
+            // save this information to return it later:
+            remaps.push(remap);
         }
 
         let m = MeshFunc {
             verts: verts,
             faces: faces,
         };
-        (m, offsets)
+        (m, remaps)
     }
 }

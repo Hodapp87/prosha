@@ -789,14 +789,14 @@ pub fn ramhorn() -> Rule<()> {
 
     let (a0, a1, a2, a3, s4, s5, s6, s7);
     let seed = vec_indexed![
-        @s4 VertexUnion::Vertex(vertex(-0.5, -0.5, 1.0)),
-        @s5 VertexUnion::Vertex(vertex(-0.5,  0.5, 1.0)),
-        @s6 VertexUnion::Vertex(vertex( 0.5,  0.5, 1.0)),
-        @s7 VertexUnion::Vertex(vertex( 0.5, -0.5, 1.0)),
         @a0 VertexUnion::Arg(0),
         @a1 VertexUnion::Arg(1),
         @a2 VertexUnion::Arg(2),
         @a3 VertexUnion::Arg(3),
+        @s4 VertexUnion::Vertex(vertex(-0.5, -0.5, 1.0)),
+        @s5 VertexUnion::Vertex(vertex(-0.5,  0.5, 1.0)),
+        @s6 VertexUnion::Vertex(vertex( 0.5,  0.5, 1.0)),
+        @s7 VertexUnion::Vertex(vertex( 0.5, -0.5, 1.0)),
     ];
     let geom = MeshFunc {
         verts: seed,
@@ -812,7 +812,13 @@ pub fn ramhorn() -> Rule<()> {
         ],
     };
     let final_geom = MeshFunc {
-        verts: vert_args(0..4),
+        verts: vec![
+            VertexUnion::Arg(s4),
+            VertexUnion::Arg(s5),
+            VertexUnion::Arg(s6),
+            VertexUnion::Arg(s7),
+        ],
+        // TODO: Factor out this repetition
         faces: vec![
             0, 2, 1,
             0, 3, 2,
