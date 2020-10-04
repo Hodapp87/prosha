@@ -66,9 +66,8 @@ related to Rust.
 
 ## Highest priority:
 
-- Fix `ramhorn_branch`.
-- Once I've fixed that, see about a refactor that respects the
-  same model, but involves much less ceremony and boilerplate.
+- See about a refactor that respects the same model, but involves
+  much less ceremony and boilerplate.
 - Look at performance.
   - Start at `to_mesh_iter()`. The cost of small appends/connects
     seems to be killing performance.

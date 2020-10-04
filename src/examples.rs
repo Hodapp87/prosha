@@ -9,7 +9,7 @@ use crate::util;
 use crate::util::VecExt;
 use crate::mesh::{Mesh, MeshFunc, VertexUnion, vert_args};
 use crate::xform::{Transform, Vertex, vertex, id};
-use crate::rule::{Rule, RuleEval, Child};
+use crate::rule::{Rule, RuleFn, RuleEval, Child};
 use crate::prim;
 use crate::dcel;
 use crate::dcel::{VertSpec};
@@ -812,12 +812,7 @@ pub fn ramhorn() -> Rule<()> {
         ],
     };
     let final_geom = MeshFunc {
-        verts: vec![
-            VertexUnion::Arg(s4),
-            VertexUnion::Arg(s5),
-            VertexUnion::Arg(s6),
-            VertexUnion::Arg(s7),
-        ],
+        verts: vert_args(s4..s7),
         // TODO: Factor out this repetition
         faces: vec![
             0, 2, 1,
@@ -907,8 +902,6 @@ pub fn ramhorn() -> Rule<()> {
     Rule { eval: Rc::new(start), ctxt: () }
 }
 
-/*
-
 #[derive(Copy, Clone)]
 pub struct RamHornCtxt {
     depth: usize,
@@ -922,30 +915,30 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
         rotate(&v, 0.4 * f).
         scale(1.0 - (1.0 - 0.95)*f);
 
-    let seed = vec![
-        vertex(-0.5, -0.5, 0.0),
-        vertex(-0.5,  0.5, 0.0),
-        vertex( 0.5,  0.5, 0.0),
-        vertex( 0.5, -0.5, 0.0),
+    let (a0, s0, sn);
+    let seed = vec_indexed![
+        @a0 VertexUnion::Arg(0),
+        VertexUnion::Arg(1),
+        VertexUnion::Arg(2),
+        VertexUnion::Arg(3),
+        @s0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
+        VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
+        VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
+        VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
+        @sn,
     ];
-    let next = incr.transform(&seed);
-    let geom = Rc::new(OpenMesh {
-        verts: next,
-        alias_verts: vec![],
-        faces: util::parallel_zigzag_faces(4),
-        // TODO: Fix this (parallel_zigzag_faces has parents)
-    });
-    let final_geom = Rc::new(OpenMesh {
-        verts: vec![],
-        alias_verts: vec![0, 1, 2, 3],
+    let geom = util::parallel_zigzag(seed.clone(), s0..sn, a0..s0).transform(&incr);
+    let final_geom = MeshFunc {
+        verts: seed.clone(),
         faces: vec![
-            0, 2, 1,
-            0, 3, 2,
+            s0 + 0, s0 + 2, s0 + 1,
+            s0 + 0, s0 + 3, s0 + 2,
         ],
-    });
+    }.transform(&incr);
+    // TODO: Why is this redundant transform needed?
 
     let opening_xform = |i| {
-        let r = FRAC_PI_2 * i;
+        let r = FRAC_PI_2 * (i as f32);
         Transform::new().
             rotate(&nalgebra::Vector3::z_axis(), r).
             translate(0.25, 0.25, 0.0).
@@ -953,19 +946,24 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
     };
 
     // 'transition' geometry (when something splits):
-    let trans_verts = vec![
+    let (v0, v1, v2, v3, m01, m12, m23, m30, mid);
+    let trans_verts = vec_indexed![
+        VertexUnion::Arg(0),
+        VertexUnion::Arg(1),
+        VertexUnion::Arg(2),
+        VertexUnion::Arg(3),
         // 'Top' vertices:
-        vertex(-0.5, -0.5, 0.0),  //  0 (above 9)
-        vertex(-0.5,  0.5, 0.0),  //  1 (above 10)
-        vertex( 0.5,  0.5, 0.0),  //  2 (above 11)
-        vertex( 0.5, -0.5, 0.0),  //  3 (above 12)
+        @v0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),  //  0 (above 9)
+        @v1 VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),  //  1 (above 10)
+        @v2 VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),  //  2 (above 11)
+        @v3 VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),  //  3 (above 12)
         // Top edge midpoints:
-        vertex(-0.5,  0.0, 0.0),  //  4 (connects 0-1)
-        vertex( 0.0,  0.5, 0.0),  //  5 (connects 1-2)
-        vertex( 0.5,  0.0, 0.0),  //  6 (connects 2-3)
-        vertex( 0.0, -0.5, 0.0),  //  7 (connects 3-0)
+        @m01 VertexUnion::Vertex(vertex(-0.5,  0.0, 0.0)),  //  4 (connects 0-1)
+        @m12 VertexUnion::Vertex(vertex( 0.0,  0.5, 0.0)),  //  5 (connects 1-2)
+        @m23 VertexUnion::Vertex(vertex( 0.5,  0.0, 0.0)),  //  6 (connects 2-3)
+        @m30 VertexUnion::Vertex(vertex( 0.0, -0.5, 0.0)),  //  7 (connects 3-0)
         // Top middle:
-        vertex( 0.0,  0.0, 0.0),  //  8
+        @mid VertexUnion::Vertex(vertex( 0.0,  0.0, 0.0)),  //  8
     ];
     let trans_faces = vec![
         // two faces straddling edge from vertex 0:
@@ -986,46 +984,30 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
         2, 10, 3,
         3, 11, 0,
     ];
-    let trans_geom = Rc::new(OpenMesh {
-        alias_verts: vec![0, 1, 2, 3],
+    let trans_geom = MeshFunc {
         verts: trans_verts.clone(),
         faces: trans_faces.clone(),
-    });
+    };
     let trans_children = move |recur: RuleFn<RamHornCtxt>, ctxt: RamHornCtxt| {
         vec![
-            Child {
-                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
-                xf: opening_xform(0.0),
-                arg_vals: vec![5,2,6,8],
-            },
-            Child {
-                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
-                xf: opening_xform(1.0),
-                arg_vals: vec![4,1,5,8],
-            },
-            Child {
-                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
-                xf: opening_xform(2.0),
-                arg_vals: vec![7,0,4,8],
-            },
-            Child {
-                rule: Rc::new(Rule { eval: recur.clone(), ctxt }),
-                xf: opening_xform(3.0),
-                arg_vals: vec![6,3,7,8],
-            },
+            child!(rule!(recur, ctxt), opening_xform(0), m12, v2, m23, mid),
+            child!(rule!(recur, ctxt), opening_xform(1), m01, v1, m12, mid),
+            child!(rule!(recur, ctxt), opening_xform(2), m30, v0, m01, mid),
+            child!(rule!(recur, ctxt), opening_xform(3), m23, v3, m30, mid),
             // TODO: These vertex mappings appear to be right.
             // Explain *why* they are right.
-            // TODO: Factor out the repetition here.
         ]
     };
     
-    let tg = trans_geom.clone();
+    let tg = Rc::new(trans_geom);
+    let fg = Rc::new(final_geom);
+    let g = Rc::new(geom);
     // TODO: Why is that necessary?
-    let recur = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+    let recur = rule_fn!(RamHornCtxt => |self_, tg| {
         if self_.ctxt.depth <= 0 {
             RuleEval {
-                geom: tg.clone(),
-                final_geom: final_geom.clone(),
+                geom: tg,
+                final_geom: fg.clone(),
                 // This final_geom will leave midpoint/centroid
                 // vertices, but stopping here means none are
                 // connected anyway - so they can just be ignored.
@@ -1037,51 +1019,45 @@ pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
                 ctxt: RamHornCtxt { depth: self_.ctxt.depth - 1 },
             };
             RuleEval {
-                geom: geom.clone(),
-                final_geom: final_geom.clone(),
+                geom: g.clone(),
+                final_geom: fg.clone(),
                 children: vec![
-                    Child {
-                        rule: Rc::new(next_rule),
-                        xf: incr,
-                        arg_vals: vec![0,1,2,3],
-                    },
+                    child!(Rc::new(next_rule), incr, s0, s0+1, s0+2, s0+3),
                 ],
             }
         }
-    };
+    });
     
-    let trans = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+    let trans = rule_fn!(RamHornCtxt => |self_| {
         RuleEval {
-            geom: trans_geom.clone(),
-            final_geom: Rc::new(prim::empty_mesh()),
-            children: trans_children(Rc::new(recur.clone()), self_.ctxt),
+            geom: tg.clone(),
+            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
+            children: trans_children(recur.clone(), self_.ctxt),
         }
-    };
+    });
 
-    let start = move |self_: Rc<Rule<RamHornCtxt>>| -> RuleEval<RamHornCtxt> {
+    let start = rule_fn!(RamHornCtxt => |self_, seed| {
+        let g = MeshFunc {
+            verts: seed[s0..sn].to_vec(),
+            // FIXME (use names for indices)
+            faces: vec![
+                0, 1, 2,
+                0, 2, 3,
+            ],
+        }.transform(&id().translate(0.0, 0.0, -0.5));
         RuleEval {
-            geom: Rc::new(OpenMesh {
-                verts: Transform::new().translate(0.0, 0.0, -0.5).transform(&seed),
-                alias_verts: vec![],
-                faces: vec![
-                    0, 1, 2,
-                    0, 2, 3,
-                ],
-            }),
-            final_geom: Rc::new(prim::empty_mesh()),
+            geom: Rc::new(g),
+            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
             children: vec![
-                Child {
-                    rule: Rc::new(Rule { eval: Rc::new(trans.clone()), ctxt: self_.ctxt }),
-                    xf: Transform::new(),
-                    arg_vals: vec![0,1,2,3],
-                },
+                child!(rule!(trans, self_.ctxt), id(), 0, 1, 2, 3),
             ],
         }
-    };
+    });
     
-    Rule { eval: Rc::new(start), ctxt: RamHornCtxt { depth } }
+    Rule { eval: start, ctxt: RamHornCtxt { depth } }
 }
 
+/*
 #[derive(Copy, Clone)]
 pub struct RamHornCtxt2 {
     depth: usize,

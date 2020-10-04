@@ -128,12 +128,12 @@ mod tests {
         run_test(examples::ramhorn(), 100, "ram_horn3", false);
     }
 
-    /*
     #[test]
     fn ramhorn_branch() {
         run_test(examples::ramhorn_branch(24, 0.25), 32, "ram_horn_branch", false);
     }
 
+    /*
     #[test]
     fn ramhorn_branch_random() {
         run_test(examples::ramhorn_branch_random(24, 0.25), 32, "ram_horn_branch_random", false);
