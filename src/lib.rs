@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn ramhorn_branch() {
-        run_test(examples::ramhorn_branch(24, 0.25), 32, "ram_horn_branch", false);
+        run_test(examples::ramhorn_branch(12, 0.6), 64, "ram_horn_branch", false);
     }
 
     /*

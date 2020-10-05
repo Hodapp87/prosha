@@ -46,6 +46,14 @@ consider how much those assume the presence of garbage
 collection. Really, I wanted a Lisp, and then the presence of
 a REPL would have been another bonus.
 
+I appear to have implemented a bunch of this solely to delay
+evaluation and let me reify the call graph in order to let me do
+things like trampolining to limit call stack depth. In theory it
+would let me analyze it better, but I'm not doing any of that.
+A lot of what I wrote here ended up just being a buggy, half-assed
+interpreter for a buggy, half-assed EDSL/minilanguage.
+(Greenspun's Tenth Rule of Programming, anyone?)
+
 On top of this, my implementation is pretty slow when it is
 using a large number of rules each producing small geometry
 (which is almost literally the only way it *can* be used
