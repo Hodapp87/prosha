@@ -84,10 +84,10 @@ mod tests {
     }
 
     #[test]
-    fn ramhorn_branch() {
-        let name = "ramhorn_branch";
+    fn tree_thing() {
+        let name = "tree_thing";
         println!("---------------------------------------------------");
-        let b = examples::RamHorn::new(0.6, 12);
+        let b = examples::TreeThing::new(0.6, 10);
         let m = b.run();
 
         println!("Got {} verts...", m.verts.len());
