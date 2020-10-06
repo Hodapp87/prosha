@@ -1,5 +1,5 @@
 use std::ops::Range;
-use crate::mesh::{MeshFunc, VertexUnion};
+use crate::mesh::{Mesh, MeshFunc, VertexUnion};
 use crate::xform::{Vertex};
 
 /// This is like `vec!`, but it can handle elements that are given
@@ -83,6 +83,35 @@ pub fn parallel_zigzag(verts: Vec<VertexUnion>, main: Range<usize>, parent: Rang
         verts: verts,
         faces: parallel_zigzag_faces(main, parent),
     }
+}
+
+pub fn parallel_zigzag_mesh(verts: Vec<Vertex>, main: Range<usize>, parent: Range<usize>) -> Mesh {
+    Mesh {
+        verts: verts,
+        faces: parallel_zigzag_faces(main, parent),
+    }
+}
+
+pub fn parallel_zigzag2<T,U>(main: T, parent: U) -> Vec<usize>
+where T: IntoIterator<Item=usize>, U: IntoIterator<Item=usize>
+{
+    let m: Vec<usize> = main.into_iter().collect();
+    let p: Vec<usize> = parent.into_iter().collect();
+    let l = m.len();
+    if l != p.len() {
+        panic!("Vectors must be the same size!")
+    }
+
+    (0..l).map(|i0| {
+        // i0 is an *offset* for the 'current' index.
+        // i1 is for the 'next' index, wrapping back to 0.
+        let i1 = (i0 + 1) % l;
+        vec![
+            // Mind winding order!
+            m[i1], p[i0], m[i0],
+            p[i1], p[i0], m[i1],
+        ]
+    }).flatten().collect()
 }
 
 pub fn centroid(verts: &Vec<Vertex>) -> Vertex {

@@ -217,7 +217,12 @@ impl MeshFunc {
             faces.extend(child.faces.iter().map(|n| {
                 let f = match child.verts[*n] {
                     VertexUnion::Vertex(_) => remap[*n],
-                    VertexUnion::Arg(m) => arg_vals[m],
+                    VertexUnion::Arg(m) => {
+                        println!("remap face: vert {} arg {} = vert {} ({:?})",
+                            *n, m, arg_vals[m], verts[arg_vals[m]]
+                        );
+                        arg_vals[m]
+                    },
                 };
                 if f >= verts.len() {
                     panic!("face >= num_verts")

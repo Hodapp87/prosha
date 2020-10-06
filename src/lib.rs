@@ -77,6 +77,21 @@ mod tests {
     fn barbs() { run_test(examples::barbs(false), 80, "barbs", false); }
 
     #[test]
+    fn barbs_direct() {
+        let name = "barbs_test";
+        println!("---------------------------------------------------");
+        let b = examples::BarbsCtxt::new();
+        let m = b.run(100);
+
+        println!("Got {} verts...", m.verts.len());
+
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        m.write_stl_file(&fname).unwrap();
+
+    }
+
+    #[test]
     fn barbs_random() { run_test(examples::barbs(true), 80, "barbs_random", false); }
 
     #[test]

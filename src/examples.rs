@@ -50,6 +50,110 @@ pub fn cube_thing() -> Rule<()> {
     Rule { eval: Rc::new(rec), ctxt: () }
 }
 
+#[derive(Clone)]
+pub struct BarbsCtxt {
+    base_incr: Transform,
+    barb_incr: Transform,
+    sides: [Transform; 4],
+    base: Vec<Vertex>,
+
+    verts: Vec<Vertex>,
+    faces: Vec<usize>,
+}
+
+impl BarbsCtxt {
+    pub fn new() -> BarbsCtxt {
+        // Incremental transform from each stage to the next:
+        let base_incr = id().translate(0.0, 0.0, 1.0).
+            rotate(&Vector3::z_axis(), 0.15).
+            rotate(&Vector3::x_axis(), 0.1).
+            scale(0.95);
+        let barb_incr = id().translate(0.0, 0.0, 0.5).
+            rotate(&Vector3::y_axis(), -0.2).
+            scale(0.8);
+        // 'Base' vertices, used throughout:
+        let base = vec![
+            vertex(-0.5, -0.5, 0.0),
+            vertex(-0.5,  0.5, 0.0),
+            vertex( 0.5,  0.5, 0.0),
+            vertex( 0.5, -0.5, 0.0),
+        ];
+        // sides[i] gives transformation from a 'base' layer to the
+        // i'th side (0 to 3):
+        let mut sides: [Transform; 4] = [id(); 4];
+        for i in 0..4 {
+            sides[i] = id().
+                rotate(&Vector3::z_axis(), -FRAC_PI_2 * (i as f32)).
+                rotate(&Vector3::y_axis(), -FRAC_PI_2).
+                translate(0.5, 0.0, 0.5);// * barb_incr;
+        }
+        BarbsCtxt {
+            base_incr: base_incr,
+            barb_incr: barb_incr,
+            base: base,
+            sides: sides,
+            verts: vec![],
+            faces: vec![],
+        }
+    }
+
+    pub fn barb(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
+
+        if iters <= 0 {
+            self.faces.extend_from_slice(&[
+                bound[0], bound[2], bound[1],
+                bound[0], bound[3], bound[2],
+            ]);
+            return;
+        }
+
+        let xform2 = xform * self.barb_incr;
+        let g = xform2.transform(&self.base);
+        let (a0, a1) = self.verts.append_indexed(g);
+
+        self.faces.append(&mut util::parallel_zigzag2(bound.to_vec(), a0..a1));
+
+        self.barb(iters - 1, xform2, [a0, a0+1, a0+2, a0+3]);
+    }
+
+    pub fn main(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
+
+        if iters <= 0 {
+            self.faces.extend_from_slice(&[
+                bound[0], bound[2], bound[1],
+                bound[0], bound[3], bound[2],
+            ]);
+            return;
+        }
+
+        let xform2 = xform * self.base_incr;
+        let g = xform2.transform(&self.base);
+        let (a0, _) = self.verts.append_indexed(g);
+
+        // TODO: Isn't there some cleaner way?
+        self.main(iters - 1, xform2, [a0, a0+1, a0+2, a0+3]);
+        self.barb(iters - 1, xform * self.sides[0], [bound[0], bound[1], a0+1, a0+0]);
+        self.barb(iters - 1, xform * self.sides[1], [bound[1], bound[2], a0+2, a0+1]);
+        self.barb(iters - 1, xform * self.sides[2], [bound[2], bound[3], a0+3, a0+2]);
+        self.barb(iters - 1, xform * self.sides[3], [bound[3], bound[0], a0+0, a0+3]);
+    }
+
+    pub fn run(mut self, iters: usize) -> Mesh {
+        self.verts.append(&mut self.base.clone());
+        self.faces.extend_from_slice(&[
+            0, 1, 2,
+            0, 2, 3,
+        ]);
+
+        self.main(iters, id(), [0,1,2,3]);
+
+        return Mesh {
+            verts: self.verts,
+            faces: self.faces,
+        }
+    }
+}
+
 pub fn barbs(random: bool) -> Rule<()> {
 
     let (b0, bn);
