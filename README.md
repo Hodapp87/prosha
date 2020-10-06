@@ -1,16 +1,23 @@
 # This needs a title
 
-This work was started as an attempt to make meshes in a more
-"generative" style, described by recursive grammars and
-replacement rules.  One goal was to make it easy to produce
-manifold meshes by following certain rules, and do so in a
+This particular code base was started around 2019 December
+as an attempt to make meshes in a more "generative" style,
+described by recursive grammars and replacement rules.  One
+main goal was to make it easy to produce manifold meshes by
+following certain rules, and do so in a
 "correct-by-construction" manner rather than by having to
 patch up or subdivide the meshes in post-processing.
+(This particular notion came out of some older work in 2018.
+See 2018-06-26 paper notes. Paper notes around 2019-09
+developed this further still.)
 
 These grammars by their nature worked in discrete steps,
 but at one point I tried (unsuccessfully) to extend this
 system to working in a more continuous and parametric
 way.  (See `parametric_mesh` and any DCEL code.)
+The Python code I had written around 2019 September used
+something like a discrete approximation of this, and its
+limitations are part of why I started on this new version.
 
 I also ran into problems anytime I wanted to produce
 meshes in a way that was more "refining" than "generative".
@@ -72,26 +79,18 @@ As it stands now, the lack of clarity in both my theory
 and in my implementation is a far bigger issue than anything
 related to Rust.
 
+Around early October 2020 I decided to scrap almost all of this and
+write everything simply as direct function calls, despite that this uses
+more stack space than I'd like. This started in the `un_greenspun`
+branch, thus named because I needed to get rid of my buggy
+implementation of half of Common Lisp. It paid off quite quickly and
+also was vastly faster at generating meshes. 
+
 ## Highest priority:
 
-- See about a refactor that respects the same model, but involves
-  much less ceremony and boilerplate.
-- Look at performance.
-  - Start at `to_mesh_iter()`. The cost of small appends/connects
-    seems to be killing performance.
-  - `connect()` is a big performance hot-spot: 85% of total time in
-    one test, around 51% in `extend()`, 33% in `clone()`. It seems
-    like I should be able to share geometry with the `Rc` (like noted
-    above), defer copying until actually needed, and pre-allocate the
-    vector to its size (which should be easy to compute).
-
-## Important but less critical:
-
+- Begin converting older examples.
+- Trash all the dead code.
 - Docs on modules
-- Compute global scale factor, and perhaps pass it to a rule (to
-  eventually be used for, perhaps, adaptive subdivision).  Note that
-  one can find the scale factors by taking the length of the first 3
-  columns of the transform matrix (supposedly).
 - swept-isocontour stuff from
   `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`.  This
   will probably require that I figure out parametric curves
@@ -109,8 +108,6 @@ related to Rust.
   obtain".  Can I fix this somehow?  Looks like a French-ism that made
   its way in.
 - Multithread!  This looks very task-parallel anywhere that I branch.
-- Would being able to name a rule node (perhaps conditionally under
-  some compile-time flag) help for debugging?
 - Use an actual logging framework.
 - How can I take tangled things like the cinquefoil and produce more
   'iterative' versions that still weave around?
@@ -132,3 +129,4 @@ related to Rust.
   entire global space.  If you *post* multiply: you are transforming
   the current local space. 
 - Don't reinvent subdivision surfaces.
+- Don't reinvent Lisp when you wanted a Lisp!

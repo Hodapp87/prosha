@@ -69,18 +69,10 @@ mod tests {
     // TODO: These tests don't test any conditions, so this is useful
     // short-hand to run, but not very meaningful as a test.
     #[test]
-    fn cube_thing() {
-        run_test(examples::cube_thing(), 3, "cube_thing3", false);
-    }
-
-    #[test]
-    fn barbs() { run_test(examples::barbs(false), 80, "barbs", false); }
-
-    #[test]
-    fn barbs_direct() {
-        let name = "barbs_test";
+    fn barbs() {
+        let name = "barbs";
         println!("---------------------------------------------------");
-        let b = examples::BarbsCtxt::new();
+        let b = examples::Barbs::new();
         let m = b.run(100);
 
         println!("Got {} verts...", m.verts.len());
@@ -92,7 +84,19 @@ mod tests {
     }
 
     #[test]
-    fn barbs_random() { run_test(examples::barbs(true), 80, "barbs_random", false); }
+    fn ramhorn_branch() {
+        let name = "ramhorn_branch";
+        println!("---------------------------------------------------");
+        let b = examples::RamHorn::new(0.6, 12);
+        let m = b.run();
+
+        println!("Got {} verts...", m.verts.len());
+
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        m.write_stl_file(&fname).unwrap();
+
+    }
 
     #[test]
     fn sierpinski() { run_test(examples::sierpinski(), 6, "sierpinski", false); }
@@ -141,11 +145,6 @@ mod tests {
     #[test]
     fn ramhorn() {
         run_test(examples::ramhorn(), 100, "ram_horn3", false);
-    }
-
-    #[test]
-    fn ramhorn_branch() {
-        run_test(examples::ramhorn_branch(12, 0.6), 64, "ram_horn_branch", false);
     }
 
     /*

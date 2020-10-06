@@ -3,66 +3,28 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_3};
 use std::f32;
 
 use nalgebra::*;
-use rand::Rng;
+//use rand::Rng;
 
 use crate::util;
 use crate::util::VecExt;
 use crate::mesh::{Mesh, MeshFunc, VertexUnion, vert_args};
 use crate::xform::{Transform, Vertex, vertex, id};
-use crate::rule::{Rule, RuleFn, RuleEval, Child};
+use crate::rule::{Rule, RuleEval, Child};
 use crate::prim;
 use crate::dcel;
 use crate::dcel::{VertSpec};
 
-pub fn cube_thing() -> Rule<()> {
-
-    // Quarter-turn in radians:
-    let qtr = FRAC_PI_2;
-    //let x = &Vector3::x_axis();
-    let y = &Vector3::y_axis();
-    let z = &Vector3::z_axis();
-
-    // Each element of this turns to a branch for the recursion:
-    let id = Transform::new();
-    let turns: Vec<Transform> = vec![
-        id.clone(),
-        id.rotate(y, qtr),
-        id.rotate(y, qtr * 2.0),
-        id.rotate(y, qtr * 3.0),
-        id.rotate(z, qtr),
-        id.rotate(z, -qtr),
-    ];
-
-    let rec = move |self_: Rc<Rule<()>>| -> RuleEval<()> {
-
-        let xforms = turns.iter().map(|xf| xf.scale(0.5).translate(6.0, 0.0, 0.0));
-        RuleEval {
-            geom: Rc::new(prim::cube().to_meshfunc()),
-            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
-            children: xforms.map(move |xf| Child {
-                rule: self_.clone(),
-                xf: xf,
-                arg_vals: vec![],
-            }).collect(),
-        }
-    };
-
-    Rule { eval: Rc::new(rec), ctxt: () }
-}
-
-#[derive(Clone)]
-pub struct BarbsCtxt {
+pub struct Barbs {
     base_incr: Transform,
     barb_incr: Transform,
     sides: [Transform; 4],
     base: Vec<Vertex>,
-
     verts: Vec<Vertex>,
     faces: Vec<usize>,
 }
 
-impl BarbsCtxt {
-    pub fn new() -> BarbsCtxt {
+impl Barbs {
+    pub fn new() -> Barbs {
         // Incremental transform from each stage to the next:
         let base_incr = id().translate(0.0, 0.0, 1.0).
             rotate(&Vector3::z_axis(), 0.15).
@@ -87,7 +49,7 @@ impl BarbsCtxt {
                 rotate(&Vector3::y_axis(), -FRAC_PI_2).
                 translate(0.5, 0.0, 0.5);// * barb_incr;
         }
-        BarbsCtxt {
+        Barbs {
             base_incr: base_incr,
             barb_incr: barb_incr,
             base: base,
@@ -97,38 +59,28 @@ impl BarbsCtxt {
         }
     }
 
-    pub fn depth_check(&self, xform: &Transform, iters: usize) -> bool {
+    pub fn run(mut self, iters: usize) -> Mesh {
+        // Make seed vertices, use them for 'bottom' face, and recurse:
+        self.verts.append(&mut self.base.clone());
+        self.faces.extend_from_slice(&[0, 1, 2,   0, 2, 3]);
+        self.main(iters, id(), [0,1,2,3]);
+        return Mesh {
+            verts: self.verts,
+            faces: self.faces,
+        }
+    }
+
+    fn limit_check(&self, xform: &Transform, iters: usize) -> bool {
         // Assume all scales are the same (for now)
         let (s, _, _) = xform.get_scale();
         return s < 0.005;
     }
 
-    pub fn barb(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
+    fn main(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
 
-        if self.depth_check(&xform, iters) {
-            self.faces.extend_from_slice(&[
-                bound[0], bound[2], bound[1],
-                bound[0], bound[3], bound[2],
-            ]);
-            return;
-        }
-
-        let xform2 = xform * self.barb_incr;
-        let g = xform2.transform(&self.base);
-        let (a0, a1) = self.verts.append_indexed(g);
-
-        self.faces.append(&mut util::parallel_zigzag2(bound.to_vec(), a0..a1));
-
-        self.barb(iters - 1, xform2, [a0, a0+1, a0+2, a0+3]);
-    }
-
-    pub fn main(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
-
-        if self.depth_check(&xform, iters) {
-            self.faces.extend_from_slice(&[
-                bound[0], bound[2], bound[1],
-                bound[0], bound[3], bound[2],
-            ]);
+        if self.limit_check(&xform, iters) {
+            self.faces.extend_from_slice(&[bound[0], bound[2], bound[1],
+                bound[0], bound[3], bound[2]]);
             return;
         }
 
@@ -144,134 +96,146 @@ impl BarbsCtxt {
         self.barb(iters - 1, xform * self.sides[3], [bound[3], bound[0], a0+0, a0+3]);
     }
 
-    pub fn run(mut self, iters: usize) -> Mesh {
-        self.verts.append(&mut self.base.clone());
-        self.faces.extend_from_slice(&[
-            0, 1, 2,
-            0, 2, 3,
-        ]);
+    fn barb(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
 
-        self.main(iters, id(), [0,1,2,3]);
+        if self.limit_check(&xform, iters) {
+            self.faces.extend_from_slice(&[bound[0], bound[2], bound[1],
+                                           bound[0], bound[3], bound[2]]);
+            return;
+        }
 
+        let xform2 = xform * self.barb_incr;
+        let g = xform2.transform(&self.base);
+        let (a0, a1) = self.verts.append_indexed(g);
+        self.faces.append(&mut util::parallel_zigzag2(bound.to_vec(), a0..a1));
+
+        self.barb(iters - 1, xform2, [a0, a0+1, a0+2, a0+3]);
+    }
+}
+
+pub struct RamHorn {
+    incr: Transform,
+    splits: [Transform; 4],
+    base: Vec<Vertex>,
+    trans: Vec<Vertex>,
+    verts: Vec<Vertex>,
+    faces: Vec<usize>,
+    depth: usize,
+}
+
+impl RamHorn {
+    pub fn new(f: f32, depth: usize) -> RamHorn {
+        // Incremental transform for each layer:
+        let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
+        let incr: Transform = Transform::new().
+            translate(0.0, 0.0, 0.8 * f).
+            rotate(&v, 0.4 * f).
+            scale(1.0 - (1.0 - 0.95) * f);
+        // 'Base' vertices, used throughout:
+        let base = vec![
+            vertex(-0.5, -0.5, 0.0),
+            vertex(-0.5,  0.5, 0.0),
+            vertex( 0.5,  0.5, 0.0),
+            vertex( 0.5, -0.5, 0.0),
+        ];
+        // 'Transition' vertices:
+        let trans = vec![
+            // Top edge midpoints:
+            vertex(-0.5,  0.0, 0.0),  // 0 - connects b0-b1
+            vertex( 0.0,  0.5, 0.0),  // 1 - connects b1-b2
+            vertex( 0.5,  0.0, 0.0),  // 2 - connects b2-b3
+            vertex( 0.0, -0.5, 0.0),  // 3 - connects b3-b0
+            // Top middle:
+            vertex( 0.0,  0.0, 0.0),  // 4 - midpoint/centroid of all
+        ];
+        // splits[i] gives transformation from a 'base' layer to the
+        // i'th split (0 to 3):
+        let mut splits: [Transform; 4] = [id(); 4];
+        for i in 0..4 {
+            let r = FRAC_PI_2 * (i as f32);
+            splits[i] = id().
+                rotate(&nalgebra::Vector3::z_axis(), r).
+                translate(0.25, 0.25, 0.0).
+                scale(0.5);
+        }
+        RamHorn {
+            incr: incr,
+            splits: splits,
+            base: base,
+            trans: trans,
+            verts: vec![],
+            faces: vec![],
+            depth: depth,
+        }
+    }
+
+    pub fn run(mut self) -> Mesh {
+        // Make seed vertices, use them for 'bottom' face, and recurse:
+        let xf = id().translate(0.0, 0.0, -0.5);
+        self.verts.append(&mut xf.transform(&self.base));
+        self.faces.extend_from_slice(&[0, 1, 2,   0, 2, 3]);
+        self.trans(id(), [0,1,2,3]);
         return Mesh {
             verts: self.verts,
             faces: self.faces,
         }
     }
-}
 
-pub fn barbs(random: bool) -> Rule<()> {
+    fn limit_check(&self, xform: &Transform) -> bool {
+        // Assume all scales are the same (for now)
+        let (s, _, _) = xform.get_scale();
+        return s < 0.005;
+    }
 
-    let (b0, bn);
-    let base_verts: Vec<VertexUnion> = vec_indexed![
-        @b0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
-        VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
-        VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
-        VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
-        @bn,
-    ];
+    // 'Transition' stage (which splits from base to 4 parts):
+    fn trans(&mut self, xform: Transform, b: [usize; 4]) {
 
-    let barb_incr = |random| {
-        if random {
-            let t = rand::thread_rng().gen_range(0.45, 0.55);
-            let s = rand::thread_rng().gen_range(0.7, 0.9);
-            let ry = rand::thread_rng().gen_range(-0.3, -0.1);
-            let rx = rand::thread_rng().gen_range(-0.04, 0.04);
-            let rz = rand::thread_rng().gen_range(-0.04, 0.04);
-            id().translate(0.0, 0.0, t).
-                rotate(&Vector3::y_axis(), ry).
-                rotate(&Vector3::x_axis(), rx).
-                rotate(&Vector3::z_axis(), rz).
-                scale(s)
+        let (n, _) = self.verts.append_indexed(xform.transform(&self.base));
+        let (m01, _) = self.verts.append_indexed(xform.transform(&self.trans));
+        let (m12, m23, m30, c) = (m01 + 1, m01 + 2, m01 + 3, m01 + 4);
+        self.faces.extend_from_slice(&[
+            // two faces straddling edge from vertex 0:
+            b[0], n+0, m01,
+            b[0], m30, n+0,
+            // two faces straddling edge from vertex 1:
+            b[1], n+1, m12,
+            b[1], m01, n+1,
+            // two faces straddling edge from vertex 2:
+            b[2], n+2, m23,
+            b[2], m12, n+2,
+            // two faces straddling edge from vertex 3:
+            b[3], n+3, m30,
+            b[3], m23, n+3,
+            // four faces from edge (0,1), (1,2), (2,3), (3,0):
+            b[0], m01, b[1],
+            b[1], m12, b[2],
+            b[2], m23, b[3],
+            b[3], m30, b[0],
+        ]);
+
+        self.child(xform * self.splits[0], self.depth,[c, m12, n+2, m23]);
+        self.child(xform * self.splits[1], self.depth,[c, m01, n+1, m12]);
+        self.child(xform * self.splits[2], self.depth,[c, m30, n+0, m01]);
+        self.child(xform * self.splits[3], self.depth,[c, m23, n+3, m30]);
+    }
+
+    fn child(&mut self, xform: Transform, depth: usize, b: [usize; 4]) {
+
+        if self.limit_check(&xform) {
+            self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
+            return;
+        }
+
+        if depth <= 0 {
+            self.trans(xform, b);
         } else {
-            id().translate(0.0, 0.0, 0.5).
-                rotate(&Vector3::y_axis(), -0.2).
-                scale(0.8)
+            let xform2 = xform * self.incr;
+            let (n0, n1) = self.verts.append_indexed(xform2.transform(&self.base));
+            self.faces.append(&mut util::parallel_zigzag2(n0..n1, b.to_vec()));
+
+            self.child(xform2, depth - 1, [n0, n0 + 1, n0 + 2, n0 + 3]);
         }
-    };
-
-    let barb = rule_fn!(() => |self_, base_verts| {
-        let mut next_verts = base_verts;
-        let (a0, a1) = next_verts.append_indexed(vert_args(0..4));
-
-        let geom = util::parallel_zigzag(next_verts, b0..bn, a0..a1);
-        let final_geom = MeshFunc {
-            verts: vert_args(0..4),
-            faces: vec![ 0, 2, 1,   0, 3, 2 ],
-        };
-
-        let b = barb_incr(random);
-
-        RuleEval {
-            geom: Rc::new(geom.transform(&b)),
-            final_geom: Rc::new(final_geom), // no transform needed (no vertices)
-            children: vec![ child_iter!(self_, b, b0..bn) ],
-        }
-    });
-
-    let main_barb_xf = |i| {
-        id().rotate(&Vector3::z_axis(), -FRAC_PI_2 * (i as f32)).
-        rotate(&Vector3::y_axis(), -FRAC_PI_2).
-        translate(0.5, 0.0, 0.5)
-    };
-    let main_incr = |random| {
-        if random {
-            //let t = rand::thread_rng().gen_range(0.75, 1.25);
-            let s = rand::thread_rng().gen_range(0.85, 1.10);
-            let rz = rand::thread_rng().gen_range(0.05, 0.25);
-            let rx = rand::thread_rng().gen_range(0.08, 0.12);
-            id().translate(0.0, 0.0, 1.0).
-                rotate(&Vector3::z_axis(), rz).
-                rotate(&Vector3::x_axis(), rx).
-                scale(s)
-        } else {
-            id().translate(0.0, 0.0, 1.0).
-                rotate(&Vector3::z_axis(), 0.15).
-                rotate(&Vector3::x_axis(), 0.1).
-                scale(0.95)
-        }
-    };
-
-    let main = rule_fn!(() => |self_, base_verts| {
-        let mut next_verts = base_verts;
-        let (a0, _) = next_verts.append_indexed(vert_args(0..4));
-
-        // This contributes no faces of its own - just vertices.
-        let geom = MeshFunc { verts: next_verts.clone(), faces: vec![] };
-        // (unless recursion ends here, of course)
-        let final_geom = MeshFunc {
-            verts: vert_args(0..4),
-            faces: vec![ 0, 2, 1,   0, 3, 2 ],
-        };
-
-        RuleEval {
-            geom: Rc::new(geom),
-            final_geom: Rc::new(final_geom),
-            children: vec![
-                child_iter!(self_, main_incr(random), b0..bn),
-                child!(rule!(barb, ()), main_barb_xf(0), b0 + 0, b0 + 1, a0 + 1, a0 + 0),
-                child!(rule!(barb, ()), main_barb_xf(1), b0 + 1, b0 + 2, a0 + 2, a0 + 1),
-                child!(rule!(barb, ()), main_barb_xf(2), b0 + 2, b0 + 3, a0 + 3, a0 + 2),
-                child!(rule!(barb, ()), main_barb_xf(3), b0 + 3, b0 + 0, a0 + 0, a0 + 3),
-                // TODO: Factor out repetition?
-            ],
-        }
-    });
-
-    let base = rule_fn!(() => |_s, base_verts| {
-        RuleEval {
-            geom: Rc::new(MeshFunc {
-                verts: base_verts,
-                faces: vec![ b0, b0 + 1, b0 + 2,   b0, b0 + 2, b0 + 3 ],
-            }),
-            // TODO: This might be buggy and leave some vertices lying around
-            final_geom: Rc::new(prim::empty_meshfunc()),
-            children: vec![ child_iter!(rule!(main, ()), id(), b0..bn) ],
-        }
-    });
-
-    //rule!(Rc::new(base), ())
-    Rule { eval: base, ctxt: () }
+    }
 }
 
 pub fn sierpinski() -> Rule<()> {
@@ -1010,160 +974,6 @@ pub fn ramhorn() -> Rule<()> {
     };
 
     Rule { eval: Rc::new(start), ctxt: () }
-}
-
-#[derive(Copy, Clone)]
-pub struct RamHornCtxt {
-    depth: usize,
-}
-
-pub fn ramhorn_branch(depth: usize, f: f32) -> Rule<RamHornCtxt> {
-    let v = Unit::new_normalize(Vector3::new(-1.0, 0.0, 1.0));
-    let incr: Transform = Transform::new().
-        translate(0.0, 0.0, 0.8 * f).
-        rotate(&v, 0.4 * f).
-        scale(1.0 - (1.0 - 0.95) * f);
-
-    let (a0, s0, sn);
-    let seed = vec_indexed![
-        @a0 VertexUnion::Arg(0),
-        VertexUnion::Arg(1),
-        VertexUnion::Arg(2),
-        VertexUnion::Arg(3),
-        @s0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),
-        VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),
-        VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),
-        VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),
-        @sn,
-    ];
-    let geom = util::parallel_zigzag(seed.clone(), s0..sn, a0..s0).transform(&incr);
-    let final_geom = MeshFunc {
-        verts: seed.clone(),
-        faces: vec![
-            s0 + 0, s0 + 2, s0 + 1,
-            s0 + 0, s0 + 3, s0 + 2,
-        ],
-    }.transform(&incr);
-    // TODO: Why is this redundant transform needed?
-
-    let opening_xform = |i| {
-        let r = FRAC_PI_2 * (i as f32);
-        Transform::new().
-            rotate(&nalgebra::Vector3::z_axis(), r).
-            translate(0.25, 0.25, 0.0).
-            scale(0.5)
-    };
-
-    // 'transition' geometry (when something splits):
-    let (v0, v1, v2, v3, m01, m12, m23, m30, mid);
-    let trans_verts = vec_indexed![
-        VertexUnion::Arg(0),
-        VertexUnion::Arg(1),
-        VertexUnion::Arg(2),
-        VertexUnion::Arg(3),
-        // 'Top' vertices:
-        @v0 VertexUnion::Vertex(vertex(-0.5, -0.5, 0.0)),  //  0 (above 9)
-        @v1 VertexUnion::Vertex(vertex(-0.5,  0.5, 0.0)),  //  1 (above 10)
-        @v2 VertexUnion::Vertex(vertex( 0.5,  0.5, 0.0)),  //  2 (above 11)
-        @v3 VertexUnion::Vertex(vertex( 0.5, -0.5, 0.0)),  //  3 (above 12)
-        // Top edge midpoints:
-        @m01 VertexUnion::Vertex(vertex(-0.5,  0.0, 0.0)),  //  4 (connects 0-1)
-        @m12 VertexUnion::Vertex(vertex( 0.0,  0.5, 0.0)),  //  5 (connects 1-2)
-        @m23 VertexUnion::Vertex(vertex( 0.5,  0.0, 0.0)),  //  6 (connects 2-3)
-        @m30 VertexUnion::Vertex(vertex( 0.0, -0.5, 0.0)),  //  7 (connects 3-0)
-        // Top middle:
-        @mid VertexUnion::Vertex(vertex( 0.0,  0.0, 0.0)),  //  8
-    ];
-    let trans_faces = vec![
-        // two faces straddling edge from vertex 0:
-        0, 4, 8,
-        0, 11, 4,
-        // two faces straddling edge from vertex 1:
-        1, 5, 9,
-        1, 8, 5,
-        // two faces straddling edge from vertex 2:
-        2, 6, 10,
-        2, 9, 6,
-        // two faces straddling edge from vertex 3:
-        3, 7, 11,
-        3, 10, 7,
-        // four faces from edge (0,1), (1,2), (2,3), (3,0):
-        0, 8, 1,
-        1, 9, 2,
-        2, 10, 3,
-        3, 11, 0,
-    ];
-    let trans_geom = MeshFunc {
-        verts: trans_verts.clone(),
-        faces: trans_faces.clone(),
-    };
-    let trans_children = move |recur: RuleFn<RamHornCtxt>, ctxt: RamHornCtxt| {
-        vec![
-            child!(rule!(recur, ctxt), opening_xform(0), m12, v2, m23, mid),
-            child!(rule!(recur, ctxt), opening_xform(1), m01, v1, m12, mid),
-            child!(rule!(recur, ctxt), opening_xform(2), m30, v0, m01, mid),
-            child!(rule!(recur, ctxt), opening_xform(3), m23, v3, m30, mid),
-            // TODO: These vertex mappings appear to be right.
-            // Explain *why* they are right.
-        ]
-    };
-
-    let tg = Rc::new(trans_geom);
-    let fg = Rc::new(final_geom);
-    let g = Rc::new(geom);
-    // TODO: Why is that necessary?
-    let recur = rule_fn!(RamHornCtxt => |self_, tg| {
-        if self_.ctxt.depth <= 0 {
-            RuleEval {
-                geom: tg,
-                final_geom: fg.clone(),
-                // This final_geom will leave midpoint/centroid
-                // vertices, but stopping here means none are
-                // connected anyway - so they can just be ignored.
-                children: trans_children(self_.eval.clone(), RamHornCtxt { depth }),
-            }
-        } else {
-            let next_rule = Rule {
-                eval: self_.eval.clone(),
-                ctxt: RamHornCtxt { depth: self_.ctxt.depth - 1 },
-            };
-            RuleEval {
-                geom: g.clone(),
-                final_geom: fg.clone(),
-                children: vec![
-                    child!(Rc::new(next_rule), incr, s0, s0+1, s0+2, s0+3),
-                ],
-            }
-        }
-    });
-
-    let trans = rule_fn!(RamHornCtxt => |self_| {
-        RuleEval {
-            geom: tg.clone(),
-            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
-            children: trans_children(recur.clone(), self_.ctxt),
-        }
-    });
-
-    let start = rule_fn!(RamHornCtxt => |self_, seed| {
-        let g = MeshFunc {
-            verts: seed[s0..sn].to_vec(),
-            // FIXME (use names for indices)
-            faces: vec![
-                0, 1, 2,
-                0, 2, 3,
-            ],
-        }.transform(&id().translate(0.0, 0.0, -0.5));
-        RuleEval {
-            geom: Rc::new(g),
-            final_geom: Rc::new(prim::empty_mesh().to_meshfunc()),
-            children: vec![
-                child!(rule!(trans, self_.ctxt), id(), 0, 1, 2, 3),
-            ],
-        }
-    });
-
-    Rule { eval: start, ctxt: RamHornCtxt { depth } }
 }
 
 pub fn test_parametric() -> Mesh {
