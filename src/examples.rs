@@ -97,9 +97,15 @@ impl BarbsCtxt {
         }
     }
 
+    pub fn depth_check(&self, xform: &Transform, iters: usize) -> bool {
+        // Assume all scales are the same (for now)
+        let (s, _, _) = xform.get_scale();
+        return s < 0.005;
+    }
+
     pub fn barb(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
 
-        if iters <= 0 {
+        if self.depth_check(&xform, iters) {
             self.faces.extend_from_slice(&[
                 bound[0], bound[2], bound[1],
                 bound[0], bound[3], bound[2],
@@ -118,7 +124,7 @@ impl BarbsCtxt {
 
     pub fn main(&mut self, iters: usize, xform: Transform, bound: [usize; 4]) {
 
-        if iters <= 0 {
+        if self.depth_check(&xform, iters) {
             self.faces.extend_from_slice(&[
                 bound[0], bound[2], bound[1],
                 bound[0], bound[3], bound[2],

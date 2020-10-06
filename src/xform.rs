@@ -48,6 +48,13 @@ impl Transform {
     pub fn transform(&self, verts: &Vec<Vertex>) -> Vec<Vertex> {
         verts.iter().map(|v| self.mtx * v).collect()
     }
+
+    /// Returns X, Y, and Z scale factors for this transformation.
+    pub fn get_scale(&self) -> (f32, f32, f32) {
+        (self.mtx.column(0).norm(),
+         self.mtx.column(1).norm(),
+         self.mtx.column(2).norm())
+    }
 }
 
 impl Mul for Transform {
