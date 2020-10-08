@@ -180,10 +180,51 @@ impl TreeThing {
         }
     }
 
+    pub fn run2(mut self) -> Mesh {
+        // Make seed vertices, use them for 'bottom' face, and recurse:
+        self.verts.append(&mut self.base.clone());
+        self.faces.extend_from_slice(&[0, 1, 2,   0, 2, 3]);
+        self.trunk(id(), [0,1,2,3]);
+        return Mesh {
+            verts: self.verts,
+            faces: self.faces,
+        }
+    }
+
+    pub fn trunk(&mut self, xform: Transform, b: [usize; 4]) {
+
+        if self.limit_check(&xform) {
+            self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
+            return;
+        }
+
+        let incr = id().translate(0.0, 0.0, 1.0).
+            rotate(&Vector3::z_axis(), 0.15).
+            rotate(&Vector3::x_axis(), 0.1).
+            scale(0.95);
+        let mut sides: [Transform; 4] = [id(); 4];
+        for i in 0..4 {
+            sides[i] = id().
+                rotate(&Vector3::z_axis(), -FRAC_PI_2 * (i as f32)).
+                rotate(&Vector3::y_axis(), -FRAC_PI_2).
+                translate(0.5, 0.0, 0.5);// * barb_incr;
+        }
+
+        let xform2 = xform * incr;
+        let g = xform2.transform(&self.base);
+        let (a0, _) = self.verts.append_indexed(g);
+
+        self.trunk(xform2, [a0, a0+1, a0+2, a0+3]);
+        self.child(xform * sides[0], self.depth, [b[0], b[1], a0 + 1, a0 + 0]);
+        self.child(xform * sides[1], self.depth, [b[1], b[2], a0 + 2, a0 + 1]);
+        self.child(xform * sides[2], self.depth, [b[2], b[3], a0 + 3, a0 + 2]);
+        self.child(xform * sides[3], self.depth, [b[3], b[0], a0 + 0, a0 + 3]);
+    }
+
     fn limit_check(&self, xform: &Transform) -> bool {
         // Assume all scales are the same (for now)
         let (s, _, _) = xform.get_scale();
-        return s < 0.002;
+        return s < 0.01;
     }
 
     fn child(&mut self, xform: Transform, depth: usize, b: [usize; 4]) {

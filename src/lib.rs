@@ -99,6 +99,21 @@ mod tests {
     }
 
     #[test]
+    fn tree_thing2() {
+        let name = "tree_thing2";
+        println!("---------------------------------------------------");
+        let b = examples::TreeThing::new(0.6, 10);
+        let m = b.run2();
+
+        println!("Got {} verts...", m.verts.len());
+
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        m.write_stl_file(&fname).unwrap();
+
+    }
+
+    #[test]
     fn sierpinski() { run_test(examples::sierpinski(), 6, "sierpinski", false); }
     /*
     #[test]
