@@ -1,5 +1,5 @@
 use std::ops::Range;
-use crate::mesh::{Mesh, MeshFunc, VertexUnion};
+use crate::mesh::{Mesh};
 use crate::xform::{Vertex};
 
 /// This is like `vec!`, but it can handle elements that are given
@@ -76,13 +76,6 @@ pub fn parallel_zigzag_faces(r1: Range<usize>, r2: Range<usize>) -> Vec<usize> {
             r2.start + i1, r2.start + i0, r1.start + i1,
         ]
     }).flatten().collect()
-}
-
-pub fn parallel_zigzag(verts: Vec<VertexUnion>, main: Range<usize>, parent: Range<usize>) -> MeshFunc {
-    MeshFunc {
-        verts: verts,
-        faces: parallel_zigzag_faces(main, parent),
-    }
 }
 
 pub fn parallel_zigzag_mesh(verts: Vec<Vertex>, main: Range<usize>, parent: Range<usize>) -> Mesh {

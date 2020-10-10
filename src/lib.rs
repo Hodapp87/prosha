@@ -1,12 +1,10 @@
 pub mod mesh;
 #[macro_use]
-pub mod rule;
 pub mod prim;
 #[macro_use]
 pub mod util;
 pub mod xform;
 pub mod examples;
-pub mod dcel;
 
 //pub use crate::examples;
 //pub use crate::openmesh::test_thing;
@@ -16,30 +14,7 @@ mod tests {
     use super::*;
     use std::rc::Rc;
     use std::time::Instant;
-    use rule::Rule;
     use nalgebra::*;
-
-    fn run_test<S>(rule: Rule<S>, iters: usize, name: &str, use_old: bool) {
-        let r = Rc::new(rule);
-        println!("---------------------------------------------------");
-        println!("Running {} with {}...",
-                 name, if use_old { "to_mesh" } else { "to_mesh_iter" });
-        if false {
-            let start = Instant::now();
-            let n = 5;
-            for _ in 0..n {
-                Rule::to_mesh_iter(r.clone(), iters);
-            }
-            let elapsed = start.elapsed();
-            println!("DEBUG: {} ms per run", elapsed.as_millis() / n);
-        }
-        let mesh_fn = if use_old { Rule::to_mesh } else { Rule::to_mesh_iter };
-        let (mesh, nodes) = mesh_fn(r.clone(), iters);
-        println!("Evaluated {} rules to {} verts", nodes, mesh.verts.len());
-        let fname = format!("{}.stl", name);
-        println!("Writing {}...", fname);
-        mesh.to_mesh().write_stl_file(&fname).unwrap();
-    }
 
     #[test]
     fn xform_order() {
@@ -114,69 +89,19 @@ mod tests {
     }
 
     #[test]
-    fn sierpinski() { run_test(examples::sierpinski(), 6, "sierpinski", false); }
-    /*
-    #[test]
-    fn twist() {
-        run_test(examples::twist(1.0, 2), 200, "screw", false);
-    }
+    fn sierpinski() {
+        let name = "sierpinski";
+        println!("---------------------------------------------------");
+        let b = examples::Sierpinski::new(0.50, 0.10, 0.0);
+        //let b = examples::Sierpinski::new(0.51, 0.10, 0.1);
+        let m = b.run();
 
-    #[test]
-    fn twisty_torus() {
-        run_test(examples::twisty_torus(), 3000, "twisty_torus", false);
-    }
+        println!("Got {} verts...", m.verts.len());
 
-    #[test]
-    fn twisty_torus_hardcode() {
-        run_test(examples::twisty_torus_hardcode(), 1000, "twisty_torus_hardcode", false);
-    }
-    
-    #[test]
-    #[ignore]
-    fn twisty_torus_full() {
-        run_test(examples::twisty_torus(), 40000, "twisty_torus_full", false);
-    }
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        m.write_stl_file(&fname).unwrap();
 
-    #[test]
-    #[ignore]
-    fn wind_chime_mistake_thing() {
-        run_test(examples::wind_chime_mistake_thing(), 400, "wind_chime_mistake_thing", false);
-    }
-
-    #[test]
-    fn nest_spiral_2() {
-        run_test(examples::nest_spiral_2(), 200, "nest_spiral_2", false);
-    }
-
-    // This one is very time-consuming to run:
-    #[test]
-    #[ignore]
-    fn twist_full() {
-        let f = 40;
-        run_test(examples::twist(f as f32, 128), 100*f, "screw_full", false);
-    }
-    */
-    
-    #[test]
-    fn ramhorn() {
-        run_test(examples::ramhorn(), 100, "ram_horn3", false);
-    }
-
-    /*
-    #[test]
-    fn ramhorn_branch_random() {
-        run_test(examples::ramhorn_branch_random(24, 0.25), 32, "ram_horn_branch_random", false);
-    }
-     */
-
-    #[test]
-    fn test_parametric() {
-        examples::test_parametric().write_stl_file("test_parametric.stl").unwrap();
-    }
-
-    #[test]
-    fn test_dcel() {
-        examples::test_dcel("test_dcel.stl");
     }
 }
 // need this for now:

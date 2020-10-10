@@ -88,8 +88,9 @@ also was vastly faster at generating meshes.
 
 ## Highest priority:
 
-- Begin converting older examples.
-- Trash all the dead code.
+- Work on abstraction/composition.  Particularly: factor out
+  patterns I use, and be able to *compose* procedural meshes
+  somehow - e.g. the 'context' object I discussed. 
 - Docs on modules
 - swept-isocontour stuff from
   `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`.  This
