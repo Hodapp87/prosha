@@ -1,5 +1,5 @@
 [package]
-name = "mesh_scratch"
+name = "prosha"
 version = "0.1.0"
 authors = ["Chris Hodapp <hodapp87@gmail.com>"]
 edition = "2018"
@@ -9,7 +9,7 @@ edition = "2018"
 [profile.release]
 # Unoptimized debug builds are too slow to profile
 # having debug info doesn't hurt perf for now
-debug = true
+# debug = true
 
 [dependencies]
 euclid = "0.20.7"

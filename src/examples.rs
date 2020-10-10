@@ -307,6 +307,7 @@ impl Sierpinski {
             (v1b+v2b)/2.0,
             (v2b+v0b)/2.0,
         ];
+        // There might be some redundancy when these are used
 
         Sierpinski {
             splits: splits,

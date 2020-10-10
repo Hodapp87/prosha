@@ -1,4 +1,10 @@
-# This needs a title
+# Prosha
+
+Experiments in procedural meshes in Rust
+
+More detailed docs and examples forthcoming.
+
+## General Notes & History
 
 This particular code base was started around 2019 December
 as an attempt to make meshes in a more "generative" style,
@@ -86,6 +92,12 @@ branch, thus named because I needed to get rid of my buggy
 implementation of half of Common Lisp. It paid off quite quickly and
 also was vastly faster at generating meshes. 
 
+## What does the name mean?
+
+Nothing, but it's better than its previous name of
+"mesh_scratch". I asked for name suggestions, and someone came up
+with this one.
+
 ## Highest priority:
 
 - Work on abstraction/composition.  Particularly: factor out
@@ -120,6 +132,7 @@ also was vastly faster at generating meshes.
 - [Geometry and Algorithms for Computer Aided Design (Hartmann)](https://www2.mathematik.tu-darmstadt.de/~ehartmann/cdgen0104.pdf)
 - https://en.wikipedia.org/wiki/Surface_triangulation
 - https://www.cs.cmu.edu/~quake/triangle.html
+- OpenSubdiv!
 
 ## Reflections & Quick Notes
 
