@@ -104,9 +104,11 @@ with this one.
   patterns I use, and be able to *compose* procedural meshes
   somehow - e.g. the 'context' object I discussed. 
 - Docs on modules
+- Make some examples that are non-deterministic!
 - swept-isocontour stuff from
   `/mnt/dev/graphics_misc/isosurfaces_2018_2019/spiral*.py`.  This
   will probably require that I figure out parametric curves
+  (is this stuff still possible?)
 - Make an example that is more discrete-automata, less
   approximation-of-space-curve.
 
@@ -144,3 +146,28 @@ with this one.
   the current local space. 
 - Don't reinvent subdivision surfaces.
 - Don't reinvent Lisp when you wanted a Lisp!
+
+## Examples
+
+### Barbs
+
+See `examples::Barbs` & "barbs" test in `lib.rs`.
+
+![Barbs](./images/barbs_preview.png)
+
+### Tree Thing
+
+See `examples::TreeThing`.  First one is "tree_thing" test in `lib.rs`:
+
+![tree_thing](./images/tree_thing_preview.jpg)
+
+Second is "tree_thing2" (this was from a larger Blender render):
+
+![tree_thing2](./images/rust_tree_thing_03_smaller.jpg)
+
+### Sierpinski
+
+See `examples::Sierpinski` & "sierpinski" test in `lib.rs`.
+This looks cooler with some randomness added and 3D printed.
+
+![sierpinski](./images/sierpinski_preview.png)
