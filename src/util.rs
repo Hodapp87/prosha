@@ -1,6 +1,6 @@
+use crate::mesh::Mesh;
+use crate::xform::Vertex;
 use std::ops::Range;
-use crate::mesh::{Mesh};
-use crate::xform::{Vertex};
 
 /// This is like `vec!`, but it can handle elements that are given
 /// with `@var element` rather than `element`, e.g. like
@@ -42,40 +42,49 @@ impl<T> VecExt<T> for Vec<T> {
 /// (thus, the returned length will be `count*p.len()`).
 pub fn subdivide_cycle(p: &Vec<Vertex>, count: usize) -> Vec<Vertex> {
     let n = p.len();
-    (0..n).map(|i| {
-        // The inner loop is interpolating between v1 and v2:
-        let v1 = &p[i];
-        let v2 = &p[(i+1) % n];
-        (0..count).map(move |j| {
-            // This is just lerping in count+1 equally spaced steps:
-            let f = (j as f32) / (count as f32);
-            v1*(1.0-f) + v2*f
+    (0..n)
+        .map(|i| {
+            // The inner loop is interpolating between v1 and v2:
+            let v1 = &p[i];
+            let v2 = &p[(i + 1) % n];
+            (0..count).map(move |j| {
+                // This is just lerping in count+1 equally spaced steps:
+                let f = (j as f32) / (count as f32);
+                v1 * (1.0 - f) + v2 * f
+            })
         })
-    }).flatten().collect()
+        .flatten()
+        .collect()
 }
 // TODO: This can be generalized to an iterator or to IntoIterator
 // trait bound
 
 pub fn parallel_zigzag_faces(r1: Range<usize>, r2: Range<usize>) -> Vec<usize> {
     let count = r1.end - r1.start;
-        if (r2.end - r2.start) != count {
+    if (r2.end - r2.start) != count {
         panic!("Ranges must have the same size");
     }
-    if (r2.end > r1.start && r2.end < r1.end) ||
-        (r1.end > r2.start && r1.end < r2.end) {
+    if (r2.end > r1.start && r2.end < r1.end) || (r1.end > r2.start && r1.end < r2.end) {
         panic!("Ranges cannot overlap");
     }
 
-    (0..count).map(|i0| {
-        // i0 is an *offset* for the 'current' index.
-        // i1 is for the 'next' index, wrapping back to 0.
-        let i1 = (i0 + 1) % count;
-        vec![
-            // Mind winding order!
-            r1.start + i1, r2.start + i0, r1.start + i0,
-            r2.start + i1, r2.start + i0, r1.start + i1,
-        ]
-    }).flatten().collect()
+    (0..count)
+        .map(|i0| {
+            // i0 is an *offset* for the 'current' index.
+            // i1 is for the 'next' index, wrapping back to 0.
+            let i1 = (i0 + 1) % count;
+            vec![
+                // Mind winding order!
+                r1.start + i1,
+                r2.start + i0,
+                r1.start + i0,
+                r2.start + i1,
+                r2.start + i0,
+                r1.start + i1,
+            ]
+        })
+        .flatten()
+        .collect()
 }
 
 pub fn parallel_zigzag_mesh(verts: Vec<Vertex>, main: Range<usize>, parent: Range<usize>) -> Mesh {
@@ -85,8 +94,10 @@ pub fn parallel_zigzag_mesh(verts: Vec<Vertex>, main: Range<usize>, parent: Rang
     }
 }
 
-pub fn parallel_zigzag2<T,U>(main: T, parent: U) -> Vec<usize>
-where T: IntoIterator<Item=usize>, U: IntoIterator<Item=usize>
+pub fn parallel_zigzag2<T, U>(main: T, parent: U) -> Vec<usize>
+where
+    T: IntoIterator<Item = usize>,
+    U: IntoIterator<Item = usize>,
 {
     let m: Vec<usize> = main.into_iter().collect();
     let p: Vec<usize> = parent.into_iter().collect();
@@ -95,16 +106,18 @@ where T: IntoIterator<Item=usize>, U: IntoIterator<Item=usize>
         panic!("Vectors must be the same size!")
     }
 
-    (0..l).map(|i0| {
-        // i0 is an *offset* for the 'current' index.
-        // i1 is for the 'next' index, wrapping back to 0.
-        let i1 = (i0 + 1) % l;
-        vec![
-            // Mind winding order!
-            m[i1], p[i0], m[i0],
-            p[i1], p[i0], m[i1],
-        ]
-    }).flatten().collect()
+    (0..l)
+        .map(|i0| {
+            // i0 is an *offset* for the 'current' index.
+            // i1 is for the 'next' index, wrapping back to 0.
+            let i1 = (i0 + 1) % l;
+            vec![
+                // Mind winding order!
+                m[i1], p[i0], m[i0], p[i1], p[i0], m[i1],
+            ]
+        })
+        .flatten()
+        .collect()
 }
 
 pub fn centroid(verts: &Vec<Vertex>) -> Vertex {
@@ -118,17 +131,22 @@ pub fn centroid(verts: &Vec<Vertex>) -> Vertex {
 }
 
 pub fn connect_convex(range: Range<usize>, target: usize, as_parent: bool) -> Vec<usize> {
-
     let count = range.end - range.start;
     if as_parent {
-        (0..count).map(|i0| {
-            let i1 = (i0 + 1) % count;
-            vec![range.start + i1, range.start + i0, target]
-        }).flatten().collect()
+        (0..count)
+            .map(|i0| {
+                let i1 = (i0 + 1) % count;
+                vec![range.start + i1, range.start + i0, target]
+            })
+            .flatten()
+            .collect()
     } else {
-        (0..count).map(|i0| {
-            let i1 = (i0 + 1) % count;
-            vec![range.start + i0, range.start + i1, target]
-        }).flatten().collect()
+        (0..count)
+            .map(|i0| {
+                let i1 = (i0 + 1) % count;
+                vec![range.start + i0, range.start + i1, target]
+            })
+            .flatten()
+            .collect()
     }
 }

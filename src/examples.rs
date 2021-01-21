@@ -367,3 +367,94 @@ impl Sierpinski {
         return s < 0.01;
     }
 }
+
+pub struct NestedSpiral {
+    base: Vec<Vertex>,
+    verts: Vec<Vertex>,
+    faces: Vec<usize>,
+    seeds: Vec<Transform>,
+    incr: Vec<Transform>,
+    max_count: usize,
+}
+
+impl NestedSpiral {
+    pub fn new() -> NestedSpiral {
+        let d = vertex(0.5, 0.0, 0.5);
+        // 'Base' vertices, used throughout:
+        let mut base = vec![
+            (vertex(-0.5, 0.0, -0.5)),
+            (vertex(0.5, 0.0, -0.5)),
+            (vertex(0.5, 0.0, 0.5)),
+            (vertex(-0.5, 0.0, 0.5)),
+        ];
+        base = id().scale(0.3).transform(&base);
+        // TODO: Check winding order
+
+        let rot_y = |ang| id().rotate(&Vector3::y_axis(), ang);
+        let rot_y_and_trans = |ang, dx| rot_y(ang).translate(dx, 0.0, 0.0);
+
+        // Pairs of (seed transform, incremental transform):
+        let xforms: Vec<(Transform, Transform)> = vec![
+            (id(),                      id().translate(0.0, 0.1, 0.0)),
+            (rot_y_and_trans(0.0, 3.0), rot_y(-0.03)),
+            (rot_y_and_trans(0.0, 1.0), rot_y(0.07)),
+            (rot_y_and_trans(0.0, 0.5), rot_y(-0.2)),
+        ];
+        // TODO: Does it make sense that this should be the reverse of the Python ones?
+
+        // TODO: I still need Cartesian product of various different seeds.
+        // e.g. rot_y_and_trans(0.0, 0.5) should be N entries with various rotations
+        // instead of 0.0.
+
+        let (seeds, incr) = xforms.iter().cloned().unzip();
+
+        NestedSpiral {
+            base: base,
+            verts: vec![],
+            faces: vec![],
+            incr:  incr,
+            seeds: seeds,
+            max_count: 500,
+        }
+    }
+
+    pub fn incr(&mut self, idx: usize, b: [usize; 4], xforms: Vec<Transform>) {
+
+        if idx >= self.max_count {
+            self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
+            return;
+        }
+
+        // Compute global transform with product of all 'xforms':
+        let global = xforms.iter().fold(id(), |acc, m| acc * (*m));
+
+        // Generate geometry:
+        let g = global.transform(&self.base);
+        let (n0, n1) = self.verts.append_indexed(g);
+        self.faces.append(&mut util::parallel_zigzag2(b.to_vec(), n0..n1));
+
+        // Increment the individual transformations:
+        let xforms_next: Vec<Transform> = xforms.iter()
+            .zip(self.incr.iter())
+            .map(|(m,incr)| ((*incr) * (*m)))
+            .collect();
+
+        self.incr(idx + 1, [n0, n0 + 1, n0 + 2, n0 + 3], xforms_next);
+    }
+
+    pub fn run(mut self) -> Mesh {
+        // TODO: Generate all seed geometry & transforms
+
+        let global = self.seeds.iter().fold(id(), |acc, m| acc * (*m));
+        let g = global.transform(&self.base);
+        let (n0, n1) = self.verts.append_indexed(g);
+        //let (n0, _) = self.verts.append_indexed(self.base.clone());
+
+        self.incr(0, [n0, n0 + 1, n0 + 2, n0 + 3], self.seeds.clone());
+
+        return Mesh {
+            verts: self.verts,
+            faces: self.faces,
+        };
+    }
+}

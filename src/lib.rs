@@ -3,8 +3,8 @@ pub mod mesh;
 pub mod prim;
 #[macro_use]
 pub mod util;
-pub mod xform;
 pub mod examples;
+pub mod xform;
 
 //pub use crate::examples;
 //pub use crate::openmesh::test_thing;
@@ -12,9 +12,9 @@ pub mod examples;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nalgebra::*;
     use std::rc::Rc;
     use std::time::Instant;
-    use nalgebra::*;
 
     #[test]
     fn xform_order() {
@@ -24,7 +24,7 @@ mod tests {
 
         let dx = 4.0;
         let r = -0.5;
-        
+
         let trans = xform::Transform::new().translate(dx, 0.0, 0.0);
         let rot = xform::Transform::new().rotate(y, r);
 
@@ -32,13 +32,27 @@ mod tests {
         let xf2 = rot.translate(dx, 0.0, 0.0);
 
         // Rotate entire space, *then* translate in that rotated plane:
-        geom.transform(&trans).transform(&rot).write_stl_file("xform_apply_trans_rot.stl").unwrap();
-        geom.transform(&(rot * trans)).write_stl_file("xform_mul_rot_trans.stl").unwrap();
-        geom.transform(&xf2).write_stl_file("xform_rot_trans.stl").unwrap();
+        geom.transform(&trans)
+            .transform(&rot)
+            .write_stl_file("xform_apply_trans_rot.stl")
+            .unwrap();
+        geom.transform(&(rot * trans))
+            .write_stl_file("xform_mul_rot_trans.stl")
+            .unwrap();
+        geom.transform(&xf2)
+            .write_stl_file("xform_rot_trans.stl")
+            .unwrap();
         // Translate cube, *then* rotate it:
-        geom.transform(&rot).transform(&trans).write_stl_file("xform_apply_rot_trans.stl").unwrap();
-        geom.transform(&(trans * rot)).write_stl_file("xform_mul_trans_rot.stl").unwrap();
-        geom.transform(&xf1).write_stl_file("xform_trans_rot.stl").unwrap();
+        geom.transform(&rot)
+            .transform(&trans)
+            .write_stl_file("xform_apply_rot_trans.stl")
+            .unwrap();
+        geom.transform(&(trans * rot))
+            .write_stl_file("xform_mul_trans_rot.stl")
+            .unwrap();
+        geom.transform(&xf1)
+            .write_stl_file("xform_trans_rot.stl")
+            .unwrap();
     }
 
     // TODO: These tests don't test any conditions, so this is useful
@@ -55,7 +69,6 @@ mod tests {
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         m.write_stl_file(&fname).unwrap();
-
     }
 
     #[test]
@@ -70,7 +83,6 @@ mod tests {
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         m.write_stl_file(&fname).unwrap();
-
     }
 
     #[test]
@@ -85,7 +97,6 @@ mod tests {
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         m.write_stl_file(&fname).unwrap();
-
     }
 
     #[test]
@@ -101,7 +112,21 @@ mod tests {
         let fname = format!("{}.stl", name);
         println!("Writing {}...", fname);
         m.write_stl_file(&fname).unwrap();
+    }
 
+    #[test]
+    fn nested_spiral() {
+        let name = "nested_spiral";
+        println!("---------------------------------------------------");
+        let b = examples::NestedSpiral::new();
+        //let b = examples::Sierpinski::new(0.51, 0.10, 0.1);
+        let m = b.run();
+
+        println!("Got {} verts...", m.verts.len());
+
+        let fname = format!("{}.stl", name);
+        println!("Writing {}...", fname);
+        m.write_stl_file(&fname).unwrap();
     }
 }
 // need this for now:
