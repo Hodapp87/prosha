@@ -171,3 +171,9 @@ See `examples::Sierpinski` & "sierpinski" test in `lib.rs`.
 This looks cooler with some randomness added and 3D printed.
 
 ![sierpinski](./images/sierpinski_preview.png)
+
+### Triple Nested Spiral
+
+See `examples::NestedSpiral` & "nested_spiral" test in `lib.rs`.
+
+![nested_spiral](./images/nested_spiral.jpg)

@@ -378,18 +378,18 @@ pub struct NestedSpiral {
 }
 
 impl NestedSpiral {
-    // TODO: Fix winding order being wrong on 'body' vertices (not end caps)
     pub fn new() -> NestedSpiral {
-        let d = vertex(0.5, 0.0, 0.5);
         // 'Base' vertices, used throughout:
         let mut base = vec![
-            (vertex(-0.5, 0.0, -0.5)),
-            (vertex(0.5, 0.0, -0.5)),
-            (vertex(0.5, 0.0, 0.5)),
-            (vertex(-0.5, 0.0, 0.5)),
+            (vertex(0.0, 0.0, 0.0)),
+            (vertex(1.0, 0.0, 0.0)),
+            (vertex(1.0, 0.0, 1.0)),
+            (vertex(0.0, 0.0, 1.0)),
         ];
-        base = id().scale(0.3).transform(&base);
-        // TODO: Check winding order
+        base = id().scale(0.3).translate(-0.5, 0.0, -0.5).transform(&base);
+
+        // TODO: Subdivide vertices down (Python version goes from 4
+        // verts up to 16 by subdividing twice)
 
         let rot_y = |ang| id().rotate(&Vector3::y_axis(), ang);
         let rot_y_and_trans = |ang, dx| rot_y(ang).translate(dx, 0.0, 0.0);
@@ -450,7 +450,7 @@ impl NestedSpiral {
         // Generate geometry:
         let g = global.transform(&self.base);
         let (n0, n1) = self.verts.append_indexed(g);
-        self.faces.append(&mut util::parallel_zigzag2(b.to_vec(), n0..n1));
+        self.faces.append(&mut util::parallel_zigzag2(n0..n1, b.to_vec()));
 
         // Increment the individual transformations:
         let xforms_next: Vec<Transform> = xforms.iter()
@@ -468,7 +468,7 @@ impl NestedSpiral {
         for seed in seeds {
             let global = seed.iter().fold(id(), |acc, m| acc * (*m));
             let g = global.transform(&self.base);
-            let (n0, n1) = self.verts.append_indexed(g);
+            let (n0, _) = self.verts.append_indexed(g);
             self.faces.extend_from_slice(&[n0, n0+1, n0+2,   n0, n0+2, n0+3]);
 
             self.iter(0, [n0, n0 + 1, n0 + 2, n0 + 3], &seed);
