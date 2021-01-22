@@ -1,4 +1,4 @@
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_3};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::f32;
 
 use nalgebra::*;
@@ -372,12 +372,13 @@ pub struct NestedSpiral {
     base: Vec<Vertex>,
     verts: Vec<Vertex>,
     faces: Vec<usize>,
-    seeds: Vec<Transform>,
+    seeds: Vec<Vec<Transform>>,
     incr: Vec<Transform>,
     max_count: usize,
 }
 
 impl NestedSpiral {
+    // TODO: Fix winding order being wrong on 'body' vertices (not end caps)
     pub fn new() -> NestedSpiral {
         let d = vertex(0.5, 0.0, 0.5);
         // 'Base' vertices, used throughout:
@@ -393,20 +394,38 @@ impl NestedSpiral {
         let rot_y = |ang| id().rotate(&Vector3::y_axis(), ang);
         let rot_y_and_trans = |ang, dx| rot_y(ang).translate(dx, 0.0, 0.0);
 
-        // Pairs of (seed transform, incremental transform):
-        let xforms: Vec<(Transform, Transform)> = vec![
-            (id(),                      id().translate(0.0, 0.1, 0.0)),
-            (rot_y_and_trans(0.0, 3.0), rot_y(-0.03)),
-            (rot_y_and_trans(0.0, 1.0), rot_y(0.07)),
-            (rot_y_and_trans(0.0, 0.5), rot_y(-0.2)),
+
+        let get_xform = |i, j, k| {
+            let i0 = PI*2.0*(i as f32) / 4.0;
+            let j0 = PI*2.0*(j as f32) / 4.0;
+            let k0 = PI*2.0*(k as f32) / 4.0;
+            // Pairs of (seed transform, incremental transform):
+            vec![
+                id(),
+                rot_y_and_trans(i0, 3.0),
+                rot_y_and_trans(j0, 1.0),
+                rot_y_and_trans(k0, 0.5),
+            ]
+            // TODO: Does it make sense that this should be the reverse of the Python ones?
+        };
+
+        let mut seeds = vec![];
+        for i in 0..4 {
+            for j in 0..4 {
+                for k in 0..4 {
+                    seeds.push(get_xform(i, j, k));
+                }
+            }
+        }
+
+        let incr = vec![
+            id().translate(0.0, 0.1, 0.0),
+            rot_y(-0.03),
+            rot_y(0.07),
+            rot_y(-0.2),
         ];
-        // TODO: Does it make sense that this should be the reverse of the Python ones?
-
-        // TODO: I still need Cartesian product of various different seeds.
-        // e.g. rot_y_and_trans(0.0, 0.5) should be N entries with various rotations
-        // instead of 0.0.
-
-        let (seeds, incr) = xforms.iter().cloned().unzip();
+        // TODO: This is kludgy (having it separate 'incremental' and 'seed'
+        // transformations)
 
         NestedSpiral {
             base: base,
@@ -418,7 +437,7 @@ impl NestedSpiral {
         }
     }
 
-    pub fn incr(&mut self, idx: usize, b: [usize; 4], xforms: Vec<Transform>) {
+    pub fn iter(&mut self, idx: usize, b: [usize; 4], xforms: &Vec<Transform>) {
 
         if idx >= self.max_count {
             self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
@@ -439,18 +458,21 @@ impl NestedSpiral {
             .map(|(m,incr)| ((*incr) * (*m)))
             .collect();
 
-        self.incr(idx + 1, [n0, n0 + 1, n0 + 2, n0 + 3], xforms_next);
+        self.iter(idx + 1, [n0, n0 + 1, n0 + 2, n0 + 3], &xforms_next);
     }
 
     pub fn run(mut self) -> Mesh {
-        // TODO: Generate all seed geometry & transforms
 
-        let global = self.seeds.iter().fold(id(), |acc, m| acc * (*m));
-        let g = global.transform(&self.base);
-        let (n0, n1) = self.verts.append_indexed(g);
-        //let (n0, _) = self.verts.append_indexed(self.base.clone());
+        let seeds = self.seeds.clone();
 
-        self.incr(0, [n0, n0 + 1, n0 + 2, n0 + 3], self.seeds.clone());
+        for seed in seeds {
+            let global = seed.iter().fold(id(), |acc, m| acc * (*m));
+            let g = global.transform(&self.base);
+            let (n0, n1) = self.verts.append_indexed(g);
+            self.faces.extend_from_slice(&[n0, n0+1, n0+2,   n0, n0+2, n0+3]);
+
+            self.iter(0, [n0, n0 + 1, n0 + 2, n0 + 3], &seed);
+        }
 
         return Mesh {
             verts: self.verts,
