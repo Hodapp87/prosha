@@ -9,10 +9,11 @@ edition = "2018"
 [profile.release]
 # Unoptimized debug builds are too slow to profile
 # having debug info doesn't hurt perf for now
-# debug = true
+debug = true
 
 [dependencies]
 euclid = "0.20.7"
 nalgebra = "0.19.0"
 stl_io = "0.4.2"
 rand = "0.7.3"
+itertools = "0.10.0"

@@ -8,6 +8,7 @@ use crate::util;
 use crate::util::VecExt;
 use crate::mesh::{Mesh};
 use crate::xform::{Transform, Vertex, vertex, id};
+use itertools::Itertools;
 
 pub struct Barbs {
     base_incr: Transform,
@@ -372,10 +373,9 @@ pub struct NestedSpiral {
     base: Vec<Vertex>,
     verts: Vec<Vertex>,
     faces: Vec<usize>,
-    seeds: Vec<Vec<Transform>>,
-    incr: Vec<Transform>,
 }
 
+// TODO: Add original mesh as a conditional
 impl NestedSpiral {
     pub fn new() -> NestedSpiral {
         // 'Base' vertices, used throughout:
@@ -390,60 +390,75 @@ impl NestedSpiral {
         // TODO: Subdivide vertices down (Python version goes from 4
         // verts up to 16 by subdividing twice)
 
-        let rot_y = |ang| id().rotate(&Vector3::y_axis(), ang);
-        let rot_y_and_trans = |ang, dx| rot_y(ang).translate(dx, 0.0, 0.0);
-
-
-        let get_xform = |i, j, k| {
-            let i0 = PI*2.0*(i as f32) / 4.0;
-            let j0 = PI*2.0*(j as f32) / 4.0;
-            let k0 = PI*2.0*(k as f32) / 4.0;
-            // Pairs of (seed transform, incremental transform):
-            vec![
-                id(),
-                rot_y_and_trans(i0, 3.0),
-                rot_y_and_trans(j0, 1.0),
-                rot_y_and_trans(k0, 0.5),
-            ]
-            // TODO: Does it make sense that this should be the reverse of the Python ones?
-        };
-
-        let mut seeds = vec![];
-        for i in 0..4 {
-            for j in 0..4 {
-                for k in 0..4 {
-                    seeds.push(get_xform(i, j, k));
-                }
-            }
-        }
-
-        let incr = vec![
-            id().translate(0.0, 0.1, 0.0),
-            rot_y(-0.03),
-            rot_y(0.07),
-            rot_y(-0.2),
-        ];
-        // TODO: This is kludgy (having it separate 'incremental' and 'seed'
-        // transformations)
-
         NestedSpiral {
             base: base,
             verts: vec![],
             faces: vec![],
-            incr:  incr,
-            seeds: seeds,
         }
     }
 
-    pub fn iter(&mut self, count: usize, b: [usize; 4], xforms: &Vec<Transform>) {
+    pub fn run(mut self) -> Mesh {
 
-        if count <= 0 {
-            self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
-            return;
+        //let mut rng = rand::thread_rng();
+
+        let rot_y = |ang| id().rotate(&Vector3::y_axis(), ang);
+        let rot_y_and_trans = |ang, dx| rot_y(ang).translate(dx, 0.0, 0.0);
+
+        // The inner-most tuples are: (seed transform, incremental transform)
+        let xforms: Vec<Vec<(Transform, Transform)>> = vec![
+            (0..1).map(|_| {
+                (id(), id().translate(0.0, 0.1, 0.0).scale(0.995))
+            }).collect(),
+            (0..2).map(|i| {
+                (rot_y_and_trans(PI*2.0*(i as f32) / 2.0, 5.0), rot_y(0.02))
+            }).collect(),
+            (0..4).map(|i| {
+                (rot_y_and_trans(PI*2.0*(i as f32) / 4.0, 3.0), rot_y(-0.03))
+            }).collect(),
+            (0..4).map(|i| {
+                (rot_y_and_trans(PI*2.0*(i as f32) / 4.0, 1.0), rot_y(0.07))
+            }).collect(),
+            (0..4).map(|i| {
+                (rot_y_and_trans(PI*2.0*(i as f32) / 4.0, 0.5), rot_y(-0.2))
+            }).collect(),
+        ];
+        // Each inner vector here is a 'branching' transformation, so to
+        // flatten this, we need Cartesian product:
+
+        for xform in xforms.iter().multi_cartesian_product() {
+
+            let (seed, incr): (Vec<Transform>, Vec<Transform>) = xform.iter().map(|i| **i).unzip();
+            // TODO: is it silly to un-zip this just to re-zip it in iter()?
+
+            let global = seed.iter().fold(id(), |acc, m| acc * (*m));
+            let g = global.transform(&self.base);
+            let (n0, _) = self.verts.append_indexed(g);
+            self.faces.extend_from_slice(&[n0, n0+1, n0+2,   n0, n0+2, n0+3]);
+
+            // let count: usize = rng.gen_range(500, 2500);
+            // Old effect: just set count to 500
+            let count = 2000;
+
+            self.iter(count, [n0, n0 + 1, n0 + 2, n0 + 3], &seed, &incr);
         }
+
+        return Mesh {
+            verts: self.verts,
+            faces: self.faces,
+        };
+    }
+
+    pub fn iter(&mut self, count: usize, b: [usize; 4], xforms: &Vec<Transform>, incr: &Vec<Transform>) {
 
         // Compute global transform with product of all 'xforms':
         let global = xforms.iter().fold(id(), |acc, m| acc * (*m));
+
+        // See if we should bail out here:
+        let (s, _, _) = global.get_scale();
+        if s < 0.01 || count <= 0 {
+            self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
+            return;
+        }
 
         // Generate geometry:
         let g = global.transform(&self.base);
@@ -452,33 +467,11 @@ impl NestedSpiral {
 
         // Increment the individual transformations:
         let xforms_next: Vec<Transform> = xforms.iter()
-            .zip(self.incr.iter())
+            .zip(incr.iter())
             .map(|(m,incr)| ((*incr) * (*m)))
             .collect();
 
-        self.iter(count - 1, [n0, n0 + 1, n0 + 2, n0 + 3], &xforms_next);
+        self.iter(count - 1, [n0, n0 + 1, n0 + 2, n0 + 3], &xforms_next, &incr);
     }
 
-    pub fn run(mut self) -> Mesh {
-
-        let seeds = self.seeds.clone();
-        let mut rng = rand::thread_rng();
-
-        for seed in seeds {
-            let global = seed.iter().fold(id(), |acc, m| acc * (*m));
-            let g = global.transform(&self.base);
-            let (n0, _) = self.verts.append_indexed(g);
-            self.faces.extend_from_slice(&[n0, n0+1, n0+2,   n0, n0+2, n0+3]);
-
-            let count: usize = rng.gen_range(100, 500);
-            // Old effect: just set count to 500
-
-            self.iter(count, [n0, n0 + 1, n0 + 2, n0 + 3], &seed);
-        }
-
-        return Mesh {
-            verts: self.verts,
-            faces: self.faces,
-        };
-    }
 }
