@@ -2,7 +2,7 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::f32;
 
 use nalgebra::*;
-//use rand::Rng;
+use rand::Rng;
 
 use crate::util;
 use crate::util::VecExt;
@@ -374,7 +374,6 @@ pub struct NestedSpiral {
     faces: Vec<usize>,
     seeds: Vec<Vec<Transform>>,
     incr: Vec<Transform>,
-    max_count: usize,
 }
 
 impl NestedSpiral {
@@ -433,13 +432,12 @@ impl NestedSpiral {
             faces: vec![],
             incr:  incr,
             seeds: seeds,
-            max_count: 500,
         }
     }
 
-    pub fn iter(&mut self, idx: usize, b: [usize; 4], xforms: &Vec<Transform>) {
+    pub fn iter(&mut self, count: usize, b: [usize; 4], xforms: &Vec<Transform>) {
 
-        if idx >= self.max_count {
+        if count <= 0 {
             self.faces.extend_from_slice(&[b[0], b[2], b[1], b[0], b[3], b[2]]);
             return;
         }
@@ -458,12 +456,13 @@ impl NestedSpiral {
             .map(|(m,incr)| ((*incr) * (*m)))
             .collect();
 
-        self.iter(idx + 1, [n0, n0 + 1, n0 + 2, n0 + 3], &xforms_next);
+        self.iter(count - 1, [n0, n0 + 1, n0 + 2, n0 + 3], &xforms_next);
     }
 
     pub fn run(mut self) -> Mesh {
 
         let seeds = self.seeds.clone();
+        let mut rng = rand::thread_rng();
 
         for seed in seeds {
             let global = seed.iter().fold(id(), |acc, m| acc * (*m));
@@ -471,7 +470,10 @@ impl NestedSpiral {
             let (n0, _) = self.verts.append_indexed(g);
             self.faces.extend_from_slice(&[n0, n0+1, n0+2,   n0, n0+2, n0+3]);
 
-            self.iter(0, [n0, n0 + 1, n0 + 2, n0 + 3], &seed);
+            let count: usize = rng.gen_range(100, 500);
+            // Old effect: just set count to 500
+
+            self.iter(count, [n0, n0 + 1, n0 + 2, n0 + 3], &seed);
         }
 
         return Mesh {
