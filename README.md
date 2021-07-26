@@ -67,7 +67,7 @@ A lot of what I wrote here ended up just being a buggy, half-assed
 interpreter for a buggy, half-assed EDSL/minilanguage.
 (Greenspun's Tenth Rule of Programming, anyone?)
 
-On top of this, my implementation is pretty slow when it is
+On top of this, my implementation was pretty slow when it was
 using a large number of rules each producing small geometry
 (which is almost literally the only way it *can* be used
 if you want to produce a fairly complex mesh). I did some
@@ -75,7 +75,7 @@ profiling some months ago that showed I was spending the
 vast majority of my time in `extend()` and `clone()` for
 `Vec` - and so I could probably see some huge performance
 gains if I could simply pre-allocate vectors and share geometry
-more. Also, I'm pretty sure this code does some very task-parallel
+more. Also, I'm pretty sure this code did some very task-parallel
 elements (e.g. anytime a rule branches), and multithreading should
 be able to exploit this if I care.
 
