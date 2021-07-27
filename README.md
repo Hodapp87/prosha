@@ -4,6 +4,12 @@ Experiments in procedural meshes in Rust
 
 More detailed docs and examples forthcoming.
 
+Due to some issues explained a little bit below and a little bit in
+other blog posts, I'm now treating this as maintenance-only and not as
+an active project.
+
+(TODO: Link to these posts)
+
 ## General Notes & History
 
 This particular code base was started around 2019 December

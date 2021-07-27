@@ -72,7 +72,7 @@ mod tests {
     }
 
     #[test]
-    fn tree_thing() {
+    fn tree_thing1() {
         let name = "tree_thing";
         println!("---------------------------------------------------");
         let b = examples::TreeThing::new(0.6, 10);
